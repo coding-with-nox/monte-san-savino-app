@@ -1,0 +1,32 @@
+replicaCount: 2
+image:
+  repository: ghcr.io/your-org/miniatures-contest-backend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+env:
+  PORT: "3000"
+  PG_HOST: "postgres"
+  PG_PORT: "5432"
+  PG_DB: "tenant_db_1"
+  PG_USER: "postgres"
+  MINIO_ENDPOINT: "minio"
+  MINIO_PORT: "9000"
+  MINIO_BUCKET: "models"
+  MINIO_PUBLIC_URL: "http://minio:9000"
+secrets:
+  JWT_SECRET: "change-me"
+  PG_PASSWORD: "postgres"
+  MINIO_ACCESS_KEY: "minioadmin"
+  MINIO_SECRET_KEY: "minioadmin"
+ingress:
+  enabled: false
+  className: ""
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /
+          pathType: Prefix

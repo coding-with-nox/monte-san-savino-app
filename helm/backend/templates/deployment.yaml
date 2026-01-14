@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "miniatures-contest-backend.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "miniatures-contest-backend.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "miniatures-contest-backend.name" . }}
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: {{ .Values.env.PORT | quote }}
+            - name: PG_HOST
+              value: {{ .Values.env.PG_HOST | quote }}
+            - name: PG_PORT
+              value: {{ .Values.env.PG_PORT | quote }}
+            - name: PG_DB
+              value: {{ .Values.env.PG_DB | quote }}
+            - name: PG_USER
+              value: {{ .Values.env.PG_USER | quote }}
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "miniatures-contest-backend.fullname" . }}-secret
+                  key: PG_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "miniatures-contest-backend.fullname" . }}-secret
+                  key: JWT_SECRET
+            - name: MINIO_ENDPOINT
+              value: {{ .Values.env.MINIO_ENDPOINT | quote }}
+            - name: MINIO_PORT
+              value: {{ .Values.env.MINIO_PORT | quote }}
+            - name: MINIO_BUCKET
+              value: {{ .Values.env.MINIO_BUCKET | quote }}
+            - name: MINIO_PUBLIC_URL
+              value: {{ .Values.env.MINIO_PUBLIC_URL | quote }}
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "miniatures-contest-backend.fullname" . }}-secret
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "miniatures-contest-backend.fullname" . }}-secret
+                  key: MINIO_SECRET_KEY
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 20
