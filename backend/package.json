@@ -9,6 +9,7 @@
     "drizzle:migrate": "bunx drizzle-kit migrate"
   },
   "dependencies": {
+    "@elysiajs/swagger": "^0.8.5",
     "elysia": "^1.0.0",
     "jose": "^5.9.6",
     "pg": "^8.12.0",

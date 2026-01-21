@@ -9,4 +9,15 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
   .post("/vote", async ({ user, tenantDb, body }) => {
     const uc = new VoteModel(new VoteRepositoryDrizzle(tenantDb), new ModelReadRepositoryDrizzle(tenantDb));
     return await uc.execute({ id: crypto.randomUUID(), judgeId: user.id, modelId: body.modelId, rank: body.rank });
-  }, { body: t.Object({ modelId: t.String(), rank: t.Union([t.Literal(0), t.Literal(1), t.Literal(2), t.Literal(3)]) }) });
+  }, {
+    body: t.Object({ modelId: t.String(), rank: t.Union([t.Literal(0), t.Literal(1), t.Literal(2), t.Literal(3)]) }),
+    detail: {
+      summary: "Vota un modello",
+      description: "Crea o aggiorna il voto del giudice per un modello specifico.",
+      tags: ["Judging"],
+      security: [{ bearerAuth: [] }]
+    },
+    response: {
+      200: t.Object({ voteId: t.String(), updated: t.Boolean() })
+    }
+  });
