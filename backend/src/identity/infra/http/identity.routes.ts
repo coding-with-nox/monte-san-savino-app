@@ -9,8 +9,28 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
   .post("/register", async ({ body, tenantDb }) => {
     const uc = new RegisterUser(new UserRepositoryDrizzle(tenantDb), new BcryptHasher());
     return await uc.execute({ id: crypto.randomUUID(), email: body.email, password: body.password });
-  }, { body: t.Object({ email: t.String(), password: t.String({ minLength: 8 }) }) })
+  }, {
+    body: t.Object({ email: t.String(), password: t.String({ minLength: 8 }) }),
+    detail: {
+      summary: "Registrazione utente",
+      description: "Crea un nuovo account utente con ruolo `user` di default.",
+      tags: ["Auth"]
+    },
+    response: {
+      200: t.Object({ id: t.String(), email: t.String(), role: t.String() })
+    }
+  })
   .post("/login", async ({ body, tenantDb }) => {
     const uc = new LoginWithPassword(new UserRepositoryDrizzle(tenantDb), new BcryptHasher(), new JwtTokenService());
     return await uc.execute(body);
-  }, { body: t.Object({ email: t.String(), password: t.String() }) });
+  }, {
+    body: t.Object({ email: t.String(), password: t.String() }),
+    detail: {
+      summary: "Login con password",
+      description: "Restituisce un JWT da usare con `Authorization: Bearer <token>`.",
+      tags: ["Auth"]
+    },
+    response: {
+      200: t.Object({ accessToken: t.String(), role: t.String() })
+    }
+  });
