@@ -5,6 +5,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
     ports:
       - "5432:5432"
     volumes:
@@ -32,7 +33,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me}
       PG_HOST: postgres
       PG_PORT: 5432
-      PG_DB: ${POSTGRES_DB:-postgres}
+      PG_DB: ${TENANT_DB_NAME:-tenant_db_1}
       PG_USER: ${POSTGRES_USER:-postgres}
       PG_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       MINIO_ENDPOINT: minio
