@@ -30,6 +30,10 @@ export default function Login({ language }: LoginProps) {
 
   function handleError(error: unknown) {
     console.error(error);
+    if (error instanceof Error && error.message) {
+      setErr(error.message);
+      return;
+    }
     setErr(labels.errorGeneric);
   }
 

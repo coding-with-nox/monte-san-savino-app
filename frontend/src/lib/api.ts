@@ -16,6 +16,12 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   const res = await fetch(API_BASE + path, { ...options, headers });
   if (!res.ok) {
+    const ct = res.headers.get("content-type") ?? "";
+    if (ct.includes("application/json")) {
+      const payload = await res.json().catch(() => null);
+      const message = payload?.error ?? payload?.message;
+      if (message) throw new Error(String(message));
+    }
     const message = await res.text();
     throw new Error(message || res.statusText);
   }
