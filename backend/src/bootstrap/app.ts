@@ -1,4 +1,5 @@
 import { Elysia, t } from "elysia";
+import cors from "@elysiajs/cors";
 import swagger from "@elysiajs/swagger";
 import { tenantMiddleware } from "../tenancy/infra/http/tenant.middleware";
 import { authMiddleware } from "../identity/infra/http/auth.middleware";
@@ -7,7 +8,16 @@ import { judgeRoutes } from "../contest/infra/http/judge.routes";
 import { modelUploadRoutes } from "../contest/infra/http/modelUpload.routes";
 
 export function buildApp() {
+  const rawCorsOrigin = process.env.CORS_ORIGIN ?? "";
+  const corsOrigins = rawCorsOrigin
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   return new Elysia()
+    .use(cors({
+      origin: corsOrigins.length > 0 ? corsOrigins : true
+    }))
     .use(swagger({
       path: "/docs",
       documentation: {
