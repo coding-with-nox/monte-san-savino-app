@@ -1,9 +1,14 @@
--- Create tenant database if it does not already exist.
+-- init-tenant-db.sql (single file, robusto)
+
+-- 1) Crea il DB tenant se manca
 SELECT 'CREATE DATABASE tenant_db_1'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'tenant_db_1')\gexec
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'tenant_db_1') \gexec;
 
-\connect tenant_db_1
+-- 2) Abilita dblink nel DB corrente (di solito "postgres")
+CREATE EXTENSION IF NOT EXISTS dblink;
 
+-- 3) Esegui la creazione tabelle dentro tenant_db_1 tramite dblink
+SELECT dblink_exec('dbname=tenant_db_1', $DDL$
 CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY,
   email text NOT NULL UNIQUE,
@@ -55,3 +60,4 @@ CREATE TABLE IF NOT EXISTS votes (
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_votes_judge_model
   ON votes (judge_id, model_id);
+$DDL$);
