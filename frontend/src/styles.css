@@ -1,0 +1,226 @@
+:root {
+  font-family: "Roboto", "Segoe UI", system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--md-background);
+  color: var(--md-on-surface);
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "opsz" 24, "wght" 400, "FILL" 0, "GRAD" 0;
+}
+
+[data-theme="light"] {
+  --md-primary: #6750a4;
+  --md-on-primary: #ffffff;
+  --md-surface: #fffbff;
+  --md-on-surface: #1c1b1f;
+  --md-outline: #79747e;
+  --md-background: #f4f1f8;
+  --md-surface-variant: #f1ecf4;
+  --md-on-surface-variant: #4a4458;
+}
+
+[data-theme="dark"] {
+  --md-primary: #d0bcff;
+  --md-on-primary: #381e72;
+  --md-surface: #1c1b1f;
+  --md-on-surface: #e6e1e5;
+  --md-outline: #938f99;
+  --md-background: #121014;
+  --md-surface-variant: #2a2632;
+  --md-on-surface-variant: #cac4d0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.app-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-weight: 500;
+}
+
+.app-header a {
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.app-header a:hover {
+  opacity: 1;
+}
+
+.header-spacer {
+  flex: 1;
+}
+
+.header-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.language-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--md-surface-variant);
+  color: var(--md-on-surface-variant);
+  border-radius: 999px;
+  padding: 0 12px;
+  height: 40px;
+}
+
+.language-select select {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  padding-right: 16px;
+}
+
+.language-select select option {
+  color: #1c1b1f;
+}
+
+.icon-button {
+  border: none;
+  background: var(--md-surface-variant);
+  color: var(--md-on-surface-variant);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.icon-button:hover {
+  filter: brightness(0.98);
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--md-outline);
+  opacity: 0.4;
+}
+
+.login-page {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px 0;
+}
+
+.login-card {
+  width: min(520px, 100%);
+  background: var(--md-surface);
+  border-radius: 28px;
+  padding: 40px 32px 32px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+  display: grid;
+  gap: 24px;
+}
+
+.login-title-group h2 {
+  margin: 4px 0 8px;
+  font-size: 2rem;
+}
+
+.login-title-group p {
+  margin: 0;
+  color: var(--md-on-surface-variant);
+}
+
+.login-eyebrow {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--md-primary);
+}
+
+.login-form {
+  display: grid;
+  gap: 16px;
+}
+
+.login-field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--md-on-surface-variant);
+}
+
+.login-field input {
+  border-radius: 14px;
+  border: 1px solid var(--md-outline);
+  padding: 12px 16px;
+  background: transparent;
+  color: var(--md-on-surface);
+  outline: none;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-field input:focus {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-primary) 30%, transparent);
+}
+
+.login-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.login-primary {
+  border: none;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-secondary {
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  padding: 10px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.login-error {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
