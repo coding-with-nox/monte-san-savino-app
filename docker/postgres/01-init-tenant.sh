@@ -1,18 +1,20 @@
--- init-tenant-db.sql (single file, robusto)
+#!/usr/bin/env bash
+set -euo pipefail
 
--- 0) Imposta il nome del tenant da variabile d'ambiente, con fallback
-\set tenant_db_name 'tenant_db_1'
-\getenv tenant_db_name TENANT_DB_NAME
+TENANT_DB_NAME="${TENANT_DB_NAME:-tenant_db_1}"
+POSTGRES_USER="${POSTGRES_USER:-postgres}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}"
+PGHOST="${PGHOST:-localhost}"
+PGPORT="${PGPORT:-5432}"
 
--- 1) Crea il DB tenant se manca
-SELECT format('CREATE DATABASE %I', :'tenant_db_name')
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'tenant_db_name') \gexec;
+export PGPASSWORD="$POSTGRES_PASSWORD"
 
--- 2) Abilita dblink nel DB corrente (di solito "postgres")
-CREATE EXTENSION IF NOT EXISTS dblink;
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<SQL
+SELECT 'CREATE DATABASE "${TENANT_DB_NAME}"'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${TENANT_DB_NAME}')\gexec
+SQL
 
--- 3) Esegui la creazione tabelle dentro il tenant tramite dblink
-SELECT dblink_exec(format('dbname=%s', :'tenant_db_name'), $DDL$
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$TENANT_DB_NAME" <<'SQL'
 CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY,
   email text NOT NULL UNIQUE,
@@ -64,4 +66,4 @@ CREATE TABLE IF NOT EXISTS votes (
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_votes_judge_model
   ON votes (judge_id, model_id);
-$DDL$);
+SQL
