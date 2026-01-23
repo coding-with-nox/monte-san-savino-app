@@ -1,5 +1,6 @@
 import { getToken } from "./auth";
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3000";
+const rawApiBase = import.meta.env.VITE_API_BASE;
+const API_BASE = rawApiBase && rawApiBase.trim() !== "" ? rawApiBase : "http://localhost:3000";
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: any = { "Content-Type": "application/json", ...(options.headers ?? {}) };
   const token = getToken();
