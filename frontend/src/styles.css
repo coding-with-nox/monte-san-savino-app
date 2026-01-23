@@ -81,6 +81,33 @@ input {
   align-items: center;
 }
 
+.language-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--md-surface-variant);
+  color: var(--md-on-surface-variant);
+  border-radius: 999px;
+  padding: 0 12px;
+  height: 40px;
+}
+
+.language-select select {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  padding-right: 16px;
+}
+
+.language-select select option {
+  color: #1c1b1f;
+}
+
 .icon-button {
   border: none;
   background: var(--md-surface-variant);

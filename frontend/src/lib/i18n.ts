@@ -14,10 +14,11 @@ export const translations = {
     themeToggle: "Tema",
     themeLight: "Light",
     themeDark: "Dark",
-    languageToggle: "言語",
+    languageToggle: "Lingua",
     languageIt: "Italiano",
     languageEn: "English",
-    errorTitle: "Errore di accesso"
+    errorTitle: "Errore di accesso",
+    errorGeneric: "Si è verificato un problema. Riprova più tardi."
   },
   en: {
     loginEyebrow: "Welcome back",
@@ -32,10 +33,11 @@ export const translations = {
     themeToggle: "Theme",
     themeLight: "Light",
     themeDark: "Dark",
-    languageToggle: "言語",
+    languageToggle: "Language",
     languageIt: "Italiano",
     languageEn: "English",
-    errorTitle: "Login error"
+    errorTitle: "Login error",
+    errorGeneric: "Something went wrong. Please try again later."
   }
 } as const;
 

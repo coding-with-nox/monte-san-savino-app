@@ -50,15 +50,17 @@ export default function App() {
         <Link to="/judge">Judge</Link>
         <div className="header-spacer" />
         <div className="header-controls">
-          <button
-            type="button"
-            className="icon-button"
-            onClick={() => setLanguage(language === "it" ? "en" : "it")}
-            aria-label={`${labels.languageToggle}: ${language === "it" ? labels.languageEn : labels.languageIt}`}
-            title={`${labels.languageToggle}: ${language === "it" ? labels.languageEn : labels.languageIt}`}
-          >
+          <div className="language-select">
             <span className="material-symbols-outlined">language</span>
-          </button>
+            <select
+              value={language}
+              onChange={(event) => setLanguage(event.target.value as Language)}
+              aria-label={labels.languageToggle}
+            >
+              <option value="it">{labels.languageIt}</option>
+              <option value="en">{labels.languageEn}</option>
+            </select>
+          </div>
           <button
             type="button"
             className="icon-button"

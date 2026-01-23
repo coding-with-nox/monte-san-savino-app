@@ -24,8 +24,14 @@ export default function Login({ language }: LoginProps) {
     passwordPlaceholder: t(language, "passwordPlaceholder"),
     loginButton: t(language, "loginButton"),
     signupButton: t(language, "signupButton"),
-    errorTitle: t(language, "errorTitle")
+    errorTitle: t(language, "errorTitle"),
+    errorGeneric: t(language, "errorGeneric")
   }), [language]);
+
+  function handleError(error: unknown) {
+    console.error(error);
+    setErr(labels.errorGeneric);
+  }
 
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -38,7 +44,7 @@ export default function Login({ language }: LoginProps) {
       setToken(res.accessToken);
       nav("/");
     } catch (e: any) {
-      setErr(e.message);
+      handleError(e);
     }
   }
 
@@ -51,7 +57,7 @@ export default function Login({ language }: LoginProps) {
       });
       await onLogin({ preventDefault() {} } as any);
     } catch (e: any) {
-      setErr(e.message);
+      handleError(e);
     }
   }
 
