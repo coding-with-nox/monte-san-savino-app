@@ -10,7 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/postgres/init-tenant-db.sql:/docker-entrypoint-initdb.d/01-init-tenant-db.sql:ro
+      - ./docker/postgres/01-init-tenant.sh:/docker-entrypoint-initdb.d/01-init-tenant.sh:ro
 
   minio:
     image: minio/minio
@@ -47,8 +47,27 @@ services:
     image: ghcr.io/coding-with-nox/monte-san-savino-app-frontend:latest
     depends_on:
       - backend
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "8080:80"
+
+  db-init:
+    image: postgres:16
+    depends_on:
+      - postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
+      PGHOST: postgres
+      PGPORT: 5432
+    volumes:
+      - ./docker/postgres/01-init-tenant.sh:/docker-entrypoint-initdb.d/01-init-tenant.sh:ro
+    command: >
+      bash -c "until pg_isready -h postgres -p 5432 -U $${POSTGRES_USER}; do sleep 1; done;
+      /docker-entrypoint-initdb.d/01-init-tenant.sh"
+    restart: "no"
 
 volumes:
   pgdata:
