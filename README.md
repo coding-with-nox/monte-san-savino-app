@@ -37,3 +37,20 @@ Docs:
 - `docs/user-manual.md`
 - `docs/user-manual.pdf`
 - `helm/` for Kubernetes deployment
+
+## Backend + API overview
+- The backend lives in `backend/` and runs on Bun + Elysia. Start it with `bun run dev` and access Swagger at `http://localhost:3000/docs`. This is the authoritative list of endpoints and schemas.
+- The frontend lives in `frontend/` and calls the API via `frontend/src/lib/api.ts`. The base URL is `VITE_API_BASE` (defaults to `http://localhost:3000` when unset).
+
+### Currently wired FE → BE calls
+The React pages call these endpoints:
+- `POST /auth/register` from the Login page (registration).
+- `POST /auth/login` from the Login page (returns `accessToken`).
+- `POST /judge/vote` from the Judge page (requires `Authorization: Bearer <token>` and `judge` role).
+
+### Endpoints available in the backend (not all wired in FE yet)
+From the API bootstrap:
+- `GET /health` for health checks.
+- `POST /models/:modelId/image-upload` to request a signed upload URL (requires `user` role).
+
+If the FE feels disconnected, make sure the frontend dev server is pointing at the backend (`VITE_API_BASE`) and that the backend is running on the same port shown in Swagger.
