@@ -9,6 +9,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init-tenant-db.sql:/docker-entrypoint-initdb.d/01-init-tenant-db.sql:ro
 
   minio:
     image: minio/minio
