@@ -24,7 +24,7 @@ services:
       - miniodata:/data
 
   backend:
-    image: ghcr.io/coding-with-nox/monte-san-savino-backend:latest
+    image: ghcr.io/coding-with-nox/monte-san-savino-app-backend:latest
     depends_on:
       - postgres
       - minio
@@ -43,7 +43,7 @@ services:
       - "3000:3000"
 
   frontend:
-    image: ghcr.io/coding-with-nox/monte-san-savino-frontend:latest
+    image: ghcr.io/coding-with-nox/monte-san-savino-app-frontend:latest
     depends_on:
       - backend
     ports:
