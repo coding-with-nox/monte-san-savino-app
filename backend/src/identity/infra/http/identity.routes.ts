@@ -4,19 +4,17 @@ import { LoginWithPassword } from "../../application/LoginWithPassword";
 import { BcryptHasher } from "../crypto/bcryptHasher";
 import { JwtTokenService } from "../tokens/jwtTokenService";
 import { UserRepositoryDrizzle } from "../persistence/userRepository.drizzle";
+import { getTenantDbFromEnv } from "../../../tenancy/infra/tenantDbFactory";
 
 export const identityRoutes = new Elysia({ prefix: "/auth" })
   .post("/register", async ({ body, tenantDb, set }) => {
-    if (!tenantDb) {
-      set.status = 500;
-      return { error: "Tenant database not initialized" };
-    }
+    const db = tenantDb ?? getTenantDbFromEnv();
     if (body.password.length < 8) {
       set.status = 400;
       return { error: "Password must be at least 8 characters long" };
     }
     try {
-      const uc = new RegisterUser(new UserRepositoryDrizzle(tenantDb), new BcryptHasher());
+      const uc = new RegisterUser(new UserRepositoryDrizzle(db), new BcryptHasher());
       return await uc.execute({ id: crypto.randomUUID(), email: body.email, password: body.password });
     } catch (error) {
       set.status = 400;
@@ -36,12 +34,9 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
     }
   })
   .post("/login", async ({ body, tenantDb, set }) => {
-    if (!tenantDb) {
-      set.status = 500;
-      return { error: "Tenant database not initialized" };
-    }
+    const db = tenantDb ?? getTenantDbFromEnv();
     try {
-      const uc = new LoginWithPassword(new UserRepositoryDrizzle(tenantDb), new BcryptHasher(), new JwtTokenService());
+      const uc = new LoginWithPassword(new UserRepositoryDrizzle(db), new BcryptHasher(), new JwtTokenService());
       return await uc.execute(body);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed";
