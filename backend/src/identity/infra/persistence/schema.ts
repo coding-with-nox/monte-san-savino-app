@@ -6,3 +6,14 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   isActive: boolean("is_active").default(true).notNull()
 });
+
+export const userProfilesTable = pgTable("user_profiles", {
+  userId: uuid("user_id").primaryKey(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  phone: text("phone"),
+  city: text("city"),
+  address: text("address"),
+  emergencyContact: text("emergency_contact"),
+  avatarUrl: text("avatar_url")
+});

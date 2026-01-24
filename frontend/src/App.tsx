@@ -3,6 +3,13 @@ import { Routes, Route, Link, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Judge from "./pages/Judge";
+import Profile from "./pages/Profile";
+import Teams from "./pages/Teams";
+import Models from "./pages/Models";
+import Enrollments from "./pages/Enrollments";
+import PublicEvents from "./pages/PublicEvents";
+import Admin from "./pages/Admin";
+import StaffCheckin from "./pages/StaffCheckin";
 import { getToken, getRole, roleAtLeast } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
 
@@ -47,7 +54,14 @@ export default function App() {
       <header className="app-header">
         <b>Miniatures Contest</b>
         <Link to="/">Home</Link>
+        <Link to="/profile">Profilo</Link>
+        <Link to="/teams">Team</Link>
+        <Link to="/models">Modelli</Link>
+        <Link to="/enrollments">Iscrizioni</Link>
+        <Link to="/public-events">Eventi pubblici</Link>
         <Link to="/judge">Judge</Link>
+        <Link to="/staff">Staff</Link>
+        <Link to="/admin">Admin</Link>
         <div className="header-spacer" />
         <div className="header-controls">
           <div className="language-select">
@@ -85,7 +99,14 @@ export default function App() {
           )}
         />
         <Route path="/" element={<Protected><Dashboard /></Protected>} />
+        <Route path="/profile" element={<Protected><Profile /></Protected>} />
+        <Route path="/teams" element={<Protected><Teams /></Protected>} />
+        <Route path="/models" element={<Protected><Models /></Protected>} />
+        <Route path="/enrollments" element={<Protected><Enrollments /></Protected>} />
+        <Route path="/public-events" element={<PublicEvents />} />
         <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge /></RequireRole></Protected>} />
+        <Route path="/staff" element={<Protected><RequireRole min="staff"><StaffCheckin /></RequireRole></Protected>} />
+        <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin /></RequireRole></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

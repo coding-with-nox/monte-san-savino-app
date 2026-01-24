@@ -2,7 +2,7 @@ import { getToken } from "./auth";
 
 const rawApiBase = import.meta.env.VITE_API_BASE;
 const trimmedBase = rawApiBase && rawApiBase.trim() !== "" ? rawApiBase.trim() : "http://localhost:3000";
-const API_BASE = trimmedBase.endsWith("/") ? trimmedBase.slice(0, -1) : trimmedBase;
+export const API_BASE = trimmedBase.endsWith("/") ? trimmedBase.slice(0, -1) : trimmedBase;
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers ?? {});
