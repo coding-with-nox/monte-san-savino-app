@@ -224,3 +224,66 @@ input {
   font-size: 0.9rem;
   white-space: pre-wrap;
 }
+
+.card {
+  border: 1px solid var(--md-outline);
+  background: var(--md-surface);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: center;
+}
+
+.grid-two {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+
+.muted {
+  color: var(--md-on-surface-variant);
+}
+
+.hint {
+  opacity: 0.8;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.code-block {
+  background: #111;
+  color: #ddd;
+  padding: 12px;
+  margin-top: 12px;
+  overflow: auto;
+  border-radius: 8px;
+}
