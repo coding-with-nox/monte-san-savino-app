@@ -1,4 +1,5 @@
 export interface TokenService {
-  sign(payload: { sub: string; email: string; role: string; tenantId?: string }): Promise<string>;
+  signAccess(payload: { sub: string; email: string; role: string; tenantId?: string }): Promise<{ token: string; expiresIn: number }>;
+  signRefresh(payload: { sub: string; email: string; role: string; tenantId?: string }): Promise<{ token: string; expiresIn: number }>;
   verify(token: string): Promise<any>;
 }

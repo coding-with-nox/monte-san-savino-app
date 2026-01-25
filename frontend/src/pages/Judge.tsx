@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { Language, t } from "../lib/i18n";
 
 type Model = { id: string; name: string; categoryId: string; imageUrl?: string | null };
 
-export default function Judge() {
+interface JudgeProps {
+  language: Language;
+}
+
+export default function Judge({ language }: JudgeProps) {
   const [modelId, setModelId] = useState("");
   const [rank, setRank] = useState<number>(0);
   const [out, setOut] = useState("");
@@ -30,13 +35,13 @@ export default function Judge() {
 
   return (
     <div>
-      <h2>Judge</h2>
-      <p>Rank: 0 = non meritevole. Assenza voto = nessun record.</p>
+      <h2>{t(language, "judgeTitle")}</h2>
+      <p>{t(language, "judgeRankHint")}</p>
       <div className="card">
         <div className="grid">
-          <input placeholder="Event ID" value={eventId} onChange={(e) => setEventId(e.target.value)} />
-          <input placeholder="Ricerca modello" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <button onClick={loadModels}>Aggiorna lista</button>
+          <input placeholder={t(language, "judgeEventPlaceholder")} value={eventId} onChange={(e) => setEventId(e.target.value)} />
+          <input placeholder={t(language, "judgeSearchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <button onClick={loadModels}>{t(language, "judgeRefreshButton")}</button>
         </div>
         <ul>
           {models.map((model) => (
@@ -49,16 +54,16 @@ export default function Judge() {
         </ul>
       </div>
       <div className="card">
-        <h3>Vota modello</h3>
+        <h3>{t(language, "judgeVoteTitle")}</h3>
         <div className="grid">
-          <input placeholder="modelId" value={modelId} onChange={e=>setModelId(e.target.value)} />
+          <input placeholder={t(language, "judgeModelIdPlaceholder")} value={modelId} onChange={e=>setModelId(e.target.value)} />
           <select value={rank} onChange={e=>setRank(Number(e.target.value))}>
             <option value={0}>0</option>
             <option value={1}>1</option>
             <option value={2}>2</option>
             <option value={3}>3</option>
           </select>
-          <button onClick={vote}>Vota</button>
+          <button onClick={vote}>{t(language, "judgeVoteButton")}</button>
         </div>
         <pre className="code-block">{out}</pre>
       </div>

@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { Language, t } from "../lib/i18n";
 
 type Event = { id: string; name: string; status: string; startDate?: string | null; endDate?: string | null };
 
-export default function PublicEvents() {
+interface PublicEventsProps {
+  language: Language;
+}
+
+export default function PublicEvents({ language }: PublicEventsProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [status, setStatus] = useState("");
 
@@ -18,11 +23,11 @@ export default function PublicEvents() {
 
   return (
     <div>
-      <h2>Eventi pubblici</h2>
+      <h2>{t(language, "publicEventsTitle")}</h2>
       <div className="card">
         <div className="grid">
-          <input placeholder="Filtro status" value={status} onChange={(e) => setStatus(e.target.value)} />
-          <button onClick={load}>Aggiorna</button>
+          <input placeholder={t(language, "publicEventsStatusPlaceholder")} value={status} onChange={(e) => setStatus(e.target.value)} />
+          <button onClick={load}>{t(language, "publicEventsRefreshButton")}</button>
         </div>
       </div>
       <div className="card">
