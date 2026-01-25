@@ -1,4 +1,16 @@
 import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  Container,
+  Grid,
+  Stack,
+  TextField,
+  Typography
+} from "@mui/material";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -37,21 +49,78 @@ export default function Profile({ language }: ProfileProps) {
   }, []);
 
   return (
-    <div>
-      <h2>{t(language, "profileTitle")}</h2>
-      <div className="card">
-        <div className="grid">
-          <input placeholder={t(language, "profileFirstName")} value={profile.firstName ?? ""} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} />
-          <input placeholder={t(language, "profileLastName")} value={profile.lastName ?? ""} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} />
-          <input placeholder={t(language, "profilePhone")} value={profile.phone ?? ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
-          <input placeholder={t(language, "profileCity")} value={profile.city ?? ""} onChange={(e) => setProfile({ ...profile, city: e.target.value })} />
-          <input placeholder={t(language, "profileAddress")} value={profile.address ?? ""} onChange={(e) => setProfile({ ...profile, address: e.target.value })} />
-          <input placeholder={t(language, "profileEmergencyContact")} value={profile.emergencyContact ?? ""} onChange={(e) => setProfile({ ...profile, emergencyContact: e.target.value })} />
-          <input placeholder={t(language, "profileAvatarUrl")} value={profile.avatarUrl ?? ""} onChange={(e) => setProfile({ ...profile, avatarUrl: e.target.value })} />
-        </div>
-        <button onClick={save}>{t(language, "profileSaveButton")}</button>
-      </div>
-      {message && <p className="hint">{message}</p>}
-    </div>
+    <Container maxWidth="md">
+      <Stack spacing={3}>
+        <Typography variant="h4">{t(language, "profileTitle")}</Typography>
+        <Card>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  label={t(language, "profileFirstName")}
+                  value={profile.firstName ?? ""}
+                  onChange={(event) => setProfile({ ...profile, firstName: event.target.value })}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  label={t(language, "profileLastName")}
+                  value={profile.lastName ?? ""}
+                  onChange={(event) => setProfile({ ...profile, lastName: event.target.value })}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  label={t(language, "profilePhone")}
+                  value={profile.phone ?? ""}
+                  onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  label={t(language, "profileCity")}
+                  value={profile.city ?? ""}
+                  onChange={(event) => setProfile({ ...profile, city: event.target.value })}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  label={t(language, "profileAddress")}
+                  value={profile.address ?? ""}
+                  onChange={(event) => setProfile({ ...profile, address: event.target.value })}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  label={t(language, "profileEmergencyContact")}
+                  value={profile.emergencyContact ?? ""}
+                  onChange={(event) => setProfile({ ...profile, emergencyContact: event.target.value })}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={6}>
+                <TextField
+                  label={t(language, "profileAvatarUrl")}
+                  value={profile.avatarUrl ?? ""}
+                  onChange={(event) => setProfile({ ...profile, avatarUrl: event.target.value })}
+                  fullWidth
+                />
+              </Grid>
+            </Grid>
+          </CardContent>
+          <CardActions sx={{ px: 2, pb: 2 }}>
+            <Button variant="contained" onClick={save}>
+              {t(language, "profileSaveButton")}
+            </Button>
+          </CardActions>
+        </Card>
+        {message && <Alert severity="info">{message}</Alert>}
+      </Stack>
+    </Container>
   );
 }

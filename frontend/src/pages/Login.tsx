@@ -1,5 +1,16 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Container,
+  Stack,
+  TextField,
+  Typography
+} from "@mui/material";
 import { api } from "../lib/api";
 import { createCodeChallenge, generateCodeVerifier, setSession } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
@@ -78,44 +89,53 @@ export default function Login({ language }: LoginProps) {
   }
 
   return (
-    <div className="login-page">
-      <section className="login-card">
-        <div className="login-title-group">
-          <div className="login-eyebrow">{labels.eyebrow}</div>
-          <h2>{labels.title}</h2>
-          <p>{labels.subtitle}</p>
-        </div>
+    <Container maxWidth="sm" sx={{ py: { xs: 6, md: 10 } }}>
+      <Card elevation={6}>
+        <CardContent>
+          <Stack spacing={3}>
+            <Box>
+              <Typography variant="overline" color="primary">
+                {labels.eyebrow}
+              </Typography>
+              <Typography variant="h4">{labels.title}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {labels.subtitle}
+              </Typography>
+            </Box>
 
-        <form onSubmit={onLogin} className="login-form">
-          <label className="login-field">
-            {labels.emailLabel}
-            <input
-              placeholder={labels.emailPlaceholder}
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-          </label>
-          <label className="login-field">
-            {labels.passwordLabel}
-            <input
-              placeholder={labels.passwordPlaceholder}
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </label>
-          <div className="login-actions">
-            <button type="submit" className="login-primary">{labels.loginButton}</button>
-            <button type="button" className="login-secondary" onClick={onRegister}>{labels.signupButton}</button>
-          </div>
-          {err && (
-            <div className="login-error">
-              <strong>{labels.errorTitle}</strong>
-              <div>{err}</div>
-            </div>
-          )}
-        </form>
-      </section>
-    </div>
+            <Stack component="form" spacing={2} onSubmit={onLogin}>
+              <TextField
+                label={labels.emailLabel}
+                placeholder={labels.emailPlaceholder}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                fullWidth
+              />
+              <TextField
+                label={labels.passwordLabel}
+                placeholder={labels.passwordPlaceholder}
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                fullWidth
+              />
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                <Button type="submit" variant="contained" color="primary" fullWidth>
+                  {labels.loginButton}
+                </Button>
+                <Button type="button" variant="outlined" onClick={onRegister} fullWidth>
+                  {labels.signupButton}
+                </Button>
+              </Stack>
+              {err && (
+                <Alert severity="error">
+                  <strong>{labels.errorTitle}</strong> — {err}
+                </Alert>
+              )}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+    </Container>
   );
 }

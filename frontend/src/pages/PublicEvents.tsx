@@ -1,4 +1,17 @@
 import React, { useEffect, useState } from "react";
+import {
+  Button,
+  Card,
+  CardContent,
+  Container,
+  Grid,
+  List,
+  ListItem,
+  ListItemText,
+  Stack,
+  TextField,
+  Typography
+} from "@mui/material";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -22,23 +35,40 @@ export default function PublicEvents({ language }: PublicEventsProps) {
   }, []);
 
   return (
-    <div>
-      <h2>{t(language, "publicEventsTitle")}</h2>
-      <div className="card">
-        <div className="grid">
-          <input placeholder={t(language, "publicEventsStatusPlaceholder")} value={status} onChange={(e) => setStatus(e.target.value)} />
-          <button onClick={load}>{t(language, "publicEventsRefreshButton")}</button>
-        </div>
-      </div>
-      <div className="card">
-        <ul>
-          {events.map((event) => (
-            <li key={event.id}>
-              <b>{event.name}</b> <span className="muted">({event.status})</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
+    <Container maxWidth="lg">
+      <Stack spacing={3}>
+        <Typography variant="h4">{t(language, "publicEventsTitle")}</Typography>
+        <Card>
+          <CardContent>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={8}>
+                <TextField
+                  label={t(language, "publicEventsStatusPlaceholder")}
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Button variant="contained" onClick={load} fullWidth>
+                  {t(language, "publicEventsRefreshButton")}
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <List dense>
+              {events.map((event) => (
+                <ListItem key={event.id} disableGutters>
+                  <ListItemText primary={event.name} secondary={event.status} />
+                </ListItem>
+              ))}
+            </List>
+          </CardContent>
+        </Card>
+      </Stack>
+    </Container>
   );
 }

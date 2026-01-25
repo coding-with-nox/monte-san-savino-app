@@ -1,4 +1,19 @@
 import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Button,
+  Card,
+  CardContent,
+  Container,
+  Grid,
+  Link,
+  List,
+  ListItem,
+  ListItemText,
+  Stack,
+  TextField,
+  Typography
+} from "@mui/material";
 import { api, API_BASE } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -61,79 +76,195 @@ export default function Admin({ language }: AdminProps) {
     load().catch((err) => setMessage(err.message));
   }, []);
 
+  const enrollmentStatuses = ["pending", "approved", "rejected", "paid"];
+
   return (
-    <div>
-      <h2>{t(language, "adminTitle")}</h2>
-      {message && <p className="hint">{message}</p>}
-      <div className="grid-two">
-        <div className="card">
-          <h3>{t(language, "adminEventsTitle")}</h3>
-          <div className="grid">
-            <input placeholder={t(language, "adminEventNamePlaceholder")} value={eventForm.name} onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })} />
-            <input placeholder={t(language, "adminEventStatusPlaceholder")} value={eventForm.status} onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })} />
-            <button onClick={createEvent}>{t(language, "adminEventCreateButton")}</button>
-          </div>
-          <ul>
-            {events.map((event) => (
-              <li key={event.id}>{event.name} <span className="muted">({event.status})</span></li>
-            ))}
-          </ul>
-        </div>
-        <div className="card">
-          <h3>{t(language, "adminCategoriesTitle")}</h3>
-          <div className="grid">
-            <input placeholder={t(language, "adminCategoryEventPlaceholder")} value={categoryForm.eventId} onChange={(e) => setCategoryForm({ ...categoryForm, eventId: e.target.value })} />
-            <input placeholder={t(language, "adminCategoryNamePlaceholder")} value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} />
-            <button onClick={createCategory}>{t(language, "adminCategoryCreateButton")}</button>
-          </div>
-          <ul>
-            {categories.map((category) => (
-              <li key={category.id}>{category.name} <span className="muted">({category.eventId})</span></li>
-            ))}
-          </ul>
-        </div>
-        <div className="card">
-          <h3>{t(language, "adminEnrollmentsTitle")}</h3>
-          <ul>
-            {enrollments.map((enrollment) => (
-              <li key={enrollment.id}>
-                <b>{enrollment.eventId}</b> - {enrollment.status}
-                <div className="chip-row">
-                  {["pending", "approved", "rejected", "paid"].map((status) => (
-                    <button key={status} className="chip" onClick={() => updateEnrollment(enrollment.id, status)}>{status}</button>
+    <Container maxWidth="xl">
+      <Stack spacing={3}>
+        <Typography variant="h4">{t(language, "adminTitle")}</Typography>
+        {message && <Alert severity="info">{message}</Alert>}
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {t(language, "adminEventsTitle")}
+                </Typography>
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      label={t(language, "adminEventNamePlaceholder")}
+                      value={eventForm.name}
+                      onChange={(event) => setEventForm({ ...eventForm, name: event.target.value })}
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      label={t(language, "adminEventStatusPlaceholder")}
+                      value={eventForm.status}
+                      onChange={(event) => setEventForm({ ...eventForm, status: event.target.value })}
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Button variant="contained" onClick={createEvent} fullWidth>
+                      {t(language, "adminEventCreateButton")}
+                    </Button>
+                  </Grid>
+                </Grid>
+                <List dense sx={{ mt: 2 }}>
+                  {events.map((event) => (
+                    <ListItem key={event.id} disableGutters>
+                      <ListItemText primary={event.name} secondary={event.status} />
+                    </ListItem>
                   ))}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="card">
-          <h3>{t(language, "adminJudgeAssignTitle")}</h3>
-          <div className="grid">
-            <input placeholder={t(language, "adminJudgeEventPlaceholder")} value={judgeAssignment.eventId} onChange={(e) => setJudgeAssignment({ ...judgeAssignment, eventId: e.target.value })} />
-            <input placeholder={t(language, "adminJudgeIdPlaceholder")} value={judgeAssignment.judgeId} onChange={(e) => setJudgeAssignment({ ...judgeAssignment, judgeId: e.target.value })} />
-            <button onClick={assignJudge}>{t(language, "adminJudgeAssignButton")}</button>
-          </div>
-        </div>
-        <div className="card">
-          <h3>{t(language, "adminUsersTitle")}</h3>
-          <ul>
-            {users.map((user) => (
-              <li key={user.id}>
-                {user.email} <span className="muted">({user.role})</span>
-                <button className="chip" onClick={() => resetPassword(user.id)}>{t(language, "adminResetPasswordButton")}</button>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="card">
-          <h3>{t(language, "adminExportTitle")}</h3>
-          <ul>
-            <li><a href={`${API_BASE}/exports/enrollments`} target="_blank" rel="noreferrer">{t(language, "adminExportEnrollments")}</a></li>
-            <li><a href={`${API_BASE}/exports/models`} target="_blank" rel="noreferrer">{t(language, "adminExportModels")}</a></li>
-          </ul>
-        </div>
-      </div>
-    </div>
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {t(language, "adminCategoriesTitle")}
+                </Typography>
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      label={t(language, "adminCategoryEventPlaceholder")}
+                      value={categoryForm.eventId}
+                      onChange={(event) => setCategoryForm({ ...categoryForm, eventId: event.target.value })}
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      label={t(language, "adminCategoryNamePlaceholder")}
+                      value={categoryForm.name}
+                      onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })}
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Button variant="contained" onClick={createCategory} fullWidth>
+                      {t(language, "adminCategoryCreateButton")}
+                    </Button>
+                  </Grid>
+                </Grid>
+                <List dense sx={{ mt: 2 }}>
+                  {categories.map((category) => (
+                    <ListItem key={category.id} disableGutters>
+                      <ListItemText primary={category.name} secondary={category.eventId} />
+                    </ListItem>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {t(language, "adminEnrollmentsTitle")}
+                </Typography>
+                <Stack spacing={2}>
+                  {enrollments.map((enrollment) => (
+                    <Stack key={enrollment.id} spacing={1}>
+                      <Typography variant="subtitle2">
+                        {enrollment.eventId} — {enrollment.status}
+                      </Typography>
+                      <Grid container spacing={1}>
+                        {enrollmentStatuses.map((status) => (
+                          <Grid item key={status}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => updateEnrollment(enrollment.id, status)}
+                            >
+                              {status}
+                            </Button>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Stack>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {t(language, "adminJudgeAssignTitle")}
+                </Typography>
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} md={5}>
+                    <TextField
+                      label={t(language, "adminJudgeEventPlaceholder")}
+                      value={judgeAssignment.eventId}
+                      onChange={(event) => setJudgeAssignment({ ...judgeAssignment, eventId: event.target.value })}
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={5}>
+                    <TextField
+                      label={t(language, "adminJudgeIdPlaceholder")}
+                      value={judgeAssignment.judgeId}
+                      onChange={(event) => setJudgeAssignment({ ...judgeAssignment, judgeId: event.target.value })}
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={2}>
+                    <Button variant="contained" onClick={assignJudge} fullWidth>
+                      {t(language, "adminJudgeAssignButton")}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {t(language, "adminUsersTitle")}
+                </Typography>
+                <Stack spacing={1}>
+                  {users.map((user) => (
+                    <Stack key={user.id} direction="row" spacing={2} alignItems="center">
+                      <Typography variant="body2" sx={{ flex: 1 }}>
+                        {user.email} — {user.role}
+                      </Typography>
+                      <Button variant="outlined" size="small" onClick={() => resetPassword(user.id)}>
+                        {t(language, "adminResetPasswordButton")}
+                      </Button>
+                    </Stack>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {t(language, "adminExportTitle")}
+                </Typography>
+                <Stack spacing={1}>
+                  <Link href={`${API_BASE}/exports/enrollments`} target="_blank" rel="noreferrer">
+                    {t(language, "adminExportEnrollments")}
+                  </Link>
+                  <Link href={`${API_BASE}/exports/models`} target="_blank" rel="noreferrer">
+                    {t(language, "adminExportModels")}
+                  </Link>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Stack>
+    </Container>
   );
 }

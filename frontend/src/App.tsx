@@ -1,5 +1,30 @@
-import React, { useEffect, useState } from "react";
-import { Routes, Route, Link, Navigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Navigate, Route, Routes, Link as RouterLink, useLocation } from "react-router-dom";
+import {
+  AppBar,
+  Box,
+  Button,
+  CssBaseline,
+  Divider,
+  Drawer,
+  FormControl,
+  IconButton,
+  InputLabel,
+  List,
+  ListItemButton,
+  ListItemText,
+  MenuItem,
+  Select,
+  Stack,
+  ThemeProvider,
+  Toolbar,
+  Typography,
+  createTheme,
+  useMediaQuery
+} from "@mui/material";
+import MenuIcon from "@mui/icons-material/Menu";
+import Brightness4Icon from "@mui/icons-material/Brightness4";
+import Brightness7Icon from "@mui/icons-material/Brightness7";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Judge from "./pages/Judge";
@@ -17,12 +42,13 @@ function Protected({ children }: { children: React.ReactNode }) {
   return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
 }
 function RequireRole({ min, children }: { min: any; children: React.ReactNode }) {
-  const r = getRole(); if (!r) return <Navigate to="/login" replace />;
+  const r = getRole();
+  if (!r) return <Navigate to="/login" replace />;
   return roleAtLeast(r, min) ? <>{children}</> : <Navigate to="/" replace />;
 }
 
 export default function App() {
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
+  const [themeMode, setThemeMode] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") return "light";
     return (window.localStorage.getItem("theme") as "light" | "dark") || "light";
   });
@@ -30,11 +56,12 @@ export default function App() {
     if (typeof window === "undefined") return "it";
     return (window.localStorage.getItem("language") as Language) || "it";
   });
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    window.localStorage.setItem("theme", theme);
-  }, [theme]);
+    window.localStorage.setItem("theme", themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     window.localStorage.setItem("language", language);
@@ -49,66 +76,138 @@ export default function App() {
     languageEn: t(language, "languageEn")
   };
 
-  return (
-    <div className="app-shell">
-      <header className="app-header">
-        <b>Miniatures Contest</b>
-        <Link to="/">{t(language, "navHome")}</Link>
-        <Link to="/profile">{t(language, "navProfile")}</Link>
-        <Link to="/teams">{t(language, "navTeams")}</Link>
-        <Link to="/models">{t(language, "navModels")}</Link>
-        <Link to="/enrollments">{t(language, "navEnrollments")}</Link>
-        <Link to="/public-events">{t(language, "navPublicEvents")}</Link>
-        <Link to="/judge">{t(language, "navJudge")}</Link>
-        <Link to="/staff">{t(language, "navStaff")}</Link>
-        <Link to="/admin">{t(language, "navAdmin")}</Link>
-        <div className="header-spacer" />
-        <div className="header-controls">
-          <div className="language-select">
-            <span className="material-symbols-outlined">language</span>
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value as Language)}
-              aria-label={labels.languageToggle}
-            >
-              <option value="it">{labels.languageIt}</option>
-              <option value="en">{labels.languageEn}</option>
-            </select>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            aria-label={`${labels.themeToggle}: ${theme === "light" ? labels.themeDark : labels.themeLight}`}
-            title={`${labels.themeToggle}: ${theme === "light" ? labels.themeDark : labels.themeLight}`}
+  const muiTheme = useMemo(() => createTheme({
+    palette: {
+      mode: themeMode,
+      primary: {
+        main: themeMode === "light" ? "#6750a4" : "#d0bcff"
+      }
+    },
+    typography: {
+      fontFamily: "\"Roboto\", \"Segoe UI\", system-ui, sans-serif"
+    }
+  }), [themeMode]);
+
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
+
+  const navItems = [
+    { label: t(language, "navHome"), path: "/" },
+    { label: t(language, "navProfile"), path: "/profile" },
+    { label: t(language, "navTeams"), path: "/teams" },
+    { label: t(language, "navModels"), path: "/models" },
+    { label: t(language, "navEnrollments"), path: "/enrollments" },
+    { label: t(language, "navPublicEvents"), path: "/public-events" },
+    { label: t(language, "navJudge"), path: "/judge" },
+    { label: t(language, "navStaff"), path: "/staff" },
+    { label: t(language, "navAdmin"), path: "/admin" }
+  ];
+
+  const isActive = (path: string) => {
+    if (path === "/") return location.pathname === "/";
+    return location.pathname.startsWith(path);
+  };
+
+  const drawerContent = (
+    <Box sx={{ width: 280 }} role="presentation" onClick={() => setDrawerOpen(false)}>
+      <Typography variant="h6" sx={{ px: 2, py: 2 }}>
+        Miniatures Contest
+      </Typography>
+      <Divider />
+      <List>
+        {navItems.map((item) => (
+          <ListItemButton
+            key={item.path}
+            component={RouterLink}
+            to={item.path}
+            selected={isActive(item.path)}
           >
-            <span className="material-symbols-outlined">
-              {theme === "light" ? "dark_mode" : "light_mode"}
-            </span>
-          </button>
-        </div>
-      </header>
-      <hr className="divider" />
-      <Routes>
-        <Route
-          path="/login"
-          element={(
-            <Login
-              language={language}
+            <ListItemText primary={item.label} />
+          </ListItemButton>
+        ))}
+      </List>
+    </Box>
+  );
+
+  return (
+    <ThemeProvider theme={muiTheme}>
+      <CssBaseline />
+      <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+        <AppBar position="static" color="primary">
+          <Toolbar sx={{ gap: 2 }}>
+            {isMobile && (
+              <IconButton color="inherit" edge="start" onClick={() => setDrawerOpen(true)}>
+                <MenuIcon />
+              </IconButton>
+            )}
+            <Typography variant="h6" sx={{ flexGrow: isMobile ? 1 : 0 }}>
+              Miniatures Contest
+            </Typography>
+            {!isMobile && (
+              <Stack direction="row" spacing={1} sx={{ flexGrow: 1, ml: 2, flexWrap: "wrap" }}>
+                {navItems.map((item) => (
+                  <Button
+                    key={item.path}
+                    color="inherit"
+                    component={RouterLink}
+                    to={item.path}
+                    variant={isActive(item.path) ? "outlined" : "text"}
+                    sx={{ borderColor: "rgba(255,255,255,0.4)" }}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </Stack>
+            )}
+            <Stack direction="row" spacing={1} alignItems="center">
+              <FormControl size="small" sx={{ minWidth: 140, bgcolor: "background.paper", borderRadius: 1 }}>
+                <InputLabel id="language-select-label">{labels.languageToggle}</InputLabel>
+                <Select
+                  labelId="language-select-label"
+                  value={language}
+                  label={labels.languageToggle}
+                  onChange={(event) => setLanguage(event.target.value as Language)}
+                >
+                  <MenuItem value="it">{labels.languageIt}</MenuItem>
+                  <MenuItem value="en">{labels.languageEn}</MenuItem>
+                </Select>
+              </FormControl>
+              <IconButton
+                color="inherit"
+                onClick={() => setThemeMode(themeMode === "light" ? "dark" : "light")}
+                aria-label={`${labels.themeToggle}: ${themeMode === "light" ? labels.themeDark : labels.themeLight}`}
+                title={`${labels.themeToggle}: ${themeMode === "light" ? labels.themeDark : labels.themeLight}`}
+              >
+                {themeMode === "light" ? <Brightness4Icon /> : <Brightness7Icon />}
+              </IconButton>
+            </Stack>
+          </Toolbar>
+        </AppBar>
+        <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+          {drawerContent}
+        </Drawer>
+        <Box sx={{ py: 4 }}>
+          <Routes>
+            <Route
+              path="/login"
+              element={(
+                <Login
+                  language={language}
+                />
+              )}
             />
-          )}
-        />
-        <Route path="/" element={<Protected><Dashboard language={language} /></Protected>} />
-        <Route path="/profile" element={<Protected><Profile language={language} /></Protected>} />
-        <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
-        <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
-        <Route path="/enrollments" element={<Protected><Enrollments language={language} /></Protected>} />
-        <Route path="/public-events" element={<PublicEvents language={language} />} />
-        <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />
-        <Route path="/staff" element={<Protected><RequireRole min="staff"><StaffCheckin language={language} /></RequireRole></Protected>} />
-        <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin language={language} /></RequireRole></Protected>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
+            <Route path="/" element={<Protected><Dashboard language={language} /></Protected>} />
+            <Route path="/profile" element={<Protected><Profile language={language} /></Protected>} />
+            <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
+            <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
+            <Route path="/enrollments" element={<Protected><Enrollments language={language} /></Protected>} />
+            <Route path="/public-events" element={<PublicEvents language={language} />} />
+            <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />
+            <Route path="/staff" element={<Protected><RequireRole min="staff"><StaffCheckin language={language} /></RequireRole></Protected>} />
+            <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin language={language} /></RequireRole></Protected>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Box>
+      </Box>
+    </ThemeProvider>
   );
 }
