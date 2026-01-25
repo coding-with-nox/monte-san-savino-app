@@ -8,7 +8,11 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 export const userRoutes = new Elysia({ prefix: "/users" })
   .use(tenantMiddleware)
   .use(requireRole("user"))
-  .get("/profile", async ({ user, tenantDb }) => {
+  .get("/profile", async ({ user, tenantDb, set }) => {
+    if (!user?.id) {
+      set.status = 401;
+      return { error: "Unauthenticated" };
+    }
     const db = tenantDb ?? getTenantDbFromEnv();
     const rows = await db
       .select({
@@ -34,7 +38,11 @@ export const userRoutes = new Elysia({ prefix: "/users" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .put("/profile", async ({ user, tenantDb, body }) => {
+  .put("/profile", async ({ user, tenantDb, body, set }) => {
+    if (!user?.id) {
+      set.status = 401;
+      return { error: "Unauthenticated" };
+    }
     const db = tenantDb ?? getTenantDbFromEnv();
     await db
       .insert(userProfilesTable)
@@ -60,7 +68,11 @@ export const userRoutes = new Elysia({ prefix: "/users" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .patch("/profile/contacts", async ({ user, tenantDb, body }) => {
+  .patch("/profile/contacts", async ({ user, tenantDb, body, set }) => {
+    if (!user?.id) {
+      set.status = 401;
+      return { error: "Unauthenticated" };
+    }
     const db = tenantDb ?? getTenantDbFromEnv();
     await db
       .insert(userProfilesTable)
@@ -83,7 +95,11 @@ export const userRoutes = new Elysia({ prefix: "/users" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .patch("/profile/avatar", async ({ user, tenantDb, body }) => {
+  .patch("/profile/avatar", async ({ user, tenantDb, body, set }) => {
+    if (!user?.id) {
+      set.status = 401;
+      return { error: "Unauthenticated" };
+    }
     const db = tenantDb ?? getTenantDbFromEnv();
     await db
       .insert(userProfilesTable)
