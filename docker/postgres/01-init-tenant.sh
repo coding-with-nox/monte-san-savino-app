@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS team_members (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_team_user
   ON team_members (team_id, user_id);
 
+CREATE INDEX IF NOT EXISTS ix_team_members_user
+  ON team_members (user_id);
+
 CREATE TABLE IF NOT EXISTS events (
   id uuid PRIMARY KEY,
   name text NOT NULL,
@@ -62,6 +65,9 @@ CREATE TABLE IF NOT EXISTS categories (
   event_id uuid NOT NULL,
   name text NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS ix_categories_event
+  ON categories (event_id);
 
 CREATE TABLE IF NOT EXISTS registrations (
   id uuid PRIMARY KEY,
@@ -79,6 +85,12 @@ ALTER TABLE registrations ADD COLUMN IF NOT EXISTS category_id uuid;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_reg_user_event
   ON registrations (user_id, event_id);
 
+CREATE INDEX IF NOT EXISTS ix_registrations_event
+  ON registrations (event_id);
+
+CREATE INDEX IF NOT EXISTS ix_registrations_user
+  ON registrations (user_id);
+
 CREATE TABLE IF NOT EXISTS models (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL,
@@ -90,11 +102,20 @@ CREATE TABLE IF NOT EXISTS models (
 
 ALTER TABLE models ADD COLUMN IF NOT EXISTS team_id uuid;
 
+CREATE INDEX IF NOT EXISTS ix_models_category
+  ON models (category_id);
+
+CREATE INDEX IF NOT EXISTS ix_models_user
+  ON models (user_id);
+
 CREATE TABLE IF NOT EXISTS model_images (
   id uuid PRIMARY KEY,
   model_id uuid NOT NULL,
   url text NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS ix_model_images_model
+  ON model_images (model_id);
 
 CREATE TABLE IF NOT EXISTS votes (
   id uuid PRIMARY KEY,
@@ -107,6 +128,9 @@ CREATE TABLE IF NOT EXISTS votes (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_votes_judge_model
   ON votes (judge_id, model_id);
 
+CREATE INDEX IF NOT EXISTS ix_votes_model
+  ON votes (model_id);
+
 CREATE TABLE IF NOT EXISTS judge_assignments (
   id uuid PRIMARY KEY,
   event_id uuid NOT NULL,
@@ -116,6 +140,9 @@ CREATE TABLE IF NOT EXISTS judge_assignments (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_judge_event
   ON judge_assignments (event_id, judge_id);
 
+CREATE INDEX IF NOT EXISTS ix_judge_assignments_event
+  ON judge_assignments (event_id);
+
 CREATE TABLE IF NOT EXISTS payments (
   id uuid PRIMARY KEY,
   registration_id uuid NOT NULL,
@@ -124,4 +151,7 @@ CREATE TABLE IF NOT EXISTS payments (
   provider_ref text,
   created_at timestamp DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS ix_payments_registration
+  ON payments (registration_id);
 SQL
