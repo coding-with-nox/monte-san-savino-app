@@ -40,7 +40,7 @@ Docs:
 
 ## Backend + API overview
 - The backend lives in `backend/` and runs on Bun + Elysia. Start it with `bun run dev` and access Swagger at `http://localhost:3000/docs`. This is the authoritative list of endpoints and schemas.
-- The frontend lives in `frontend/` and calls the API via `frontend/src/lib/api.ts`. The base URL is `VITE_API_BASE` (defaults to `http://localhost:3000` when unset).
+- The frontend lives in `frontend/` and calls the API via `frontend/src/lib/api.ts`. The base URL is `VITE_API_BASE` (defaults to `/api` when unset, or set it to `http://localhost:3000` for local dev without a proxy).
 
 ### Currently wired FE → BE calls
 The React pages call these endpoints:
