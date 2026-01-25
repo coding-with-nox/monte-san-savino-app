@@ -1,4 +1,21 @@
 import React, { useEffect, useState } from "react";
+import {
+  Button,
+  Card,
+  CardContent,
+  Container,
+  FormControl,
+  Grid,
+  InputLabel,
+  List,
+  ListItemButton,
+  ListItemText,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Typography
+} from "@mui/material";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -34,39 +51,91 @@ export default function Judge({ language }: JudgeProps) {
   }, []);
 
   return (
-    <div>
-      <h2>{t(language, "judgeTitle")}</h2>
-      <p>{t(language, "judgeRankHint")}</p>
-      <div className="card">
-        <div className="grid">
-          <input placeholder={t(language, "judgeEventPlaceholder")} value={eventId} onChange={(e) => setEventId(e.target.value)} />
-          <input placeholder={t(language, "judgeSearchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
-          <button onClick={loadModels}>{t(language, "judgeRefreshButton")}</button>
-        </div>
-        <ul>
-          {models.map((model) => (
-            <li key={model.id}>
-              <button className="link-button" onClick={() => setModelId(model.id)}>
-                {model.name} <span className="muted">({model.categoryId})</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="card">
-        <h3>{t(language, "judgeVoteTitle")}</h3>
-        <div className="grid">
-          <input placeholder={t(language, "judgeModelIdPlaceholder")} value={modelId} onChange={e=>setModelId(e.target.value)} />
-          <select value={rank} onChange={e=>setRank(Number(e.target.value))}>
-            <option value={0}>0</option>
-            <option value={1}>1</option>
-            <option value={2}>2</option>
-            <option value={3}>3</option>
-          </select>
-          <button onClick={vote}>{t(language, "judgeVoteButton")}</button>
-        </div>
-        <pre className="code-block">{out}</pre>
-      </div>
-    </div>
+    <Container maxWidth="lg">
+      <Stack spacing={3}>
+        <Typography variant="h4">{t(language, "judgeTitle")}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {t(language, "judgeRankHint")}
+        </Typography>
+        <Card>
+          <CardContent>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label={t(language, "judgeEventPlaceholder")}
+                  value={eventId}
+                  onChange={(event) => setEventId(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label={t(language, "judgeSearchPlaceholder")}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Button variant="contained" onClick={loadModels} fullWidth>
+                  {t(language, "judgeRefreshButton")}
+                </Button>
+              </Grid>
+            </Grid>
+            <List dense sx={{ mt: 2 }}>
+              {models.map((model) => (
+                <ListItemButton key={model.id} onClick={() => setModelId(model.id)}>
+                  <ListItemText primary={model.name} secondary={model.categoryId} />
+                </ListItemButton>
+              ))}
+            </List>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              {t(language, "judgeVoteTitle")}
+            </Typography>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label={t(language, "judgeModelIdPlaceholder")}
+                  value={modelId}
+                  onChange={(event) => setModelId(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel id="rank-label">Rank</InputLabel>
+                  <Select
+                    labelId="rank-label"
+                    value={rank}
+                    label="Rank"
+                    onChange={(event) => setRank(Number(event.target.value))}
+                  >
+                    {[0, 1, 2, 3].map((value) => (
+                      <MenuItem key={value} value={value}>
+                        {value}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Button variant="contained" onClick={vote} fullWidth>
+                  {t(language, "judgeVoteButton")}
+                </Button>
+              </Grid>
+            </Grid>
+            {out && (
+              <Typography component="pre" sx={{ mt: 2, whiteSpace: "pre-wrap" }}>
+                {out}
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+      </Stack>
+    </Container>
   );
 }

@@ -2,11 +2,13 @@ import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { requireRole } from "./role.middleware";
 import { usersTable, userProfilesTable } from "../persistence/schema";
+import { getTenantDbFromEnv } from "../../../tenancy/infra/tenantDbFactory";
 
 export const userRoutes = new Elysia({ prefix: "/users" })
   .use(requireRole("user"))
   .get("/profile", async ({ user, tenantDb }) => {
-    const rows = await tenantDb
+    const db = tenantDb ?? getTenantDbFromEnv();
+    const rows = await db
       .select({
         id: usersTable.id,
         email: usersTable.email,
@@ -31,7 +33,8 @@ export const userRoutes = new Elysia({ prefix: "/users" })
     }
   })
   .put("/profile", async ({ user, tenantDb, body }) => {
-    await tenantDb
+    const db = tenantDb ?? getTenantDbFromEnv();
+    await db
       .insert(userProfilesTable)
       .values({ userId: user.id as any, ...body })
       .onConflictDoUpdate({
@@ -56,7 +59,8 @@ export const userRoutes = new Elysia({ prefix: "/users" })
     }
   })
   .patch("/profile/contacts", async ({ user, tenantDb, body }) => {
-    await tenantDb
+    const db = tenantDb ?? getTenantDbFromEnv();
+    await db
       .insert(userProfilesTable)
       .values({ userId: user.id as any, ...body })
       .onConflictDoUpdate({
@@ -78,7 +82,8 @@ export const userRoutes = new Elysia({ prefix: "/users" })
     }
   })
   .patch("/profile/avatar", async ({ user, tenantDb, body }) => {
-    await tenantDb
+    const db = tenantDb ?? getTenantDbFromEnv();
+    await db
       .insert(userProfilesTable)
       .values({ userId: user.id as any, avatarUrl: body.avatarUrl })
       .onConflictDoUpdate({

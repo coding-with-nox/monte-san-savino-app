@@ -1,4 +1,18 @@
 import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Button,
+  Card,
+  CardContent,
+  Container,
+  Grid,
+  List,
+  ListItem,
+  ListItemText,
+  Stack,
+  TextField,
+  Typography
+} from "@mui/material";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -40,27 +54,63 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   }, []);
 
   return (
-    <div>
-      <h2>{t(language, "enrollmentsTitle")}</h2>
-      <div className="card">
-        <div className="grid">
-          <input placeholder={t(language, "enrollmentsEventPlaceholder")} value={eventId} onChange={(e) => setEventId(e.target.value)} />
-          <input placeholder={t(language, "enrollmentsModelPlaceholder")} value={modelId} onChange={(e) => setModelId(e.target.value)} />
-          <input placeholder={t(language, "enrollmentsCategoryPlaceholder")} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} />
-          <button onClick={enroll}>{t(language, "enrollmentsButton")}</button>
-        </div>
-      </div>
-      <div className="card">
-        <h3>{t(language, "enrollmentsListTitle")}</h3>
-        <ul>
-          {enrollments.map((enrollment) => (
-            <li key={enrollment.id}>
-              <b>{enrollment.eventId}</b> - {enrollment.status} {enrollment.checkedIn ? t(language, "enrollmentsCheckedIn") : ""}
-            </li>
-          ))}
-        </ul>
-      </div>
-      {message && <p className="hint">{message}</p>}
-    </div>
+    <Container maxWidth="lg">
+      <Stack spacing={3}>
+        <Typography variant="h4">{t(language, "enrollmentsTitle")}</Typography>
+        <Card>
+          <CardContent>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label={t(language, "enrollmentsEventPlaceholder")}
+                  value={eventId}
+                  onChange={(event) => setEventId(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label={t(language, "enrollmentsModelPlaceholder")}
+                  value={modelId}
+                  onChange={(event) => setModelId(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label={t(language, "enrollmentsCategoryPlaceholder")}
+                  value={categoryId}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Button variant="contained" onClick={enroll}>
+                  {t(language, "enrollmentsButton")}
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              {t(language, "enrollmentsListTitle")}
+            </Typography>
+            <List dense>
+              {enrollments.map((enrollment) => (
+                <ListItem key={enrollment.id} disableGutters>
+                  <ListItemText
+                    primary={`${enrollment.eventId} — ${enrollment.status}`}
+                    secondary={enrollment.checkedIn ? t(language, "enrollmentsCheckedIn") : undefined}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </CardContent>
+        </Card>
+        {message && <Alert severity="info">{message}</Alert>}
+      </Stack>
+    </Container>
   );
 }
