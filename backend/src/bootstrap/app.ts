@@ -30,7 +30,8 @@ export function buildApp() {
 
   return new Elysia()
     .use(cors({
-      origin: corsOrigins.length > 0 ? corsOrigins : true
+      origin: corsOrigins.length > 0 ? corsOrigins : true,
+      allowedHeaders: ["Authorization", "Content-Type"]
     }))
     .use(swagger({
       path: "/docs",
