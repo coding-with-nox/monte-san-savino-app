@@ -1,9 +1,11 @@
 import { Elysia, t } from "elysia";
 import { and, eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { registrationsTable } from "../persistence/schema";
 
 export const userEnrollmentRoutes = new Elysia({ prefix: "/enrollments" })
+  .use(tenantMiddleware)
   .use(requireRole("user"))
   .get("/", async ({ tenantDb, user }) => {
     return await tenantDb.select().from(registrationsTable).where(eq(registrationsTable.userId, user.id as any));
@@ -34,6 +36,7 @@ export const userEnrollmentRoutes = new Elysia({ prefix: "/enrollments" })
   });
 
 export const adminEnrollmentRoutes = new Elysia({ prefix: "/admin/enrollments" })
+  .use(tenantMiddleware)
   .use(requireRole("manager"))
   .get("/", async ({ tenantDb, query }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
@@ -62,6 +65,7 @@ export const adminEnrollmentRoutes = new Elysia({ prefix: "/admin/enrollments" }
   });
 
 export const staffCheckinRoutes = new Elysia({ prefix: "/staff" })
+  .use(tenantMiddleware)
   .use(requireRole("staff"))
   .post("/checkin/:enrollmentId", async ({ tenantDb, params }) => {
     await tenantDb.update(registrationsTable).set({ checkedIn: true }).where(eq(registrationsTable.id, params.enrollmentId as any));

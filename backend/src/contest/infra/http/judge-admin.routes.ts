@@ -1,9 +1,11 @@
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { judgeAssignmentsTable } from "../persistence/schema";
 
 export const judgeAdminRoutes = new Elysia({ prefix: "/admin/judges" })
+  .use(tenantMiddleware)
   .use(requireRole("manager"))
   .get("/assignments", async ({ tenantDb, query }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;

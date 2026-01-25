@@ -1,9 +1,11 @@
 import { Elysia, t } from "elysia";
 import { and, eq, ilike } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { modelsTable, modelImagesTable } from "../persistence/schema";
 
 export const modelRoutes = new Elysia({ prefix: "/models" })
+  .use(tenantMiddleware)
   .use(requireRole("user"))
   .get("/", async ({ tenantDb, user, query }) => {
     const search = query?.search ? String(query.search) : null;

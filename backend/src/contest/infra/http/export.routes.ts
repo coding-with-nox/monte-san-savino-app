@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { registrationsTable, modelsTable } from "../persistence/schema";
 
 function toCsv(rows: Record<string, any>[]) {
@@ -14,6 +15,7 @@ function toCsv(rows: Record<string, any>[]) {
 }
 
 export const exportRoutes = new Elysia({ prefix: "/exports" })
+  .use(tenantMiddleware)
   .use(requireRole("manager"))
   .get("/enrollments", async ({ tenantDb, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;

@@ -3,8 +3,10 @@ import { eq } from "drizzle-orm";
 import { requireRole } from "./role.middleware";
 import { usersTable } from "../persistence/schema";
 import { BcryptHasher } from "../crypto/bcryptHasher";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 
 export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
+  .use(tenantMiddleware)
   .use(requireRole("manager"))
   .get("/", async ({ tenantDb }) => {
     return await tenantDb.select({

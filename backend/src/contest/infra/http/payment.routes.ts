@@ -1,9 +1,11 @@
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { paymentsTable, registrationsTable } from "../persistence/schema";
 
 export const paymentRoutes = new Elysia({ prefix: "/payments" })
+  .use(tenantMiddleware)
   .use(requireRole("user"))
   .post("/checkout", async ({ tenantDb, body }) => {
     const paymentId = crypto.randomUUID();

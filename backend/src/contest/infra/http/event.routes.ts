@@ -1,9 +1,11 @@
 import { Elysia, t } from "elysia";
 import { and, eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { eventsTable, registrationsTable } from "../persistence/schema";
 
 export const eventRoutes = new Elysia({ prefix: "/events" })
+  .use(tenantMiddleware)
   .use(requireRole("manager"))
   .get("/", async ({ tenantDb }) => {
     return await tenantDb.select().from(eventsTable);
@@ -78,6 +80,7 @@ export const eventRoutes = new Elysia({ prefix: "/events" })
   });
 
 export const enrollmentRoutes = new Elysia({ prefix: "/events" })
+  .use(tenantMiddleware)
   .use(requireRole("user"))
   .post("/:eventId/enroll", async ({ tenantDb, user, params, body, set }) => {
     const existing = await tenantDb

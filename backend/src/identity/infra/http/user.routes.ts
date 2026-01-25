@@ -3,8 +3,10 @@ import { eq } from "drizzle-orm";
 import { requireRole } from "./role.middleware";
 import { usersTable, userProfilesTable } from "../persistence/schema";
 import { getTenantDbFromEnv } from "../../../tenancy/infra/tenantDbFactory";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 
 export const userRoutes = new Elysia({ prefix: "/users" })
+  .use(tenantMiddleware)
   .use(requireRole("user"))
   .get("/profile", async ({ user, tenantDb }) => {
     const db = tenantDb ?? getTenantDbFromEnv();

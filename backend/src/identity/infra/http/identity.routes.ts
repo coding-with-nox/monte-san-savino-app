@@ -6,6 +6,7 @@ import { BcryptHasher } from "../crypto/bcryptHasher";
 import { JwtTokenService } from "../tokens/jwtTokenService";
 import { UserRepositoryDrizzle } from "../persistence/userRepository.drizzle";
 import { getTenantDbFromEnv } from "../../../tenancy/infra/tenantDbFactory";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { consumeAuthCode, createAuthCode } from "../tokens/pkceStore";
 import crypto from "node:crypto";
 
@@ -29,6 +30,7 @@ function buildTokenResponse(accessToken: string, refreshToken: string, expiresIn
 }
 
 export const identityRoutes = new Elysia({ prefix: "/auth" })
+  .use(tenantMiddleware)
   .post("/register", async ({ body, tenantDb, set }) => {
     const db = tenantDb ?? getTenantDbFromEnv();
     if (body.password.length < 8) {

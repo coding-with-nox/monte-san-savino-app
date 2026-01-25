@@ -6,8 +6,10 @@ import { ModelReadRepositoryDrizzle } from "../persistence/modelReadRepository.d
 import { VoteModel } from "../../application/VoteModel";
 import { categoriesTable, judgeAssignmentsTable, modelsTable, modelImagesTable, registrationsTable } from "../persistence/schema";
 import { usersTable, userProfilesTable } from "../../../identity/infra/persistence/schema";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 
 export const judgeRoutes = new Elysia({ prefix: "/judge" })
+  .use(tenantMiddleware)
   .use(requireRole("judge"))
   .get("/events", async ({ tenantDb, user }) => {
     return await tenantDb

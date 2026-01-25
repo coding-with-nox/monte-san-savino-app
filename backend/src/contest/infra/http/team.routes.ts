@@ -1,9 +1,11 @@
 import { Elysia, t } from "elysia";
 import { and, eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { teamsTable, teamMembersTable } from "../persistence/schema";
 
 export const teamRoutes = new Elysia({ prefix: "/teams" })
+  .use(tenantMiddleware)
   .use(requireRole("user"))
   .post("/", async ({ tenantDb, user, body }) => {
     const teamId = crypto.randomUUID();

@@ -1,9 +1,11 @@
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { modelsTable } from "../persistence/schema";
 
 export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
+  .use(tenantMiddleware)
   .use(requireRole("manager"))
   .get("/", async ({ tenantDb }) => {
     return await tenantDb.select().from(modelsTable);
