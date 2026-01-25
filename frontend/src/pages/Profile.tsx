@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { Language, t } from "../lib/i18n";
 
 type Profile = {
   email?: string;
@@ -13,7 +14,11 @@ type Profile = {
   avatarUrl?: string | null;
 };
 
-export default function Profile() {
+interface ProfileProps {
+  language: Language;
+}
+
+export default function Profile({ language }: ProfileProps) {
   const [profile, setProfile] = useState<Profile>({});
   const [message, setMessage] = useState("");
 
@@ -24,7 +29,7 @@ export default function Profile() {
 
   async function save() {
     await api("/users/profile", { method: "PUT", body: JSON.stringify(profile) });
-    setMessage("Profilo aggiornato.");
+    setMessage(t(language, "profileSaved"));
   }
 
   useEffect(() => {
@@ -33,18 +38,18 @@ export default function Profile() {
 
   return (
     <div>
-      <h2>Profilo</h2>
+      <h2>{t(language, "profileTitle")}</h2>
       <div className="card">
         <div className="grid">
-          <input placeholder="Nome" value={profile.firstName ?? ""} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} />
-          <input placeholder="Cognome" value={profile.lastName ?? ""} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} />
-          <input placeholder="Telefono" value={profile.phone ?? ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
-          <input placeholder="Città" value={profile.city ?? ""} onChange={(e) => setProfile({ ...profile, city: e.target.value })} />
-          <input placeholder="Indirizzo" value={profile.address ?? ""} onChange={(e) => setProfile({ ...profile, address: e.target.value })} />
-          <input placeholder="Contatto emergenza" value={profile.emergencyContact ?? ""} onChange={(e) => setProfile({ ...profile, emergencyContact: e.target.value })} />
-          <input placeholder="Avatar URL" value={profile.avatarUrl ?? ""} onChange={(e) => setProfile({ ...profile, avatarUrl: e.target.value })} />
+          <input placeholder={t(language, "profileFirstName")} value={profile.firstName ?? ""} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} />
+          <input placeholder={t(language, "profileLastName")} value={profile.lastName ?? ""} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} />
+          <input placeholder={t(language, "profilePhone")} value={profile.phone ?? ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+          <input placeholder={t(language, "profileCity")} value={profile.city ?? ""} onChange={(e) => setProfile({ ...profile, city: e.target.value })} />
+          <input placeholder={t(language, "profileAddress")} value={profile.address ?? ""} onChange={(e) => setProfile({ ...profile, address: e.target.value })} />
+          <input placeholder={t(language, "profileEmergencyContact")} value={profile.emergencyContact ?? ""} onChange={(e) => setProfile({ ...profile, emergencyContact: e.target.value })} />
+          <input placeholder={t(language, "profileAvatarUrl")} value={profile.avatarUrl ?? ""} onChange={(e) => setProfile({ ...profile, avatarUrl: e.target.value })} />
         </div>
-        <button onClick={save}>Salva profilo</button>
+        <button onClick={save}>{t(language, "profileSaveButton")}</button>
       </div>
       {message && <p className="hint">{message}</p>}
     </div>

@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { Language, t } from "../lib/i18n";
 
 type Model = { id: string; name: string; categoryId: string; teamId?: string | null; imageUrl?: string | null };
 type ModelDetail = { model: Model; images: { id: string; url: string }[] };
 
-export default function Models() {
+interface ModelsProps {
+  language: Language;
+}
+
+export default function Models({ language }: ModelsProps) {
   const [models, setModels] = useState<Model[]>([]);
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -44,19 +49,19 @@ export default function Models() {
 
   return (
     <div>
-      <h2>Modelli</h2>
+      <h2>{t(language, "modelsTitle")}</h2>
       <div className="card">
         <div className="grid">
-          <input placeholder="Nome modello" value={name} onChange={(e) => setName(e.target.value)} />
-          <input placeholder="Category ID" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} />
-          <input placeholder="Team ID (opzionale)" value={teamId} onChange={(e) => setTeamId(e.target.value)} />
-          <input placeholder="Immagine principale URL" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
-          <button onClick={create}>Crea modello</button>
+          <input placeholder={t(language, "modelsNamePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} />
+          <input placeholder={t(language, "modelsCategoryPlaceholder")} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} />
+          <input placeholder={t(language, "modelsTeamPlaceholder")} value={teamId} onChange={(e) => setTeamId(e.target.value)} />
+          <input placeholder={t(language, "modelsImagePlaceholder")} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
+          <button onClick={create}>{t(language, "modelsCreateButton")}</button>
         </div>
       </div>
       <div className="grid-two">
         <div className="card">
-          <h3>Lista modelli</h3>
+          <h3>{t(language, "modelsListTitle")}</h3>
           <ul>
             {models.map((model) => (
               <li key={model.id}>
@@ -68,7 +73,7 @@ export default function Models() {
           </ul>
         </div>
         <div className="card">
-          <h3>Dettaglio</h3>
+          <h3>{t(language, "modelsDetailTitle")}</h3>
           {selected?.model ? (
             <>
               <p><b>{selected.model.name}</b></p>
@@ -79,12 +84,12 @@ export default function Models() {
                 ))}
               </ul>
               <div className="grid">
-                <input placeholder="URL immagine" value={image} onChange={(e) => setImage(e.target.value)} />
-                <button onClick={addImage}>Aggiungi immagine</button>
+                <input placeholder={t(language, "modelsAddImagePlaceholder")} value={image} onChange={(e) => setImage(e.target.value)} />
+                <button onClick={addImage}>{t(language, "modelsAddImageButton")}</button>
               </div>
             </>
           ) : (
-            <p className="muted">Seleziona un modello.</p>
+            <p className="muted">{t(language, "modelsSelectHint")}</p>
           )}
         </div>
       </div>

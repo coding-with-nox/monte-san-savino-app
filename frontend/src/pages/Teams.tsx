@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { Language, t } from "../lib/i18n";
 
 type Team = { id: string; name: string; ownerId: string; role: string };
 type TeamDetail = { team?: Team; members?: { teamId: string; userId: string; role: string }[] };
 
-export default function Teams() {
+interface TeamsProps {
+  language: Language;
+}
+
+export default function Teams({ language }: TeamsProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<TeamDetail | null>(null);
@@ -39,16 +44,16 @@ export default function Teams() {
 
   return (
     <div>
-      <h2>Team</h2>
+      <h2>{t(language, "teamsTitle")}</h2>
       <div className="card">
         <div className="grid">
-          <input placeholder="Nome team" value={name} onChange={(e) => setName(e.target.value)} />
-          <button onClick={createTeam}>Crea team</button>
+          <input placeholder={t(language, "teamsNamePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} />
+          <button onClick={createTeam}>{t(language, "teamsCreateButton")}</button>
         </div>
       </div>
       <div className="grid-two">
         <div className="card">
-          <h3>I tuoi team</h3>
+          <h3>{t(language, "teamsListTitle")}</h3>
           <ul>
             {teams.map((team) => (
               <li key={team.id}>
@@ -60,7 +65,7 @@ export default function Teams() {
           </ul>
         </div>
         <div className="card">
-          <h3>Dettaglio</h3>
+          <h3>{t(language, "teamsDetailTitle")}</h3>
           {selected?.team ? (
             <>
               <p><b>{selected.team.name}</b></p>
@@ -70,12 +75,12 @@ export default function Teams() {
                 ))}
               </ul>
               <div className="grid">
-                <input placeholder="User ID" value={memberId} onChange={(e) => setMemberId(e.target.value)} />
-                <button onClick={addMember}>Aggiungi membro</button>
+                <input placeholder={t(language, "teamsMemberPlaceholder")} value={memberId} onChange={(e) => setMemberId(e.target.value)} />
+                <button onClick={addMember}>{t(language, "teamsAddMemberButton")}</button>
               </div>
             </>
           ) : (
-            <p className="muted">Seleziona un team.</p>
+            <p className="muted">{t(language, "teamsSelectHint")}</p>
           )}
         </div>
       </div>

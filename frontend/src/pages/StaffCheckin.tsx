@@ -1,13 +1,18 @@
 import React, { useState } from "react";
 import { api } from "../lib/api";
+import { Language, t } from "../lib/i18n";
 
-export default function StaffCheckin() {
+interface StaffCheckinProps {
+  language: Language;
+}
+
+export default function StaffCheckin({ language }: StaffCheckinProps) {
   const [enrollmentId, setEnrollmentId] = useState("");
   const [message, setMessage] = useState("");
 
   async function checkIn() {
     await api(`/staff/checkin/${enrollmentId}`, { method: "POST" });
-    setMessage("Check-in completato.");
+    setMessage(t(language, "staffCheckinCompleted"));
     setEnrollmentId("");
   }
 
@@ -18,12 +23,12 @@ export default function StaffCheckin() {
 
   return (
     <div>
-      <h2>Check-in staff</h2>
+      <h2>{t(language, "staffCheckinTitle")}</h2>
       <div className="card">
         <div className="grid">
-          <input placeholder="Enrollment ID" value={enrollmentId} onChange={(e) => setEnrollmentId(e.target.value)} />
-          <button onClick={checkIn}>Check-in</button>
-          <button onClick={printBadge}>Stampa badge</button>
+          <input placeholder={t(language, "staffCheckinEnrollmentPlaceholder")} value={enrollmentId} onChange={(e) => setEnrollmentId(e.target.value)} />
+          <button onClick={checkIn}>{t(language, "staffCheckinButton")}</button>
+          <button onClick={printBadge}>{t(language, "staffCheckinPrintButton")}</button>
         </div>
       </div>
       {message && <p className="hint">{message}</p>}

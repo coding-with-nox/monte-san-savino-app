@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import { setToken } from "../lib/auth";
+import { createCodeChallenge, generateCodeVerifier, setSession } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
 
 interface LoginProps {
@@ -41,11 +41,23 @@ export default function Login({ language }: LoginProps) {
     e.preventDefault();
     setErr(null);
     try {
-      const res = await api<{ accessToken: string }>("/auth/login", {
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = await createCodeChallenge(codeVerifier);
+      const authRes = await api<{ code: string }>("/auth/authorize", {
         method: "POST",
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({
+          email,
+          password,
+          code_challenge: codeChallenge,
+          code_challenge_method: "S256"
+        })
       });
-      setToken(res.accessToken);
+      const tokenRes = await api<{ accessToken: string; refreshToken: string; expiresIn: number; expires_in?: number }>("/auth/token", {
+        method: "POST",
+        body: JSON.stringify({ code: authRes.code, code_verifier: codeVerifier })
+      });
+      const expiresIn = tokenRes.expiresIn ?? tokenRes.expires_in ?? 0;
+      setSession(tokenRes.accessToken, tokenRes.refreshToken, expiresIn);
       nav("/");
     } catch (e: any) {
       handleError(e);

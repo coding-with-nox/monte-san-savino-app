@@ -12,7 +12,13 @@ export class LoginWithPassword {
     if (!user.canLogin()) throw new Error("User disabled");
     const ok = await this.hasher.verify(input.password, user.passwordHash);
     if (!ok) throw new Error("Invalid credentials");
-    const token = await this.tokens.sign({ sub: user.id, email: user.email.value, role: user.role });
-    return { accessToken: token, role: user.role };
+    const access = await this.tokens.signAccess({ sub: user.id, email: user.email.value, role: user.role });
+    const refresh = await this.tokens.signRefresh({ sub: user.id, email: user.email.value, role: user.role });
+    return {
+      accessToken: access.token,
+      refreshToken: refresh.token,
+      expiresIn: access.expiresIn,
+      role: user.role
+    };
   }
 }

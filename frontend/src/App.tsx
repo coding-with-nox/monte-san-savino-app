@@ -53,15 +53,15 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <b>Miniatures Contest</b>
-        <Link to="/">Home</Link>
-        <Link to="/profile">Profilo</Link>
-        <Link to="/teams">Team</Link>
-        <Link to="/models">Modelli</Link>
-        <Link to="/enrollments">Iscrizioni</Link>
-        <Link to="/public-events">Eventi pubblici</Link>
-        <Link to="/judge">Judge</Link>
-        <Link to="/staff">Staff</Link>
-        <Link to="/admin">Admin</Link>
+        <Link to="/">{t(language, "navHome")}</Link>
+        <Link to="/profile">{t(language, "navProfile")}</Link>
+        <Link to="/teams">{t(language, "navTeams")}</Link>
+        <Link to="/models">{t(language, "navModels")}</Link>
+        <Link to="/enrollments">{t(language, "navEnrollments")}</Link>
+        <Link to="/public-events">{t(language, "navPublicEvents")}</Link>
+        <Link to="/judge">{t(language, "navJudge")}</Link>
+        <Link to="/staff">{t(language, "navStaff")}</Link>
+        <Link to="/admin">{t(language, "navAdmin")}</Link>
         <div className="header-spacer" />
         <div className="header-controls">
           <div className="language-select">
@@ -98,15 +98,15 @@ export default function App() {
             />
           )}
         />
-        <Route path="/" element={<Protected><Dashboard /></Protected>} />
-        <Route path="/profile" element={<Protected><Profile /></Protected>} />
-        <Route path="/teams" element={<Protected><Teams /></Protected>} />
-        <Route path="/models" element={<Protected><Models /></Protected>} />
-        <Route path="/enrollments" element={<Protected><Enrollments /></Protected>} />
-        <Route path="/public-events" element={<PublicEvents />} />
-        <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge /></RequireRole></Protected>} />
-        <Route path="/staff" element={<Protected><RequireRole min="staff"><StaffCheckin /></RequireRole></Protected>} />
-        <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin /></RequireRole></Protected>} />
+        <Route path="/" element={<Protected><Dashboard language={language} /></Protected>} />
+        <Route path="/profile" element={<Protected><Profile language={language} /></Protected>} />
+        <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
+        <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
+        <Route path="/enrollments" element={<Protected><Enrollments language={language} /></Protected>} />
+        <Route path="/public-events" element={<PublicEvents language={language} />} />
+        <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />
+        <Route path="/staff" element={<Protected><RequireRole min="staff"><StaffCheckin language={language} /></RequireRole></Protected>} />
+        <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin language={language} /></RequireRole></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

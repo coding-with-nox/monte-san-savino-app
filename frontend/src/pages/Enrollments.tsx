@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { Language, t } from "../lib/i18n";
 
 type Enrollment = {
   id: string;
@@ -10,7 +11,11 @@ type Enrollment = {
   checkedIn: boolean;
 };
 
-export default function Enrollments() {
+interface EnrollmentsProps {
+  language: Language;
+}
+
+export default function Enrollments({ language }: EnrollmentsProps) {
   const [eventId, setEventId] = useState("");
   const [modelId, setModelId] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -27,7 +32,7 @@ export default function Enrollments() {
     setModelId("");
     setCategoryId("");
     await load();
-    setMessage("Iscrizione inviata.");
+    setMessage(t(language, "enrollmentsSubmitted"));
   }
 
   useEffect(() => {
@@ -36,21 +41,21 @@ export default function Enrollments() {
 
   return (
     <div>
-      <h2>Iscrizioni</h2>
+      <h2>{t(language, "enrollmentsTitle")}</h2>
       <div className="card">
         <div className="grid">
-          <input placeholder="Event ID" value={eventId} onChange={(e) => setEventId(e.target.value)} />
-          <input placeholder="Model ID (opzionale)" value={modelId} onChange={(e) => setModelId(e.target.value)} />
-          <input placeholder="Category ID (opzionale)" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} />
-          <button onClick={enroll}>Iscriviti</button>
+          <input placeholder={t(language, "enrollmentsEventPlaceholder")} value={eventId} onChange={(e) => setEventId(e.target.value)} />
+          <input placeholder={t(language, "enrollmentsModelPlaceholder")} value={modelId} onChange={(e) => setModelId(e.target.value)} />
+          <input placeholder={t(language, "enrollmentsCategoryPlaceholder")} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} />
+          <button onClick={enroll}>{t(language, "enrollmentsButton")}</button>
         </div>
       </div>
       <div className="card">
-        <h3>Le tue iscrizioni</h3>
+        <h3>{t(language, "enrollmentsListTitle")}</h3>
         <ul>
           {enrollments.map((enrollment) => (
             <li key={enrollment.id}>
-              <b>{enrollment.eventId}</b> - {enrollment.status} {enrollment.checkedIn ? "✓ check-in" : ""}
+              <b>{enrollment.eventId}</b> - {enrollment.status} {enrollment.checkedIn ? t(language, "enrollmentsCheckedIn") : ""}
             </li>
           ))}
         </ul>

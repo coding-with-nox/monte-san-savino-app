@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { api, API_BASE } from "../lib/api";
+import { Language, t } from "../lib/i18n";
 
 type Event = { id: string; name: string; status: string };
 type Category = { id: string; eventId: string; name: string };
 type Enrollment = { id: string; eventId: string; status: string; userId: string };
 type User = { id: string; email: string; role: string; isActive: boolean };
 
-export default function Admin() {
+interface AdminProps {
+  language: Language;
+}
+
+export default function Admin({ language }: AdminProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -44,12 +49,12 @@ export default function Admin() {
   async function assignJudge() {
     await api("/admin/judges/assignments", { method: "POST", body: JSON.stringify(judgeAssignment) });
     setJudgeAssignment({ eventId: "", judgeId: "" });
-    setMessage("Giudice assegnato.");
+    setMessage(t(language, "adminJudgeAssigned"));
   }
 
   async function resetPassword(userId: string) {
     const res = await api<{ temporaryPassword: string }>(`/admin/users/${userId}/reset-password`, { method: "POST" });
-    setMessage(`Password temporanea: ${res.temporaryPassword}`);
+    setMessage(`${t(language, "adminTempPassword")}: ${res.temporaryPassword}`);
   }
 
   useEffect(() => {
@@ -58,15 +63,15 @@ export default function Admin() {
 
   return (
     <div>
-      <h2>Admin</h2>
+      <h2>{t(language, "adminTitle")}</h2>
       {message && <p className="hint">{message}</p>}
       <div className="grid-two">
         <div className="card">
-          <h3>Eventi</h3>
+          <h3>{t(language, "adminEventsTitle")}</h3>
           <div className="grid">
-            <input placeholder="Nome" value={eventForm.name} onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })} />
-            <input placeholder="Status" value={eventForm.status} onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })} />
-            <button onClick={createEvent}>Crea evento</button>
+            <input placeholder={t(language, "adminEventNamePlaceholder")} value={eventForm.name} onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })} />
+            <input placeholder={t(language, "adminEventStatusPlaceholder")} value={eventForm.status} onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })} />
+            <button onClick={createEvent}>{t(language, "adminEventCreateButton")}</button>
           </div>
           <ul>
             {events.map((event) => (
@@ -75,11 +80,11 @@ export default function Admin() {
           </ul>
         </div>
         <div className="card">
-          <h3>Categorie</h3>
+          <h3>{t(language, "adminCategoriesTitle")}</h3>
           <div className="grid">
-            <input placeholder="Event ID" value={categoryForm.eventId} onChange={(e) => setCategoryForm({ ...categoryForm, eventId: e.target.value })} />
-            <input placeholder="Nome categoria" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} />
-            <button onClick={createCategory}>Crea categoria</button>
+            <input placeholder={t(language, "adminCategoryEventPlaceholder")} value={categoryForm.eventId} onChange={(e) => setCategoryForm({ ...categoryForm, eventId: e.target.value })} />
+            <input placeholder={t(language, "adminCategoryNamePlaceholder")} value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} />
+            <button onClick={createCategory}>{t(language, "adminCategoryCreateButton")}</button>
           </div>
           <ul>
             {categories.map((category) => (
@@ -88,7 +93,7 @@ export default function Admin() {
           </ul>
         </div>
         <div className="card">
-          <h3>Iscrizioni</h3>
+          <h3>{t(language, "adminEnrollmentsTitle")}</h3>
           <ul>
             {enrollments.map((enrollment) => (
               <li key={enrollment.id}>
@@ -103,29 +108,29 @@ export default function Admin() {
           </ul>
         </div>
         <div className="card">
-          <h3>Assegna giudici</h3>
+          <h3>{t(language, "adminJudgeAssignTitle")}</h3>
           <div className="grid">
-            <input placeholder="Event ID" value={judgeAssignment.eventId} onChange={(e) => setJudgeAssignment({ ...judgeAssignment, eventId: e.target.value })} />
-            <input placeholder="Judge ID" value={judgeAssignment.judgeId} onChange={(e) => setJudgeAssignment({ ...judgeAssignment, judgeId: e.target.value })} />
-            <button onClick={assignJudge}>Assegna</button>
+            <input placeholder={t(language, "adminJudgeEventPlaceholder")} value={judgeAssignment.eventId} onChange={(e) => setJudgeAssignment({ ...judgeAssignment, eventId: e.target.value })} />
+            <input placeholder={t(language, "adminJudgeIdPlaceholder")} value={judgeAssignment.judgeId} onChange={(e) => setJudgeAssignment({ ...judgeAssignment, judgeId: e.target.value })} />
+            <button onClick={assignJudge}>{t(language, "adminJudgeAssignButton")}</button>
           </div>
         </div>
         <div className="card">
-          <h3>Utenti</h3>
+          <h3>{t(language, "adminUsersTitle")}</h3>
           <ul>
             {users.map((user) => (
               <li key={user.id}>
                 {user.email} <span className="muted">({user.role})</span>
-                <button className="chip" onClick={() => resetPassword(user.id)}>Reset password</button>
+                <button className="chip" onClick={() => resetPassword(user.id)}>{t(language, "adminResetPasswordButton")}</button>
               </li>
             ))}
           </ul>
         </div>
         <div className="card">
-          <h3>Export</h3>
+          <h3>{t(language, "adminExportTitle")}</h3>
           <ul>
-            <li><a href={`${API_BASE}/exports/enrollments`} target="_blank" rel="noreferrer">Export iscrizioni CSV</a></li>
-            <li><a href={`${API_BASE}/exports/models`} target="_blank" rel="noreferrer">Export modelli CSV</a></li>
+            <li><a href={`${API_BASE}/exports/enrollments`} target="_blank" rel="noreferrer">{t(language, "adminExportEnrollments")}</a></li>
+            <li><a href={`${API_BASE}/exports/models`} target="_blank" rel="noreferrer">{t(language, "adminExportModels")}</a></li>
           </ul>
         </div>
       </div>
