@@ -1,5 +1,15 @@
 import { clearToken, getRefreshToken, getToken, getTokenExpiresAt, setSession } from "./auth";
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 const rawApiBase = import.meta.env.VITE_API_BASE;
 const trimmedBase = rawApiBase && rawApiBase.trim() !== "" ? rawApiBase.trim() : "/api";
 export const API_BASE = trimmedBase.endsWith("/") ? trimmedBase.slice(0, -1) : trimmedBase;
@@ -68,10 +78,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
         if (ct.includes("application/json")) {
           const payload = await retry.json().catch(() => null);
           const message = payload?.error ?? payload?.message;
-          if (message) throw new Error(String(message));
+          if (message) throw new ApiError(retry.status, String(message));
         }
         const message = await retry.text();
-        throw new Error(message || retry.statusText);
+        throw new ApiError(retry.status, message || retry.statusText);
       }
       if (retry.status === 204) return undefined as T;
       const retryCt = retry.headers.get("content-type") ?? "";
@@ -84,10 +94,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     if (ct.includes("application/json")) {
       const payload = await res.json().catch(() => null);
       const message = payload?.error ?? payload?.message;
-      if (message) throw new Error(String(message));
+      if (message) throw new ApiError(res.status, String(message));
     }
     const message = await res.text();
-    throw new Error(message || res.statusText);
+    throw new ApiError(res.status, message || res.statusText);
   }
   if (res.status === 204) return undefined as T;
   const ct = res.headers.get("content-type") ?? "";

@@ -11,7 +11,7 @@ import {
   TextField,
   Typography
 } from "@mui/material";
-import { api } from "../lib/api";
+import { ApiError, api } from "../lib/api";
 import { createCodeChallenge, generateCodeVerifier, setSession } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
 
@@ -52,6 +52,21 @@ export default function Login({ language }: LoginProps) {
     e.preventDefault();
     setErr(null);
     try {
+      try {
+        const tokenRes = await api<{ accessToken: string; refreshToken: string; expiresIn: number; expires_in?: number }>("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email, password })
+        });
+        const expiresIn = tokenRes.expiresIn ?? tokenRes.expires_in ?? 0;
+        setSession(tokenRes.accessToken, tokenRes.refreshToken, expiresIn);
+        nav("/");
+        return;
+      } catch (error) {
+        if (!(error instanceof ApiError) || (error.status !== 404 && error.status !== 405)) {
+          throw error;
+        }
+      }
+
       const codeVerifier = generateCodeVerifier();
       const codeChallenge = await createCodeChallenge(codeVerifier);
       const authRes = await api<{ code: string }>("/auth/authorize", {
