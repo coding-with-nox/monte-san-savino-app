@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Button,
   Card,
   CardContent,
@@ -32,6 +33,8 @@ export default function Judge({ language }: JudgeProps) {
   const [eventId, setEventId] = useState("");
   const [search, setSearch] = useState("");
   const [models, setModels] = useState<Model[]>([]);
+  const [modReason, setModReason] = useState("");
+  const [modMessage, setModMessage] = useState("");
 
   async function loadModels() {
     const query = new URLSearchParams();
@@ -44,6 +47,15 @@ export default function Judge({ language }: JudgeProps) {
   async function vote() {
     const res = await api<any>("/judge/vote", { method: "POST", body: JSON.stringify({ modelId, rank }) });
     setOut(JSON.stringify(res, null, 2));
+  }
+
+  async function requestModification() {
+    await api("/judge/modification-requests", {
+      method: "POST",
+      body: JSON.stringify({ modelId, reason: modReason })
+    });
+    setModReason("");
+    setModMessage(t(language, "judgeModRequestSent"));
   }
 
   useEffect(() => {
@@ -133,6 +145,38 @@ export default function Judge({ language }: JudgeProps) {
                 {out}
               </Typography>
             )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              {t(language, "judgeModRequestTitle")}
+            </Typography>
+            {modMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setModMessage("")}>{modMessage}</Alert>}
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label={t(language, "judgeModRequestModel")}
+                  value={modelId}
+                  onChange={(event) => setModelId(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={5}>
+                <TextField
+                  label={t(language, "judgeModRequestReason")}
+                  value={modReason}
+                  onChange={(event) => setModReason(event.target.value)}
+                  fullWidth
+                  multiline
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Button variant="outlined" onClick={requestModification} fullWidth disabled={!modelId || !modReason}>
+                  {t(language, "judgeModRequestSubmit")}
+                </Button>
+              </Grid>
+            </Grid>
           </CardContent>
         </Card>
       </Stack>

@@ -1,8 +1,8 @@
 import { Elysia, t } from "elysia";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { categoriesTable } from "../persistence/schema";
+import { categoriesTable, judgeAssignmentsTable, modelsTable, votesTable } from "../persistence/schema";
 
 export const categoryRoutes = new Elysia({ prefix: "/categories" })
   .use(tenantMiddleware)
@@ -22,7 +22,7 @@ export const categoryRoutes = new Elysia({ prefix: "/categories" })
   })
   .post("/", async ({ tenantDb, body }) => {
     const id = crypto.randomUUID();
-    await tenantDb.insert(categoriesTable).values({ id, eventId: body.eventId, name: body.name });
+    await tenantDb.insert(categoriesTable).values({ id, eventId: body.eventId, name: body.name, status: "open" });
     return { id };
   }, {
     body: t.Object({ eventId: t.String(), name: t.String() }),
@@ -51,6 +51,67 @@ export const categoryRoutes = new Elysia({ prefix: "/categories" })
     params: t.Object({ categoryId: t.String() }),
     detail: {
       summary: "Elimina categoria",
+      tags: ["Categories"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .patch("/:categoryId/status", async ({ tenantDb, params, body, set }) => {
+    if (body.status === "closed") {
+      // Validate: all judges assigned to this event must have voted on every model in this category
+      const [category] = await tenantDb.select().from(categoriesTable).where(eq(categoriesTable.id, params.categoryId as any));
+      if (!category) {
+        set.status = 404;
+        return { error: "Category not found" };
+      }
+
+      // Get all judges assigned to this event
+      const judges = await tenantDb
+        .select({ judgeId: judgeAssignmentsTable.judgeId })
+        .from(judgeAssignmentsTable)
+        .where(eq(judgeAssignmentsTable.eventId, category.eventId as any));
+
+      // Get all models in this category
+      const models = await tenantDb
+        .select({ id: modelsTable.id })
+        .from(modelsTable)
+        .where(eq(modelsTable.categoryId, params.categoryId as any));
+
+      if (judges.length > 0 && models.length > 0) {
+        // Count expected votes vs actual votes
+        const expectedVotes = judges.length * models.length;
+        const modelIds = models.map(m => m.id);
+
+        const [result] = await tenantDb
+          .select({ count: sql<number>`count(*)` })
+          .from(votesTable)
+          .where(
+            and(
+              sql`${votesTable.modelId} = ANY(${modelIds})`,
+              sql`${votesTable.judgeId} = ANY(${judges.map(j => j.judgeId)})`
+            )
+          );
+
+        if (Number(result.count) < expectedVotes) {
+          set.status = 400;
+          return {
+            error: "Cannot close category: not all judges have voted on all models",
+            expected: expectedVotes,
+            actual: Number(result.count)
+          };
+        }
+      }
+    }
+
+    await tenantDb.update(categoriesTable)
+      .set({ status: body.status })
+      .where(eq(categoriesTable.id, params.categoryId as any));
+    return { updated: true, status: body.status };
+  }, {
+    params: t.Object({ categoryId: t.String() }),
+    body: t.Object({ status: t.Union([t.Literal("open"), t.Literal("closed")]) }),
+    detail: {
+      summary: "Apri/chiudi categoria",
+      description: "Per chiudere una categoria tutti i giudici devono aver votato tutti i modelli.",
       tags: ["Categories"],
       security: [{ bearerAuth: [] }]
     }

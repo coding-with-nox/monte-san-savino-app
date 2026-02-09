@@ -63,8 +63,11 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS categories (
   id uuid PRIMARY KEY,
   event_id uuid NOT NULL,
-  name text NOT NULL
+  name text NOT NULL,
+  status text NOT NULL DEFAULT 'open'
 );
+
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'open';
 
 CREATE INDEX IF NOT EXISTS ix_categories_event
   ON categories (event_id);
@@ -134,8 +137,11 @@ CREATE INDEX IF NOT EXISTS ix_votes_model
 CREATE TABLE IF NOT EXISTS judge_assignments (
   id uuid PRIMARY KEY,
   event_id uuid NOT NULL,
-  judge_id uuid NOT NULL
+  judge_id uuid NOT NULL,
+  category_id uuid
 );
+
+ALTER TABLE judge_assignments ADD COLUMN IF NOT EXISTS category_id uuid;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_judge_event
   ON judge_assignments (event_id, judge_id);
@@ -154,4 +160,45 @@ CREATE TABLE IF NOT EXISTS payments (
 
 CREATE INDEX IF NOT EXISTS ix_payments_registration
   ON payments (registration_id);
+
+CREATE TABLE IF NOT EXISTS sponsors (
+  id uuid PRIMARY KEY,
+  event_id uuid NOT NULL,
+  name text NOT NULL,
+  logo_url text,
+  website_url text,
+  description text,
+  tier text NOT NULL DEFAULT 'bronze'
+);
+
+CREATE INDEX IF NOT EXISTS ix_sponsors_event
+  ON sponsors (event_id);
+
+CREATE TABLE IF NOT EXISTS special_mentions (
+  id uuid PRIMARY KEY,
+  event_id uuid NOT NULL,
+  model_id uuid NOT NULL,
+  title text NOT NULL,
+  description text,
+  awarded_by uuid NOT NULL,
+  created_at timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_special_mentions_event
+  ON special_mentions (event_id);
+
+CREATE TABLE IF NOT EXISTS modification_requests (
+  id uuid PRIMARY KEY,
+  model_id uuid NOT NULL,
+  judge_id uuid NOT NULL,
+  reason text NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  created_at timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_mod_requests_model
+  ON modification_requests (model_id);
+
+CREATE INDEX IF NOT EXISTS ix_mod_requests_judge
+  ON modification_requests (judge_id);
 SQL

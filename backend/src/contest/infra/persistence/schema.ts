@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, numeric } from "drizzle-orm/pg-core";
 
 export const teamsTable = pgTable("teams", {
   id: uuid("id").primaryKey(),
@@ -25,7 +25,8 @@ export const eventsTable = pgTable("events", {
 export const categoriesTable = pgTable("categories", {
   id: uuid("id").primaryKey(),
   eventId: uuid("event_id").notNull(),
-  name: text("name").notNull()
+  name: text("name").notNull(),
+  status: text("status").default("open").notNull() // open | closed
 });
 
 export const registrationsTable = pgTable("registrations", {
@@ -68,7 +69,8 @@ export const votesTable = pgTable("votes", {
 export const judgeAssignmentsTable = pgTable("judge_assignments", {
   id: uuid("id").primaryKey(),
   eventId: uuid("event_id").notNull(),
-  judgeId: uuid("judge_id").notNull()
+  judgeId: uuid("judge_id").notNull(),
+  categoryId: uuid("category_id") // null = all categories in event
 }, (t) => ({
   uniq: uniqueIndex("ux_judge_event").on(t.eventId, t.judgeId)
 }));
@@ -79,5 +81,34 @@ export const paymentsTable = pgTable("payments", {
   amount: integer("amount").notNull(),
   status: text("status").notNull(),
   providerRef: text("provider_ref"),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+export const sponsorsTable = pgTable("sponsors", {
+  id: uuid("id").primaryKey(),
+  eventId: uuid("event_id").notNull(),
+  name: text("name").notNull(),
+  logoUrl: text("logo_url"),
+  websiteUrl: text("website_url"),
+  description: text("description"),
+  tier: text("tier").default("bronze").notNull() // bronze | silver | gold | platinum
+});
+
+export const specialMentionsTable = pgTable("special_mentions", {
+  id: uuid("id").primaryKey(),
+  eventId: uuid("event_id").notNull(),
+  modelId: uuid("model_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  awardedBy: uuid("awarded_by").notNull(), // manager/admin userId
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+export const modificationRequestsTable = pgTable("modification_requests", {
+  id: uuid("id").primaryKey(),
+  modelId: uuid("model_id").notNull(),
+  judgeId: uuid("judge_id").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").default("pending").notNull(), // pending | resolved | rejected
   createdAt: timestamp("created_at").defaultNow()
 });

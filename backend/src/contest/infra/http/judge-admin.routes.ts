@@ -25,13 +25,19 @@ export const judgeAdminRoutes = new Elysia({ prefix: "/admin/judges" })
     await tenantDb.insert(judgeAssignmentsTable).values({
       id,
       eventId: body.eventId,
-      judgeId: body.judgeId
+      judgeId: body.judgeId,
+      categoryId: body.categoryId ?? null
     });
     return { id };
   }, {
-    body: t.Object({ eventId: t.String(), judgeId: t.String() }),
+    body: t.Object({
+      eventId: t.String(),
+      judgeId: t.String(),
+      categoryId: t.Optional(t.String())
+    }),
     detail: {
-      summary: "Assegna giudice",
+      summary: "Assegna giudice (evento o categoria)",
+      description: "Se categoryId è fornito, il giudice è assegnato a quella specifica categoria. Altrimenti a tutto l'evento.",
       tags: ["Admin"],
       security: [{ bearerAuth: [] }]
     }
