@@ -20,6 +20,9 @@ import { awardRoutes } from "../contest/infra/http/award.routes";
 import { judgeAdminRoutes } from "../contest/infra/http/judge-admin.routes";
 import { adminModelsRoutes } from "../contest/infra/http/admin-models.routes";
 import { qrRoutes } from "../contest/infra/http/qr.routes";
+import { sponsorRoutes } from "../contest/infra/http/sponsor.routes";
+import { specialMentionRoutes } from "../contest/infra/http/special-mention.routes";
+import { judgeModificationRoutes, adminModificationRoutes } from "../contest/infra/http/modification-request.routes";
 
 export function buildApp() {
   const rawCorsOrigin = process.env.CORS_ORIGIN ?? "";
@@ -61,7 +64,8 @@ export function buildApp() {
           { name: "Exports", description: "Export dati." },
           { name: "Staff", description: "Check-in e stampa." },
           { name: "Public", description: "Endpoint pubblici." },
-          { name: "Admin", description: "Funzionalità amministrative." }
+          { name: "Admin", description: "Funzionalità amministrative." },
+          { name: "Sponsors", description: "Gestione sponsor." }
         ],
         servers: [
           { url: "http://localhost:3000", description: "Local dev" },
@@ -108,5 +112,9 @@ export function buildApp() {
     .use(awardRoutes)
     .use(judgeAdminRoutes)
     .use(adminModelsRoutes)
-    .use(qrRoutes);
+    .use(qrRoutes)
+    .use(sponsorRoutes)
+    .use(specialMentionRoutes)
+    .use(judgeModificationRoutes)
+    .use(adminModificationRoutes);
 }
