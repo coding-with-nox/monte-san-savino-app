@@ -11,6 +11,11 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgres/01-init-tenant.sh:/docker-entrypoint-initdb.d/01-init-tenant.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
 
   minio:
     image: minio/minio
@@ -27,8 +32,9 @@ services:
   backend:
     image: ghcr.io/coding-with-nox/monte-san-savino-app-backend:latest
     depends_on:
-      - postgres
-      - minio
+      postgres:
+        condition: service_healthy
+      minio: {}
     environment:
       JWT_SECRET: ${JWT_SECRET:-change-me}
       PG_HOST: postgres
@@ -55,7 +61,8 @@ services:
   db-init:
     image: postgres:16
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
