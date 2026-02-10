@@ -14,4 +14,4 @@ export const authMiddleware = new Elysia({ name: "auth" }).derive(async ({ heade
   } catch {
     return { user: null };
   }
-});
+}).as("plugin");
