@@ -6,7 +6,14 @@ import {
   CardContent,
   Chip,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
   Grid,
+  IconButton,
+  InputLabel,
   Link,
   List,
   ListItem,
@@ -17,6 +24,9 @@ import {
   TextField,
   Typography
 } from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import { api, API_BASE } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -27,6 +37,19 @@ type User = { id: string; email: string; role: string; isActive: boolean };
 type Sponsor = { id: string; eventId: string; name: string; tier: string };
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
+
+type UserProfile = {
+  id: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  city?: string | null;
+  address?: string | null;
+  emergencyContact?: string | null;
+};
 
 interface AdminProps {
   language: Language;
@@ -46,6 +69,17 @@ export default function Admin({ language }: AdminProps) {
   const [sponsorForm, setSponsorForm] = useState({ eventId: "", name: "", tier: "bronze" });
   const [mentionForm, setMentionForm] = useState({ eventId: "", modelId: "", title: "" });
   const [message, setMessage] = useState("");
+
+  // User profile dialog state
+  const [profileDialog, setProfileDialog] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
+
+  // Category edit dialog state
+  const [categoryEditDialog, setCategoryEditDialog] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryEditName, setCategoryEditName] = useState("");
 
   async function load() {
     setEvents(await api<Event[]>("/events"));
@@ -68,6 +102,28 @@ export default function Admin({ language }: AdminProps) {
     await load();
   }
 
+  async function deleteCategory(categoryId: string) {
+    await api(`/categories/${categoryId}`, { method: "DELETE" });
+    await load();
+  }
+
+  async function openCategoryEdit(cat: Category) {
+    setEditingCategory(cat);
+    setCategoryEditName(cat.name);
+    setCategoryEditDialog(true);
+  }
+
+  async function saveCategoryEdit() {
+    if (!editingCategory) return;
+    await api(`/categories/${editingCategory.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name: categoryEditName })
+    });
+    setCategoryEditDialog(false);
+    setEditingCategory(null);
+    await load();
+  }
+
   async function updateEnrollment(id: string, status: string) {
     await api(`/admin/enrollments/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
     await load();
@@ -84,6 +140,42 @@ export default function Admin({ language }: AdminProps) {
   async function resetPassword(userId: string) {
     const res = await api<{ temporaryPassword: string }>(`/admin/users/${userId}/reset-password`, { method: "POST" });
     setMessage(`${t(language, "adminTempPassword")}: ${res.temporaryPassword}`);
+  }
+
+  async function updateUserRole(userId: string, role: string) {
+    await api(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) });
+    await load();
+  }
+
+  async function toggleUserActive(userId: string, isActive: boolean) {
+    await api(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ isActive: !isActive }) });
+    await load();
+  }
+
+  async function openUserProfile(userId: string) {
+    const profile = await api<UserProfile>(`/admin/users/${userId}/profile`);
+    setSelectedProfile(profile);
+    setProfileForm({
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      phone: profile.phone,
+      city: profile.city,
+      address: profile.address,
+      emergencyContact: profile.emergencyContact
+    });
+    setEditingProfile(false);
+    setProfileDialog(true);
+  }
+
+  async function saveUserProfile() {
+    if (!selectedProfile) return;
+    await api(`/admin/users/${selectedProfile.id}/profile`, {
+      method: "PUT",
+      body: JSON.stringify(profileForm)
+    });
+    setEditingProfile(false);
+    await openUserProfile(selectedProfile.id);
+    setMessage(t(language, "adminProfileSaved"));
   }
 
   async function createSponsor() {
@@ -123,6 +215,12 @@ export default function Admin({ language }: AdminProps) {
   }, []);
 
   const enrollmentStatuses = ["pending", "approved", "rejected", "paid"];
+  const roles = ["user", "staff", "judge", "manager", "admin"];
+
+  const getEventName = (eventId: string) => {
+    const ev = events.find((e) => e.id === eventId);
+    return ev ? ev.name : eventId.slice(0, 8);
+  };
 
   return (
     <Container maxWidth="xl">
@@ -180,12 +278,18 @@ export default function Admin({ language }: AdminProps) {
                 </Typography>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={4}>
-                    <TextField
-                      label={t(language, "adminCategoryEventPlaceholder")}
-                      value={categoryForm.eventId}
-                      onChange={(event) => setCategoryForm({ ...categoryForm, eventId: event.target.value })}
-                      fullWidth
-                    />
+                    <FormControl fullWidth>
+                      <InputLabel>{t(language, "adminCategoryEventPlaceholder")}</InputLabel>
+                      <Select
+                        value={categoryForm.eventId}
+                        label={t(language, "adminCategoryEventPlaceholder")}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, eventId: e.target.value })}
+                      >
+                        {events.map((ev) => (
+                          <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid item xs={12} md={4}>
                     <TextField
@@ -196,7 +300,7 @@ export default function Admin({ language }: AdminProps) {
                     />
                   </Grid>
                   <Grid item xs={12} md={4}>
-                    <Button variant="contained" onClick={createCategory} fullWidth>
+                    <Button variant="contained" onClick={createCategory} fullWidth disabled={!categoryForm.eventId || !categoryForm.name}>
                       {t(language, "adminCategoryCreateButton")}
                     </Button>
                   </Grid>
@@ -204,7 +308,7 @@ export default function Admin({ language }: AdminProps) {
                 <List dense sx={{ mt: 2 }}>
                   {categories.map((category) => (
                     <ListItem key={category.id} disableGutters>
-                      <ListItemText primary={category.name} secondary={category.eventId} />
+                      <ListItemText primary={category.name} secondary={getEventName(category.eventId)} />
                       <Chip
                         label={category.status === "open" ? t(language, "adminCategoryOpen") : t(language, "adminCategoryClosed")}
                         color={category.status === "open" ? "success" : "default"}
@@ -215,9 +319,16 @@ export default function Admin({ language }: AdminProps) {
                         variant="outlined"
                         size="small"
                         onClick={() => toggleCategoryStatus(category)}
+                        sx={{ mr: 1 }}
                       >
                         {category.status === "open" ? t(language, "adminCategoryClose") : t(language, "adminCategoryReopen")}
                       </Button>
+                      <IconButton size="small" onClick={() => openCategoryEdit(category)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" color="error" onClick={() => deleteCategory(category.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
                     </ListItem>
                   ))}
                 </List>
@@ -236,7 +347,7 @@ export default function Admin({ language }: AdminProps) {
                   {enrollments.map((enrollment) => (
                     <Stack key={enrollment.id} spacing={1}>
                       <Typography variant="subtitle2">
-                        {enrollment.eventId} — {enrollment.status}
+                        {getEventName(enrollment.eventId)} — {enrollment.status}
                       </Typography>
                       <Grid container spacing={1}>
                         {enrollmentStatuses.map((status) => (
@@ -267,28 +378,50 @@ export default function Admin({ language }: AdminProps) {
                 </Typography>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={3}>
-                    <TextField
-                      label={t(language, "adminJudgeEventPlaceholder")}
-                      value={judgeAssignment.eventId}
-                      onChange={(event) => setJudgeAssignment({ ...judgeAssignment, eventId: event.target.value })}
-                      fullWidth
-                    />
+                    <FormControl fullWidth>
+                      <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                      <Select
+                        value={judgeAssignment.eventId}
+                        label={t(language, "adminJudgeEventPlaceholder")}
+                        onChange={(e) => setJudgeAssignment({ ...judgeAssignment, eventId: e.target.value })}
+                      >
+                        {events.map((ev) => (
+                          <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid item xs={12} md={3}>
-                    <TextField
-                      label={t(language, "adminJudgeIdPlaceholder")}
-                      value={judgeAssignment.judgeId}
-                      onChange={(event) => setJudgeAssignment({ ...judgeAssignment, judgeId: event.target.value })}
-                      fullWidth
-                    />
+                    <FormControl fullWidth>
+                      <InputLabel>{t(language, "adminJudgeIdPlaceholder")}</InputLabel>
+                      <Select
+                        value={judgeAssignment.judgeId}
+                        label={t(language, "adminJudgeIdPlaceholder")}
+                        onChange={(e) => setJudgeAssignment({ ...judgeAssignment, judgeId: e.target.value })}
+                      >
+                        {users.filter((u) => u.role === "judge" || u.role === "manager" || u.role === "admin").map((u) => (
+                          <MenuItem key={u.id} value={u.id}>{u.email}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid item xs={12} md={3}>
-                    <TextField
-                      label={t(language, "adminJudgeCategoryPlaceholder")}
-                      value={judgeAssignment.categoryId}
-                      onChange={(event) => setJudgeAssignment({ ...judgeAssignment, categoryId: event.target.value })}
-                      fullWidth
-                    />
+                    <FormControl fullWidth>
+                      <InputLabel>{t(language, "adminJudgeCategoryPlaceholder")}</InputLabel>
+                      <Select
+                        value={judgeAssignment.categoryId}
+                        label={t(language, "adminJudgeCategoryPlaceholder")}
+                        onChange={(e) => setJudgeAssignment({ ...judgeAssignment, categoryId: e.target.value })}
+                      >
+                        <MenuItem value="">{t(language, "adminJudgeAllCategories")}</MenuItem>
+                        {categories
+                          .filter((c) => !judgeAssignment.eventId || c.eventId === judgeAssignment.eventId)
+                          .map((c) => (
+                            <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                          ))
+                        }
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid item xs={12} md={3}>
                     <Button variant="contained" onClick={assignJudge} fullWidth>
@@ -309,12 +442,18 @@ export default function Admin({ language }: AdminProps) {
                 </Typography>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={3}>
-                    <TextField
-                      label={t(language, "adminSponsorEvent")}
-                      value={sponsorForm.eventId}
-                      onChange={(e) => setSponsorForm({ ...sponsorForm, eventId: e.target.value })}
-                      fullWidth
-                    />
+                    <FormControl fullWidth>
+                      <InputLabel>{t(language, "adminSponsorEvent")}</InputLabel>
+                      <Select
+                        value={sponsorForm.eventId}
+                        label={t(language, "adminSponsorEvent")}
+                        onChange={(e) => setSponsorForm({ ...sponsorForm, eventId: e.target.value })}
+                      >
+                        {events.map((ev) => (
+                          <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid item xs={12} md={3}>
                     <TextField
@@ -346,10 +485,10 @@ export default function Admin({ language }: AdminProps) {
                 <List dense sx={{ mt: 2 }}>
                   {sponsors.map((s) => (
                     <ListItem key={s.id} disableGutters>
-                      <ListItemText primary={s.name} secondary={`${s.tier} — ${s.eventId}`} />
-                      <Button variant="outlined" size="small" color="error" onClick={() => deleteSponsor(s.id)}>
-                        X
-                      </Button>
+                      <ListItemText primary={s.name} secondary={`${s.tier} — ${getEventName(s.eventId)}`} />
+                      <IconButton size="small" color="error" onClick={() => deleteSponsor(s.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
                     </ListItem>
                   ))}
                 </List>
@@ -366,12 +505,18 @@ export default function Admin({ language }: AdminProps) {
                 </Typography>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={3}>
-                    <TextField
-                      label={t(language, "adminMentionEvent")}
-                      value={mentionForm.eventId}
-                      onChange={(e) => setMentionForm({ ...mentionForm, eventId: e.target.value })}
-                      fullWidth
-                    />
+                    <FormControl fullWidth>
+                      <InputLabel>{t(language, "adminMentionEvent")}</InputLabel>
+                      <Select
+                        value={mentionForm.eventId}
+                        label={t(language, "adminMentionEvent")}
+                        onChange={(e) => setMentionForm({ ...mentionForm, eventId: e.target.value })}
+                      >
+                        {events.map((ev) => (
+                          <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid item xs={12} md={3}>
                     <TextField
@@ -400,7 +545,7 @@ export default function Admin({ language }: AdminProps) {
           </Grid>
 
           {/* Users */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -410,8 +555,28 @@ export default function Admin({ language }: AdminProps) {
                   {users.map((user) => (
                     <Stack key={user.id} direction="row" spacing={2} alignItems="center">
                       <Typography variant="body2" sx={{ flex: 1 }}>
-                        {user.email} — {user.role}
+                        {user.email}
                       </Typography>
+                      <FormControl size="small" sx={{ minWidth: 120 }}>
+                        <Select
+                          value={user.role}
+                          onChange={(e) => updateUserRole(user.id, e.target.value)}
+                          size="small"
+                        >
+                          {roles.map((r) => (
+                            <MenuItem key={r} value={r}>{r}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <Chip
+                        label={user.isActive ? t(language, "adminUserActive") : t(language, "adminUserInactive")}
+                        color={user.isActive ? "success" : "default"}
+                        size="small"
+                        onClick={() => toggleUserActive(user.id, user.isActive)}
+                      />
+                      <IconButton size="small" onClick={() => openUserProfile(user.id)}>
+                        <VisibilityIcon fontSize="small" />
+                      </IconButton>
                       <Button variant="outlined" size="small" onClick={() => resetPassword(user.id)}>
                         {t(language, "adminResetPasswordButton")}
                       </Button>
@@ -479,6 +644,130 @@ export default function Admin({ language }: AdminProps) {
           </Grid>
         </Grid>
       </Stack>
+
+      {/* User Profile Dialog */}
+      <Dialog open={profileDialog} onClose={() => setProfileDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {selectedProfile?.email ?? ""} — {t(language, "adminProfileTitle")}
+        </DialogTitle>
+        <DialogContent>
+          {selectedProfile && !editingProfile && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">{t(language, "profileFirstName")}</Typography>
+                  <Typography>{selectedProfile.firstName || "—"}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">{t(language, "profileLastName")}</Typography>
+                  <Typography>{selectedProfile.lastName || "—"}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">{t(language, "profilePhone")}</Typography>
+                  <Typography>{selectedProfile.phone || "—"}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">{t(language, "profileEmergencyContact")}</Typography>
+                  <Typography>{selectedProfile.emergencyContact || "—"}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">{t(language, "profileCity")}</Typography>
+                  <Typography>{selectedProfile.city || "—"}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">{t(language, "profileAddress")}</Typography>
+                  <Typography>{selectedProfile.address || "—"}</Typography>
+                </Grid>
+              </Grid>
+            </Stack>
+          )}
+          {selectedProfile && editingProfile && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    label={t(language, "profileFirstName")}
+                    value={profileForm.firstName ?? ""}
+                    onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    label={t(language, "profileLastName")}
+                    value={profileForm.lastName ?? ""}
+                    onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    label={t(language, "profilePhone")}
+                    value={profileForm.phone ?? ""}
+                    onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    label={t(language, "profileEmergencyContact")}
+                    value={profileForm.emergencyContact ?? ""}
+                    onChange={(e) => setProfileForm({ ...profileForm, emergencyContact: e.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    label={t(language, "profileCity")}
+                    value={profileForm.city ?? ""}
+                    onChange={(e) => setProfileForm({ ...profileForm, city: e.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    label={t(language, "profileAddress")}
+                    value={profileForm.address ?? ""}
+                    onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+              </Grid>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {!editingProfile ? (
+            <>
+              <Button onClick={() => setEditingProfile(true)}>{t(language, "profileEditButton")}</Button>
+              <Button onClick={() => setProfileDialog(false)}>{t(language, "adminDialogClose")}</Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={saveUserProfile} variant="contained">{t(language, "profileSaveButton")}</Button>
+              <Button onClick={() => setEditingProfile(false)}>{t(language, "profileCancelButton")}</Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Category Edit Dialog */}
+      <Dialog open={categoryEditDialog} onClose={() => setCategoryEditDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t(language, "adminCategoryEditTitle")}</DialogTitle>
+        <DialogContent>
+          <TextField
+            label={t(language, "adminCategoryNamePlaceholder")}
+            value={categoryEditName}
+            onChange={(e) => setCategoryEditName(e.target.value)}
+            fullWidth
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={saveCategoryEdit} variant="contained">{t(language, "profileSaveButton")}</Button>
+          <Button onClick={() => setCategoryEditDialog(false)}>{t(language, "profileCancelButton")}</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

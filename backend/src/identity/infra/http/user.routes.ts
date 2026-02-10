@@ -59,60 +59,10 @@ export const userRoutes = new Elysia({ prefix: "/users" })
       phone: t.Optional(t.String()),
       city: t.Optional(t.String()),
       address: t.Optional(t.String()),
-      emergencyContact: t.Optional(t.String()),
-      avatarUrl: t.Optional(t.String())
-    }),
-    detail: {
-      summary: "Aggiorna profilo",
-      tags: ["Users"],
-      security: [{ bearerAuth: [] }]
-    }
-  })
-  .patch("/profile/contacts", async ({ user, tenantDb, body, set }) => {
-    if (!user?.id) {
-      set.status = 401;
-      return { error: "Unauthenticated" };
-    }
-    const db = tenantDb ?? getTenantDbFromEnv();
-    await db
-      .insert(userProfilesTable)
-      .values({ userId: user.id as any, ...body })
-      .onConflictDoUpdate({
-        target: userProfilesTable.userId,
-        set: body
-      });
-    return { updated: true };
-  }, {
-    body: t.Object({
-      phone: t.Optional(t.String()),
-      city: t.Optional(t.String()),
-      address: t.Optional(t.String()),
       emergencyContact: t.Optional(t.String())
     }),
     detail: {
-      summary: "Aggiorna contatti",
-      tags: ["Users"],
-      security: [{ bearerAuth: [] }]
-    }
-  })
-  .patch("/profile/avatar", async ({ user, tenantDb, body, set }) => {
-    if (!user?.id) {
-      set.status = 401;
-      return { error: "Unauthenticated" };
-    }
-    const db = tenantDb ?? getTenantDbFromEnv();
-    await db
-      .insert(userProfilesTable)
-      .values({ userId: user.id as any, avatarUrl: body.avatarUrl })
-      .onConflictDoUpdate({
-        target: userProfilesTable.userId,
-        set: { avatarUrl: body.avatarUrl }
-      });
-    return { updated: true };
-  }, {
-    body: t.Object({ avatarUrl: t.String() }),
-    detail: {
-      summary: "Aggiorna avatar",
+      summary: "Aggiorna profilo",
       tags: ["Users"],
       security: [{ bearerAuth: [] }]
     }

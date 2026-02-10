@@ -35,7 +35,7 @@ import Enrollments from "./pages/Enrollments";
 import PublicEvents from "./pages/PublicEvents";
 import Admin from "./pages/Admin";
 import StaffCheckin from "./pages/StaffCheckin";
-import { getToken, getRole, roleAtLeast } from "./lib/auth";
+import { getToken, getRole, roleAtLeast, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -90,17 +90,25 @@ export default function App() {
 
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
 
-  const navItems = [
-    { label: t(language, "navHome"), path: "/" },
-    { label: t(language, "navProfile"), path: "/profile" },
-    { label: t(language, "navTeams"), path: "/teams" },
-    { label: t(language, "navModels"), path: "/models" },
-    { label: t(language, "navEnrollments"), path: "/enrollments" },
-    { label: t(language, "navPublicEvents"), path: "/public-events" },
-    { label: t(language, "navJudge"), path: "/judge" },
-    { label: t(language, "navStaff"), path: "/staff" },
-    { label: t(language, "navAdmin"), path: "/admin" }
+  const role = getRole();
+
+  const allNavItems = [
+    { label: t(language, "navHome"), path: "/", minRole: "user" as Role },
+    { label: t(language, "navProfile"), path: "/profile", minRole: "user" as Role },
+    { label: t(language, "navTeams"), path: "/teams", minRole: "user" as Role },
+    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
+    { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role },
+    { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null },
+    { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role },
+    { label: t(language, "navStaff"), path: "/staff", minRole: "staff" as Role },
+    { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role }
   ];
+
+  const navItems = allNavItems.filter((item) => {
+    if (!item.minRole) return true; // public pages always visible
+    if (!role) return false; // no role = not logged in, hide protected
+    return roleAtLeast(role, item.minRole);
+  });
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";

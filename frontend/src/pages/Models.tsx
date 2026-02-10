@@ -4,11 +4,15 @@ import {
   Card,
   CardContent,
   Container,
+  FormControl,
   Grid,
+  InputLabel,
   List,
   ListItem,
   ListItemButton,
   ListItemText,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Typography
@@ -18,6 +22,7 @@ import { Language, t } from "../lib/i18n";
 
 type Model = { id: string; name: string; categoryId: string; teamId?: string | null; imageUrl?: string | null };
 type ModelDetail = { model: Model; images: { id: string; url: string }[] };
+type Category = { id: string; eventId: string; name: string; status: string };
 
 interface ModelsProps {
   language: Language;
@@ -25,10 +30,10 @@ interface ModelsProps {
 
 export default function Models({ language }: ModelsProps) {
   const [models, setModels] = useState<Model[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [teamId, setTeamId] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [selected, setSelected] = useState<ModelDetail | null>(null);
   const [image, setImage] = useState("");
 
@@ -36,12 +41,26 @@ export default function Models({ language }: ModelsProps) {
     setModels(await api<Model[]>("/models"));
   }
 
+  async function loadCategories() {
+    try {
+      setCategories(await api<Category[]>("/public/categories"));
+    } catch {
+      setCategories([]);
+    }
+  }
+
   async function create() {
-    await api("/models", { method: "POST", body: JSON.stringify({ name, categoryId, teamId: teamId || undefined, imageUrl: imageUrl || undefined }) });
+    await api("/models", {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        categoryId,
+        teamId: teamId || undefined
+      })
+    });
     setName("");
     setCategoryId("");
     setTeamId("");
-    setImageUrl("");
     await load();
   }
 
@@ -59,7 +78,15 @@ export default function Models({ language }: ModelsProps) {
 
   useEffect(() => {
     load();
+    loadCategories();
   }, []);
+
+  const openCategories = categories.filter((c) => c.status === "open");
+
+  const getCategoryName = (catId: string) => {
+    const cat = categories.find((c) => c.id === catId);
+    return cat ? cat.name : catId;
+  };
 
   return (
     <Container maxWidth="lg">
@@ -77,12 +104,20 @@ export default function Models({ language }: ModelsProps) {
                 />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField
-                  label={t(language, "modelsCategoryPlaceholder")}
-                  value={categoryId}
-                  onChange={(event) => setCategoryId(event.target.value)}
-                  fullWidth
-                />
+                <FormControl fullWidth>
+                  <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
+                  <Select
+                    value={categoryId}
+                    label={t(language, "modelsCategoryPlaceholder")}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                  >
+                    {openCategories.map((cat) => (
+                      <MenuItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} md={3}>
                 <TextField
@@ -93,15 +128,7 @@ export default function Models({ language }: ModelsProps) {
                 />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField
-                  label={t(language, "modelsImagePlaceholder")}
-                  value={imageUrl}
-                  onChange={(event) => setImageUrl(event.target.value)}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Button variant="contained" onClick={create}>
+                <Button variant="contained" onClick={create} fullWidth disabled={!name || !categoryId}>
                   {t(language, "modelsCreateButton")}
                 </Button>
               </Grid>
@@ -118,7 +145,7 @@ export default function Models({ language }: ModelsProps) {
                 <List dense>
                   {models.map((model) => (
                     <ListItemButton key={model.id} onClick={() => openModel(model.id)}>
-                      <ListItemText primary={model.name} secondary={model.categoryId} />
+                      <ListItemText primary={model.name} secondary={getCategoryName(model.categoryId)} />
                     </ListItemButton>
                   ))}
                 </List>
@@ -137,7 +164,7 @@ export default function Models({ language }: ModelsProps) {
                       {selected.model.name}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {selected.model.id}
+                      {t(language, "modelsCategoryPlaceholder")}: {getCategoryName(selected.model.categoryId)}
                     </Typography>
                     <List dense>
                       {selected.images.map((img) => (

@@ -24,6 +24,7 @@ export default function Login({ language }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState("");
 
   const labels = useMemo(() => ({
     eyebrow: t(language, "loginEyebrow"),
@@ -38,6 +39,21 @@ export default function Login({ language }: LoginProps) {
     errorTitle: t(language, "errorTitle"),
     errorGeneric: t(language, "errorGeneric")
   }), [language]);
+
+  function validateEmail(value: string): boolean {
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/;
+    if (!value) return true;
+    if (value.length > 254) {
+      setEmailError(t(language, "emailValidationTooLong"));
+      return false;
+    }
+    if (!emailRegex.test(value)) {
+      setEmailError(t(language, "emailValidationInvalid"));
+      return false;
+    }
+    setEmailError("");
+    return true;
+  }
 
   function handleError(error: unknown) {
     console.error(error);
@@ -92,6 +108,7 @@ export default function Login({ language }: LoginProps) {
 
   async function onRegister() {
     setErr(null);
+    if (!validateEmail(email)) return;
     try {
       await api("/auth/register", {
         method: "POST",
@@ -123,7 +140,13 @@ export default function Login({ language }: LoginProps) {
                 label={labels.emailLabel}
                 placeholder={labels.emailPlaceholder}
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  if (emailError) validateEmail(event.target.value);
+                }}
+                onBlur={() => validateEmail(email)}
+                error={!!emailError}
+                helperText={emailError}
                 fullWidth
               />
               <TextField
