@@ -261,7 +261,13 @@ export default function Admin({ language }: AdminProps) {
                 <List dense sx={{ mt: 2 }}>
                   {events.map((event) => (
                     <ListItem key={event.id} disableGutters>
-                      <ListItemText primary={event.name} secondary={event.status} />
+                      <ListItemText primary={event.name} />
+                      <Chip
+                        label={event.status}
+                        size="small"
+                        color={event.status === "active" ? "success" : event.status === "draft" ? "warning" : "default"}
+                        sx={{ ml: 1 }}
+                      />
                     </ListItem>
                   ))}
                 </List>
@@ -346,9 +352,22 @@ export default function Admin({ language }: AdminProps) {
                 <Stack spacing={2}>
                   {enrollments.map((enrollment) => (
                     <Stack key={enrollment.id} spacing={1}>
-                      <Typography variant="subtitle2">
-                        {getEventName(enrollment.eventId)} — {enrollment.status}
-                      </Typography>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography variant="subtitle2">
+                          {getEventName(enrollment.eventId)}
+                        </Typography>
+                        <Chip
+                          label={enrollment.status}
+                          size="small"
+                          color={
+                            enrollment.status === "approved" ? "success"
+                              : enrollment.status === "pending" ? "warning"
+                              : enrollment.status === "paid" ? "info"
+                              : enrollment.status === "rejected" ? "error"
+                              : "default"
+                          }
+                        />
+                      </Stack>
                       <Grid container spacing={1}>
                         {enrollmentStatuses.map((status) => (
                           <Grid item key={status}>

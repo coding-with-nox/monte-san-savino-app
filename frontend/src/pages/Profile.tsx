@@ -92,7 +92,7 @@ export default function Profile({ language }: ProfileProps) {
     setEmergencyPhoneError(false);
   }
 
-  // Debounced city search via Nominatim (OpenStreetMap)
+  // Debounced city search via Photon API (Komoot / OpenStreetMap)
   const searchCities = useCallback(
     debounce(async (query: string) => {
       if (query.length < 2) {
@@ -102,15 +102,15 @@ export default function Profile({ language }: ProfileProps) {
       setCityLoading(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=10&featuretype=city&accept-language=${language}`,
-          { headers: { "User-Agent": "MiniContestApp/1.0" } }
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=10&lang=${language}`
         );
-        const data: any[] = await res.json();
+        const data = await res.json();
         const seen = new Set<string>();
         const options: CityOption[] = [];
-        for (const item of data) {
-          const city = item.address?.city || item.address?.town || item.address?.village || item.name || "";
-          const country = item.address?.country || "";
+        for (const feature of data.features || []) {
+          const p = feature.properties || {};
+          const city = p.city || p.name || "";
+          const country = p.country || "";
           const key = `${city}|${country}`;
           if (city && !seen.has(key)) {
             seen.add(key);
