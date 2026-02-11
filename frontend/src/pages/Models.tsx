@@ -1,11 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
+  Box,
   Button,
   Card,
   CardContent,
+  CircularProgress,
   Container,
   FormControl,
   Grid,
+  IconButton,
   InputLabel,
   List,
   ListItem,
@@ -17,6 +21,8 @@ import {
   TextField,
   Typography
 } from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -28,6 +34,15 @@ interface ModelsProps {
   language: Language;
 }
 
+function isValidUrl(str: string): boolean {
+  try {
+    new URL(str);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function Models({ language }: ModelsProps) {
   const [models, setModels] = useState<Model[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -36,6 +51,10 @@ export default function Models({ language }: ModelsProps) {
   const [teamId, setTeamId] = useState("");
   const [selected, setSelected] = useState<ModelDetail | null>(null);
   const [image, setImage] = useState("");
+  const [imageError, setImageError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setModels(await api<Model[]>("/models"));
@@ -71,8 +90,49 @@ export default function Models({ language }: ModelsProps) {
 
   async function addImage() {
     if (!selected?.model) return;
-    await api(`/models/${selected.model.id}/images`, { method: "POST", body: JSON.stringify({ url: image }) });
+    const trimmed = image.trim();
+    if (!trimmed) return;
+    if (!isValidUrl(trimmed)) {
+      setImageError(t(language, "modelsInvalidUrl"));
+      return;
+    }
+    setImageError("");
+    await api(`/models/${selected.model.id}/images`, { method: "POST", body: JSON.stringify({ url: trimmed }) });
     setImage("");
+    await openModel(selected.model.id);
+  }
+
+  async function uploadFile(file: File) {
+    if (!selected?.model) return;
+    setUploading(true);
+    try {
+      const { uploadUrl, publicUrl } = await api<{ uploadUrl: string; publicUrl: string }>(
+        `/models/${selected.model.id}/image-upload`,
+        { method: "POST", body: JSON.stringify({ contentType: file.type }) }
+      );
+      await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file
+      });
+      await api(`/models/${selected.model.id}/images`, { method: "POST", body: JSON.stringify({ url: publicUrl }) });
+      await openModel(selected.model.id);
+    } catch (err: any) {
+      setMessage(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function deleteImage(imageId: string) {
+    if (!selected?.model) return;
+    await api(`/models/${selected.model.id}/images/${imageId}`, { method: "DELETE" });
     await openModel(selected.model.id);
   }
 
@@ -92,6 +152,7 @@ export default function Models({ language }: ModelsProps) {
     <Container maxWidth="lg">
       <Stack spacing={3}>
         <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
+        {message && <Alert severity="error" onClose={() => setMessage("")}>{message}</Alert>}
         <Card>
           <CardContent>
             <Grid container spacing={2} alignItems="center">
@@ -168,23 +229,62 @@ export default function Models({ language }: ModelsProps) {
                     </Typography>
                     <List dense>
                       {selected.images.map((img) => (
-                        <ListItem key={img.id} disableGutters>
-                          <ListItemText primary={img.url} />
+                        <ListItem key={img.id} disableGutters secondaryAction={
+                          <IconButton size="small" color="error" onClick={() => deleteImage(img.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        }>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Box
+                              component="img"
+                              src={img.url}
+                              alt=""
+                              sx={{ width: 48, height: 48, objectFit: "cover", borderRadius: 1 }}
+                              onError={(e: any) => { e.target.style.display = "none"; }}
+                            />
+                            <ListItemText
+                              primary={img.url}
+                              primaryTypographyProps={{ variant: "body2", noWrap: true, sx: { maxWidth: 200 } }}
+                            />
+                          </Stack>
                         </ListItem>
                       ))}
                     </List>
                     <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={12} md={8}>
+                      <Grid item xs={12} md={6}>
                         <TextField
                           label={t(language, "modelsAddImagePlaceholder")}
                           value={image}
-                          onChange={(event) => setImage(event.target.value)}
+                          onChange={(event) => {
+                            setImage(event.target.value);
+                            setImageError("");
+                          }}
+                          error={!!imageError}
+                          helperText={imageError}
                           fullWidth
                         />
                       </Grid>
-                      <Grid item xs={12} md={4}>
-                        <Button variant="outlined" onClick={addImage} fullWidth>
+                      <Grid item xs={12} md={3}>
+                        <Button variant="outlined" onClick={addImage} fullWidth disabled={!image.trim()}>
                           {t(language, "modelsAddImageButton")}
+                        </Button>
+                      </Grid>
+                      <Grid item xs={12} md={3}>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          ref={fileInputRef}
+                          style={{ display: "none" }}
+                          onChange={handleFileChange}
+                        />
+                        <Button
+                          variant="outlined"
+                          startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />}
+                          onClick={() => fileInputRef.current?.click()}
+                          fullWidth
+                          disabled={uploading}
+                        >
+                          {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
                         </Button>
                       </Grid>
                     </Grid>

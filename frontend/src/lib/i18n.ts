@@ -148,7 +148,18 @@ export const translations = {
     judgeModRequestModel: "Model ID",
     judgeModRequestReason: "Motivazione",
     judgeModRequestSubmit: "Invia richiesta",
-    judgeModRequestSent: "Richiesta inviata."
+    judgeModRequestSent: "Richiesta inviata.",
+    adminCategoryDuplicate: "Esiste gia una categoria con questo nome.",
+    modelsUploadButton: "Carica da PC",
+    modelsInvalidUrl: "URL non valido",
+    modelsUploading: "Caricamento...",
+    modelsDeleteImage: "Rimuovi",
+    enrollmentsEventSelect: "Seleziona evento",
+    enrollmentsPastTitle: "Eventi passati",
+    enrollmentsModelSelect: "Seleziona modello (opzionale)",
+    enrollmentsCategorySelect: "Seleziona categoria (opzionale)",
+    adminJudgeAssignments: "Assegnazioni attive",
+    adminMentionsList: "Menzioni assegnate"
   },
   en: {
     loginEyebrow: "Welcome back",
@@ -297,7 +308,18 @@ export const translations = {
     judgeModRequestModel: "Model ID",
     judgeModRequestReason: "Reason",
     judgeModRequestSubmit: "Submit request",
-    judgeModRequestSent: "Request submitted."
+    judgeModRequestSent: "Request submitted.",
+    adminCategoryDuplicate: "A category with this name already exists.",
+    modelsUploadButton: "Upload from PC",
+    modelsInvalidUrl: "Invalid URL",
+    modelsUploading: "Uploading...",
+    modelsDeleteImage: "Remove",
+    enrollmentsEventSelect: "Select event",
+    enrollmentsPastTitle: "Past events",
+    enrollmentsModelSelect: "Select model (optional)",
+    enrollmentsCategorySelect: "Select category (optional)",
+    adminJudgeAssignments: "Active assignments",
+    adminMentionsList: "Assigned mentions"
   }
 } as const;
 

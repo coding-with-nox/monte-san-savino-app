@@ -20,7 +20,13 @@ export const categoryRoutes = new Elysia({ prefix: "/categories" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .post("/", async ({ tenantDb, body }) => {
+  .post("/", async ({ tenantDb, body, set }) => {
+    const existing = await tenantDb.select().from(categoriesTable)
+      .where(and(eq(categoriesTable.eventId, body.eventId as any), eq(categoriesTable.name, body.name as any)));
+    if (existing.length > 0) {
+      set.status = 409;
+      return { error: "A category with this name already exists for this event" };
+    }
     const id = crypto.randomUUID();
     await tenantDb.insert(categoriesTable).values({ id, eventId: body.eventId, name: body.name, status: "open" });
     return { id };

@@ -127,4 +127,23 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       tags: ["Models"],
       security: [{ bearerAuth: [] }]
     }
+  })
+  .delete("/:modelId/images/:imageId", async ({ tenantDb, user, params, set }) => {
+    const rows = await tenantDb
+      .select()
+      .from(modelsTable)
+      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user.id as any)));
+    if (!rows.length) {
+      set.status = 404;
+      return { error: "Not found" };
+    }
+    await tenantDb.delete(modelImagesTable).where(and(eq(modelImagesTable.id, params.imageId as any), eq(modelImagesTable.modelId, params.modelId as any)));
+    return { deleted: true };
+  }, {
+    params: t.Object({ modelId: t.String(), imageId: t.String() }),
+    detail: {
+      summary: "Elimina immagine",
+      tags: ["Models"],
+      security: [{ bearerAuth: [] }]
+    }
   });

@@ -27,7 +27,7 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import { api, API_BASE } from "../lib/api";
+import { api, ApiError, API_BASE } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
 type Event = { id: string; name: string; status: string };
@@ -37,6 +37,7 @@ type User = { id: string; email: string; role: string; isActive: boolean };
 type Sponsor = { id: string; eventId: string; name: string; tier: string };
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
+type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null };
 
 type UserProfile = {
   id: string;
@@ -62,6 +63,8 @@ export default function Admin({ language }: AdminProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [modRequests, setModRequests] = useState<ModificationRequest[]>([]);
+  const [judgeAssignments, setJudgeAssignments] = useState<JudgeAssignmentEntry[]>([]);
+  const [specialMentions, setSpecialMentions] = useState<SpecialMention[]>([]);
 
   const [eventForm, setEventForm] = useState({ name: "", status: "" });
   const [categoryForm, setCategoryForm] = useState({ eventId: "", name: "" });
@@ -88,6 +91,8 @@ export default function Admin({ language }: AdminProps) {
     setUsers(await api<User[]>("/admin/users"));
     setSponsors(await api<Sponsor[]>("/sponsors"));
     setModRequests(await api<ModificationRequest[]>("/admin/modification-requests"));
+    setJudgeAssignments(await api<JudgeAssignmentEntry[]>("/admin/judges/assignments"));
+    setSpecialMentions(await api<SpecialMention[]>("/awards/mentions"));
   }
 
   async function createEvent() {
@@ -102,9 +107,17 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function createCategory() {
-    await api("/categories", { method: "POST", body: JSON.stringify(categoryForm) });
-    setCategoryForm({ eventId: "", name: "" });
-    await load();
+    try {
+      await api("/categories", { method: "POST", body: JSON.stringify(categoryForm) });
+      setCategoryForm({ eventId: "", name: "" });
+      await load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setMessage(t(language, "adminCategoryDuplicate"));
+      } else {
+        throw err;
+      }
+    }
   }
 
   async function deleteCategory(categoryId: string) {
@@ -140,6 +153,12 @@ export default function Admin({ language }: AdminProps) {
     await api("/admin/judges/assignments", { method: "POST", body: JSON.stringify(body) });
     setJudgeAssignment({ eventId: "", judgeId: "", categoryId: "" });
     setMessage(t(language, "adminJudgeAssigned"));
+    await load();
+  }
+
+  async function deleteJudgeAssignment(id: string) {
+    await api(`/admin/judges/assignments/${id}`, { method: "DELETE" });
+    await load();
   }
 
   async function resetPassword(userId: string) {
@@ -198,6 +217,12 @@ export default function Admin({ language }: AdminProps) {
     await api("/awards/mentions", { method: "POST", body: JSON.stringify(mentionForm) });
     setMentionForm({ eventId: "", modelId: "", title: "" });
     setMessage(t(language, "adminMentionCreate"));
+    await load();
+  }
+
+  async function deleteMention(id: string) {
+    await api(`/awards/mentions/${id}`, { method: "DELETE" });
+    await load();
   }
 
   async function toggleCategoryStatus(cat: Category) {
@@ -223,9 +248,20 @@ export default function Admin({ language }: AdminProps) {
   const eventStatuses = ["draft", "active", "closed"];
   const roles = ["user", "staff", "judge", "manager", "admin"];
 
-  const getEventName = (eventId: string) => {
-    const ev = events.find((e) => e.id === eventId);
-    return ev ? ev.name : eventId.slice(0, 8);
+  const getEventName = (eid: string) => {
+    const ev = events.find((e) => e.id === eid);
+    return ev ? ev.name : eid.slice(0, 8);
+  };
+
+  const getUserEmail = (uid: string) => {
+    const u = users.find((user) => user.id === uid);
+    return u ? u.email : uid.slice(0, 8);
+  };
+
+  const getCategoryName = (cid: string | null | undefined) => {
+    if (!cid) return t(language, "adminJudgeAllCategories");
+    const c = categories.find((cat) => cat.id === cid);
+    return c ? c.name : cid.slice(0, 8);
   };
 
   return (
@@ -465,6 +501,26 @@ export default function Admin({ language }: AdminProps) {
                     </Button>
                   </Grid>
                 </Grid>
+                {judgeAssignments.length > 0 && (
+                  <>
+                    <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+                      {t(language, "adminJudgeAssignments")}
+                    </Typography>
+                    <List dense>
+                      {judgeAssignments.map((ja) => (
+                        <ListItem key={ja.id} disableGutters>
+                          <ListItemText
+                            primary={getUserEmail(ja.judgeId)}
+                            secondary={`${getEventName(ja.eventId)} — ${getCategoryName(ja.categoryId)}`}
+                          />
+                          <IconButton size="small" color="error" onClick={() => deleteJudgeAssignment(ja.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </ListItem>
+                      ))}
+                    </List>
+                  </>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -576,6 +632,26 @@ export default function Admin({ language }: AdminProps) {
                     </Button>
                   </Grid>
                 </Grid>
+                {specialMentions.length > 0 && (
+                  <>
+                    <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+                      {t(language, "adminMentionsList")}
+                    </Typography>
+                    <List dense>
+                      {specialMentions.map((m) => (
+                        <ListItem key={m.id} disableGutters>
+                          <ListItemText
+                            primary={m.title}
+                            secondary={`${getEventName(m.eventId)} — Model: ${m.modelId.slice(0, 8)}`}
+                          />
+                          <IconButton size="small" color="error" onClick={() => deleteMention(m.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </ListItem>
+                      ))}
+                    </List>
+                  </>
+                )}
               </CardContent>
             </Card>
           </Grid>

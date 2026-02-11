@@ -7,6 +7,15 @@ import { specialMentionsTable } from "../persistence/schema";
 export const specialMentionRoutes = new Elysia({ prefix: "/awards/mentions" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
+  .get("/", async ({ tenantDb }) => {
+    return await tenantDb.select().from(specialMentionsTable);
+  }, {
+    detail: {
+      summary: "Lista tutte le menzioni speciali",
+      tags: ["Awards"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
   .get("/events/:eventId", async ({ tenantDb, params }) => {
     return await tenantDb
       .select()

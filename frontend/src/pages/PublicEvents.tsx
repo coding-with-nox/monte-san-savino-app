@@ -3,13 +3,12 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Container,
-  Grid,
   List,
   ListItem,
   ListItemText,
   Stack,
-  TextField,
   Typography
 } from "@mui/material";
 import { api } from "../lib/api";
@@ -23,11 +22,9 @@ interface PublicEventsProps {
 
 export default function PublicEvents({ language }: PublicEventsProps) {
   const [events, setEvents] = useState<Event[]>([]);
-  const [status, setStatus] = useState("");
 
   async function load() {
-    const query = status ? `?status=${encodeURIComponent(status)}` : "";
-    setEvents(await api<Event[]>(`/public/events${query}`));
+    setEvents(await api<Event[]>("/public/events"));
   }
 
   useEffect(() => {
@@ -37,34 +34,27 @@ export default function PublicEvents({ language }: PublicEventsProps) {
   return (
     <Container maxWidth="lg">
       <Stack spacing={3}>
-        <Typography variant="h4">{t(language, "publicEventsTitle")}</Typography>
-        <Card>
-          <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={8}>
-                <TextField
-                  label={t(language, "publicEventsStatusPlaceholder")}
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value)}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Button variant="contained" onClick={load} fullWidth>
-                  {t(language, "publicEventsRefreshButton")}
-                </Button>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="h4">{t(language, "publicEventsTitle")}</Typography>
+          <Button variant="outlined" onClick={load}>
+            {t(language, "publicEventsRefreshButton")}
+          </Button>
+        </Stack>
         <Card>
           <CardContent>
             <List dense>
               {events.map((event) => (
                 <ListItem key={event.id} disableGutters>
-                  <ListItemText primary={event.name} secondary={event.status} />
+                  <ListItemText
+                    primary={event.name}
+                    secondary={[event.startDate, event.endDate].filter(Boolean).join(" — ") || undefined}
+                  />
+                  <Chip label={event.status} size="small" color="success" />
                 </ListItem>
               ))}
+              {events.length === 0 && (
+                <Typography variant="body2" color="text.secondary">—</Typography>
+              )}
             </List>
           </CardContent>
         </Card>
