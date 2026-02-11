@@ -91,8 +91,13 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function createEvent() {
-    await api("/events", { method: "POST", body: JSON.stringify(eventForm) });
+    await api("/events", { method: "POST", body: JSON.stringify({ ...eventForm, status: eventForm.status || "draft" }) });
     setEventForm({ name: "", status: "" });
+    await load();
+  }
+
+  async function updateEventStatus(eventId: string, status: string) {
+    await api(`/events/${eventId}`, { method: "PUT", body: JSON.stringify({ status }) });
     await load();
   }
 
@@ -215,6 +220,7 @@ export default function Admin({ language }: AdminProps) {
   }, []);
 
   const enrollmentStatuses = ["pending", "approved", "rejected", "paid"];
+  const eventStatuses = ["draft", "active", "closed"];
   const roles = ["user", "staff", "judge", "manager", "admin"];
 
   const getEventName = (eventId: string) => {
@@ -245,12 +251,18 @@ export default function Admin({ language }: AdminProps) {
                     />
                   </Grid>
                   <Grid item xs={12} md={4}>
-                    <TextField
-                      label={t(language, "adminEventStatusPlaceholder")}
-                      value={eventForm.status}
-                      onChange={(event) => setEventForm({ ...eventForm, status: event.target.value })}
-                      fullWidth
-                    />
+                    <FormControl fullWidth>
+                      <InputLabel>{t(language, "adminEventStatusPlaceholder")}</InputLabel>
+                      <Select
+                        value={eventForm.status}
+                        label={t(language, "adminEventStatusPlaceholder")}
+                        onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })}
+                      >
+                        {eventStatuses.map((s) => (
+                          <MenuItem key={s} value={s}>{s}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid item xs={12} md={4}>
                     <Button variant="contained" onClick={createEvent} fullWidth>
@@ -262,12 +274,17 @@ export default function Admin({ language }: AdminProps) {
                   {events.map((event) => (
                     <ListItem key={event.id} disableGutters>
                       <ListItemText primary={event.name} />
-                      <Chip
-                        label={event.status}
-                        size="small"
-                        color={event.status === "active" ? "success" : event.status === "draft" ? "warning" : "default"}
-                        sx={{ ml: 1 }}
-                      />
+                      <FormControl size="small" sx={{ minWidth: 110, ml: 1 }}>
+                        <Select
+                          value={event.status || "draft"}
+                          onChange={(e) => updateEventStatus(event.id, e.target.value)}
+                          size="small"
+                        >
+                          {eventStatuses.map((s) => (
+                            <MenuItem key={s} value={s}>{s}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
                     </ListItem>
                   ))}
                 </List>

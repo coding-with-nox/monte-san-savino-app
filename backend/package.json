@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --hot src/bootstrap/server.ts",
+    "dev": "bunx drizzle-kit push && bun --hot src/bootstrap/server.ts",
     "start": "bun src/bootstrap/server.ts",
     "drizzle:generate": "bunx drizzle-kit generate",
     "drizzle:migrate": "bunx drizzle-kit migrate",
+    "drizzle:push": "bunx drizzle-kit push",
     "seed": "bun src/bootstrap/seed.ts"
   },
   "dependencies": {

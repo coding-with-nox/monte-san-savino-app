@@ -102,7 +102,7 @@ export default function Profile({ language }: ProfileProps) {
       setCityLoading(true);
       try {
         const res = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=10&lang=${language}`
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=10&lang=${language === "en" ? "en" : "default"}`
         );
         const data = await res.json();
         const seen = new Set<string>();
