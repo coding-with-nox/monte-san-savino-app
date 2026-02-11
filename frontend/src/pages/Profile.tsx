@@ -30,19 +30,18 @@ type Profile = {
   city?: string | null;
   address?: string | null;
   emergencyContact?: string | null;
+  emergencyContactName?: string | null;
 };
 
 type CityOption = {
-  name: string;
-  countryName: string;
-  geonameId: number;
+  displayName: string;
+  city: string;
+  country: string;
 };
 
 interface ProfileProps {
   language: Language;
 }
-
-const GEONAMES_USERNAME = (import.meta as any).env?.VITE_GEONAMES_USERNAME || "demo";
 
 export default function Profile({ language }: ProfileProps) {
   const [profile, setProfile] = useState<Profile>({});
@@ -63,7 +62,6 @@ export default function Profile({ language }: ProfileProps) {
   }
 
   async function save() {
-    // Validate phone numbers before saving
     if (editProfile.phone && !matchIsValidTel(editProfile.phone)) {
       setPhoneError(true);
       return;
@@ -94,7 +92,7 @@ export default function Profile({ language }: ProfileProps) {
     setEmergencyPhoneError(false);
   }
 
-  // Debounced city search
+  // Debounced city search via Nominatim (OpenStreetMap)
   const searchCities = useCallback(
     debounce(async (query: string) => {
       if (query.length < 2) {
@@ -104,16 +102,22 @@ export default function Profile({ language }: ProfileProps) {
       setCityLoading(true);
       try {
         const res = await fetch(
-          `https://secure.geonames.org/searchJSON?q=${encodeURIComponent(query)}&maxRows=10&lang=${language}&featureClass=P&username=${GEONAMES_USERNAME}`
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=10&featuretype=city&accept-language=${language}`,
+          { headers: { "User-Agent": "MiniContestApp/1.0" } }
         );
-        const data = await res.json();
-        setCityOptions(
-          (data.geonames || []).map((g: any) => ({
-            name: g.name,
-            countryName: g.countryName,
-            geonameId: g.geonameId
-          }))
-        );
+        const data: any[] = await res.json();
+        const seen = new Set<string>();
+        const options: CityOption[] = [];
+        for (const item of data) {
+          const city = item.address?.city || item.address?.town || item.address?.village || item.name || "";
+          const country = item.address?.country || "";
+          const key = `${city}|${country}`;
+          if (city && !seen.has(key)) {
+            seen.add(key);
+            options.push({ displayName: `${city}, ${country}`, city, country });
+          }
+        }
+        setCityOptions(options);
       } catch {
         setCityOptions([]);
       } finally {
@@ -182,7 +186,11 @@ export default function Profile({ language }: ProfileProps) {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Typography variant="caption" color="text.secondary">{t(language, "profileEmergencyContact")}</Typography>
-                  <Typography variant="body1">{fieldValue(profile.emergencyContact)}</Typography>
+                  <Typography variant="body1">
+                    {profile.emergencyContactName
+                      ? `${profile.emergencyContactName} — ${fieldValue(profile.emergencyContact)}`
+                      : fieldValue(profile.emergencyContact)}
+                  </Typography>
                 </Grid>
               </Grid>
             </CardContent>
@@ -277,6 +285,14 @@ export default function Profile({ language }: ProfileProps) {
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
+                <TextField
+                  label={t(language, "profileEmergencyName")}
+                  value={editProfile.emergencyContactName ?? ""}
+                  onChange={(e) => setEditProfile({ ...editProfile, emergencyContactName: e.target.value })}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
                 <MuiTelInput
                   label={t(language, "profileEmergencyContact")}
                   value={editProfile.emergencyContact ?? ""}
@@ -307,7 +323,7 @@ export default function Profile({ language }: ProfileProps) {
                   freeSolo
                   options={cityOptions}
                   getOptionLabel={(opt) =>
-                    typeof opt === "string" ? opt : `${opt.name}, ${opt.countryName}`
+                    typeof opt === "string" ? opt : opt.displayName
                   }
                   inputValue={cityInputValue}
                   onInputChange={(_e, value) => {
@@ -318,8 +334,8 @@ export default function Profile({ language }: ProfileProps) {
                     if (typeof value === "string") {
                       setEditProfile({ ...editProfile, city: value });
                     } else if (value) {
-                      setEditProfile({ ...editProfile, city: `${value.name}, ${value.countryName}` });
-                      setCityInputValue(`${value.name}, ${value.countryName}`);
+                      setEditProfile({ ...editProfile, city: value.displayName });
+                      setCityInputValue(value.displayName);
                     }
                   }}
                   loading={cityLoading}

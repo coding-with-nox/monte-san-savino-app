@@ -25,6 +25,7 @@ export const userRoutes = new Elysia({ prefix: "/users" })
         city: userProfilesTable.city,
         address: userProfilesTable.address,
         emergencyContact: userProfilesTable.emergencyContact,
+        emergencyContactName: userProfilesTable.emergencyContactName,
         avatarUrl: userProfilesTable.avatarUrl
       })
       .from(usersTable)
@@ -59,7 +60,8 @@ export const userRoutes = new Elysia({ prefix: "/users" })
       phone: t.Optional(t.String()),
       city: t.Optional(t.String()),
       address: t.Optional(t.String()),
-      emergencyContact: t.Optional(t.String())
+      emergencyContact: t.Optional(t.String()),
+      emergencyContactName: t.Optional(t.String())
     }),
     detail: {
       summary: "Aggiorna profilo",

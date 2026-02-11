@@ -15,5 +15,6 @@ export const userProfilesTable = pgTable("user_profiles", {
   city: text("city"),
   address: text("address"),
   emergencyContact: text("emergency_contact"),
+  emergencyContactName: text("emergency_contact_name"),
   avatarUrl: text("avatar_url")
 });

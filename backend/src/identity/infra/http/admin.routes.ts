@@ -34,7 +34,8 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
         phone: userProfilesTable.phone,
         city: userProfilesTable.city,
         address: userProfilesTable.address,
-        emergencyContact: userProfilesTable.emergencyContact
+        emergencyContact: userProfilesTable.emergencyContact,
+        emergencyContactName: userProfilesTable.emergencyContactName
       })
       .from(usersTable)
       .leftJoin(userProfilesTable, eq(usersTable.id, userProfilesTable.userId))
@@ -69,7 +70,8 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
       phone: t.Optional(t.String()),
       city: t.Optional(t.String()),
       address: t.Optional(t.String()),
-      emergencyContact: t.Optional(t.String())
+      emergencyContact: t.Optional(t.String()),
+      emergencyContactName: t.Optional(t.String())
     }),
     detail: {
       summary: "Aggiorna profilo utente (admin)",
