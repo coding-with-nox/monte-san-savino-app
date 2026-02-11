@@ -5,12 +5,16 @@ import {
   Button,
   Card,
   CardContent,
+  CardHeader,
+  Chip,
   CircularProgress,
   Container,
+  Divider,
   FormControl,
   Grid,
   IconButton,
   InputLabel,
+  Link,
   List,
   ListItem,
   ListItemButton,
@@ -19,6 +23,7 @@ import {
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -278,15 +283,23 @@ export default function Models({ language }: ModelsProps) {
         <Grid container spacing={2}>
           <Grid item xs={12} md={6}>
             <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "modelsListTitle")}
-                </Typography>
-                <List dense>
+              <CardHeader title={t(language, "modelsListTitle")} />
+              <CardContent sx={{ pt: 0 }}>
+                <List dense disablePadding>
                   {models.map((model) => (
-                    <ListItemButton key={model.id} onClick={() => openModel(model.id)}>
-                      <ListItemText primary={model.name} secondary={getCategoryName(model.categoryId)} />
-                    </ListItemButton>
+                    <ListItem key={model.id} disableGutters divider>
+                      <ListItemButton
+                        onClick={() => openModel(model.id)}
+                        selected={selected?.model?.id === model.id}
+                        sx={{ px: 2, py: 1.25 }}
+                      >
+                        <ListItemText
+                          primary={model.name}
+                          secondary={getCategoryName(model.categoryId)}
+                          primaryTypographyProps={{ fontWeight: 600 }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
                   ))}
                 </List>
               </CardContent>
@@ -294,45 +307,31 @@ export default function Models({ language }: ModelsProps) {
           </Grid>
           <Grid item xs={12} md={6}>
             <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "modelsDetailTitle")}
-                </Typography>
+              <CardHeader title={t(language, "modelsDetailTitle")} />
+              <CardContent sx={{ pt: 0 }}>
                 {selected?.model ? (
-                  <Stack spacing={2}>
-                    <Typography variant="subtitle1" fontWeight={600}>
-                      {selected.model.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t(language, "modelsCategoryPlaceholder")}: {getCategoryName(selected.model.categoryId)}
-                    </Typography>
-                    <List dense>
-                      {selected.images.map((img) => (
-                        <ListItem key={img.id} disableGutters secondaryAction={
-                          <IconButton size="small" color="error" onClick={() => deleteImage(img.id)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        }>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Box
-                              component="img"
-                              src={img.url}
-                              alt=""
-                              sx={{ width: 48, height: 48, objectFit: "cover", borderRadius: 1 }}
-                              onError={(e: any) => { e.target.style.display = "none"; }}
-                            />
-                            <ListItemText
-                              primary={img.url}
-                              primaryTypographyProps={{ variant: "body2", noWrap: true, sx: { maxWidth: 200 } }}
-                            />
-                          </Stack>
-                        </ListItem>
-                      ))}
-                    </List>
+                  <Stack spacing={2.5}>
+                    <Stack spacing={1}>
+                      <Typography variant="h5" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                        {selected.model.name}
+                      </Typography>
+                      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+                        <Chip
+                          size="small"
+                          label={`${t(language, "modelsCategoryPlaceholder")}: ${getCategoryName(selected.model.categoryId)}`}
+                        />
+                        {selected.model.teamId ? (
+                          <Chip size="small" variant="outlined" label={`Team: ${selected.model.teamId}`} />
+                        ) : null}
+                      </Stack>
+                    </Stack>
+
+                    <Divider />
+
                     <Grid container spacing={2} alignItems="flex-start">
                       <Grid item xs={12} md={6}>
                         <Stack spacing={1.5}>
-                          <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="subtitle1" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                             <EditIcon fontSize="small" />
                             {t(language, "modelsEditSection")}
                           </Typography>
@@ -366,64 +365,139 @@ export default function Models({ language }: ModelsProps) {
                             variant="contained"
                             onClick={saveModelChanges}
                             disabled={savingModel || !editName.trim() || !editCategoryId}
+                            fullWidth
                           >
                             {savingModel ? t(language, "modelsUploading") : t(language, "modelsSaveButton")}
                           </Button>
                         </Stack>
                       </Grid>
-                      <Grid item xs={12} md={3}>
+
+                      <Grid item xs={12} md={6}>
                         <Stack spacing={1.5}>
-                          <TextField
-                            label={t(language, "modelsAddImagePlaceholder")}
-                            value={image}
-                            onChange={(event) => {
-                              setImage(event.target.value);
-                              setImageError("");
-                            }}
-                            error={!!imageError}
-                            helperText={imageError}
-                            fullWidth
-                          />
-                          <Button variant="outlined" onClick={addImage} fullWidth disabled={!image.trim()}>
-                            {t(language, "modelsAddImageButton")}
-                          </Button>
-                        </Stack>
-                      </Grid>
-                      <Grid item xs={12} md={3}>
-                        <Stack spacing={1}>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            ref={fileInputRef}
-                            style={{ display: "none" }}
-                            onChange={handleFileChange}
-                          />
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            ref={cameraInputRef}
-                            style={{ display: "none" }}
-                            onChange={handleFileChange}
-                          />
-                          <Button
-                            variant="outlined"
-                            startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />}
-                            onClick={() => fileInputRef.current?.click()}
-                            fullWidth
-                            disabled={uploading}
-                          >
-                            {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
-                          </Button>
-                          <Button
-                            variant="outlined"
-                            startIcon={<PhotoCameraIcon />}
-                            onClick={() => cameraInputRef.current?.click()}
-                            fullWidth
-                            disabled={uploading}
-                          >
-                            {t(language, "modelsCameraButton")}
-                          </Button>
+                          <Typography variant="subtitle1" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <UploadFileIcon fontSize="small" />
+                            {t(language, "modelsImagesSection")}
+                          </Typography>
+
+                          {selected.images.length > 0 ? (
+                            <Box
+                              sx={{
+                                display: "grid",
+                                gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(3, 1fr)", md: "repeat(2, 1fr)" },
+                                gap: 1
+                              }}
+                            >
+                              {selected.images.map((img) => (
+                                <Box key={img.id} sx={{ minWidth: 0 }}>
+                                  <Box
+                                    sx={{
+                                      position: "relative",
+                                      borderRadius: 1,
+                                      overflow: "hidden",
+                                      border: "1px solid",
+                                      borderColor: "divider",
+                                      bgcolor: "action.hover"
+                                    }}
+                                  >
+                                    <Box
+                                      component="img"
+                                      src={img.url}
+                                      alt=""
+                                      sx={{ width: "100%", height: 120, objectFit: "cover", display: "block" }}
+                                      onError={(e: any) => {
+                                        e.target.style.display = "none";
+                                      }}
+                                    />
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => deleteImage(img.id)}
+                                      sx={{
+                                        position: "absolute",
+                                        top: 6,
+                                        right: 6,
+                                        bgcolor: "rgba(0,0,0,0.55)",
+                                        "&:hover": { bgcolor: "rgba(0,0,0,0.75)" }
+                                      }}
+                                    >
+                                      <DeleteIcon sx={{ color: "#fff" }} fontSize="small" />
+                                    </IconButton>
+                                  </Box>
+                                  <Tooltip title={img.url}>
+                                    <Typography variant="caption" noWrap sx={{ display: "block", mt: 0.5 }}>
+                                      <Link href={img.url} target="_blank" rel="noreferrer" underline="hover" color="inherit">
+                                        {img.url}
+                                      </Link>
+                                    </Typography>
+                                  </Tooltip>
+                                </Box>
+                              ))}
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              {t(language, "modelsNoImages")}
+                            </Typography>
+                          )}
+
+                          <Stack spacing={1}>
+                            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "flex-start" }}>
+                              <TextField
+                                label={t(language, "modelsAddImagePlaceholder")}
+                                value={image}
+                                onChange={(event) => {
+                                  setImage(event.target.value);
+                                  setImageError("");
+                                }}
+                                error={!!imageError}
+                                helperText={imageError}
+                                fullWidth
+                              />
+                              <Button
+                                variant="outlined"
+                                onClick={addImage}
+                                disabled={!image.trim()}
+                                sx={{ minWidth: { sm: 180 } }}
+                              >
+                                {t(language, "modelsAddImageButton")}
+                              </Button>
+                            </Stack>
+
+                            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                ref={fileInputRef}
+                                style={{ display: "none" }}
+                                onChange={handleFileChange}
+                              />
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                ref={cameraInputRef}
+                                style={{ display: "none" }}
+                                onChange={handleFileChange}
+                              />
+                              <Button
+                                variant="outlined"
+                                startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />}
+                                onClick={() => fileInputRef.current?.click()}
+                                fullWidth
+                                disabled={uploading}
+                              >
+                                {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                startIcon={<PhotoCameraIcon />}
+                                onClick={() => cameraInputRef.current?.click()}
+                                fullWidth
+                                disabled={uploading}
+                              >
+                                {t(language, "modelsCameraButton")}
+                              </Button>
+                            </Stack>
+                          </Stack>
                         </Stack>
                       </Grid>
                     </Grid>
