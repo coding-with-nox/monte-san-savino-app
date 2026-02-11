@@ -22,6 +22,8 @@ import {
   Typography
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
@@ -53,8 +55,13 @@ export default function Models({ language }: ModelsProps) {
   const [image, setImage] = useState("");
   const [imageError, setImageError] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [savingModel, setSavingModel] = useState(false);
   const [message, setMessage] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [editTeamId, setEditTeamId] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setModels(await api<Model[]>("/models"));
@@ -86,6 +93,30 @@ export default function Models({ language }: ModelsProps) {
   async function openModel(modelId: string) {
     const detail = await api<ModelDetail>(`/models/${modelId}`);
     setSelected(detail);
+    setEditName(detail.model.name);
+    setEditCategoryId(detail.model.categoryId);
+    setEditTeamId(detail.model.teamId || "");
+  }
+
+  async function saveModelChanges() {
+    if (!selected?.model) return;
+    setSavingModel(true);
+    try {
+      await api(`/models/${selected.model.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: editName.trim(),
+          categoryId: editCategoryId,
+          teamId: editTeamId.trim() || undefined
+        })
+      });
+      await load();
+      await openModel(selected.model.id);
+    } catch (err: any) {
+      setMessage(err.message || "Unable to save model");
+    } finally {
+      setSavingModel(false);
+    }
   }
 
   async function addImage() {
@@ -102,18 +133,65 @@ export default function Models({ language }: ModelsProps) {
     await openModel(selected.model.id);
   }
 
+  async function resizeImageForUpload(file: File): Promise<File | Blob> {
+    const maxDimension = 1920;
+    const targetMaxBytes = 1.5 * 1024 * 1024;
+    const outputType = file.type === "image/png" ? "image/jpeg" : (file.type || "image/jpeg");
+    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) return file;
+
+    let bitmap: ImageBitmap;
+    try {
+      bitmap = await createImageBitmap(file);
+    } catch {
+      return file;
+    }
+
+    let { width, height } = bitmap;
+    const needsResize = width > maxDimension || height > maxDimension;
+    if (needsResize) {
+      const ratio = Math.min(maxDimension / width, maxDimension / height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    if (!needsResize && file.size <= targetMaxBytes) return file;
+
+    const qualities = [0.85, 0.75, 0.65, 0.55];
+    let candidate: Blob | null = null;
+    for (const quality of qualities) {
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, outputType, quality));
+      if (!blob) continue;
+      candidate = blob;
+      if (blob.size <= targetMaxBytes) break;
+    }
+    return candidate || file;
+  }
+
   async function uploadFile(file: File) {
     if (!selected?.model) return;
     setUploading(true);
     try {
+      const optimizedFile = await resizeImageForUpload(file);
+      const contentType = optimizedFile.type || file.type || "image/jpeg";
       const { uploadUrl, publicUrl } = await api<{ uploadUrl: string; publicUrl: string }>(
         `/models/${selected.model.id}/image-upload`,
-        { method: "POST", body: JSON.stringify({ contentType: file.type }) }
+        { method: "POST", body: JSON.stringify({ contentType }) }
       );
       await fetch(uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file
+        headers: { "Content-Type": contentType },
+        body: optimizedFile
       });
       await api(`/models/${selected.model.id}/images`, { method: "POST", body: JSON.stringify({ url: publicUrl }) });
       await openModel(selected.model.id);
@@ -128,6 +206,7 @@ export default function Models({ language }: ModelsProps) {
     const file = e.target.files?.[0];
     if (file) uploadFile(file);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   }
 
   async function deleteImage(imageId: string) {
@@ -250,42 +329,102 @@ export default function Models({ language }: ModelsProps) {
                         </ListItem>
                       ))}
                     </List>
-                    <Grid container spacing={2} alignItems="center">
+                    <Grid container spacing={2} alignItems="flex-start">
                       <Grid item xs={12} md={6}>
-                        <TextField
-                          label={t(language, "modelsAddImagePlaceholder")}
-                          value={image}
-                          onChange={(event) => {
-                            setImage(event.target.value);
-                            setImageError("");
-                          }}
-                          error={!!imageError}
-                          helperText={imageError}
-                          fullWidth
-                        />
+                        <Stack spacing={1.5}>
+                          <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <EditIcon fontSize="small" />
+                            {t(language, "modelsEditSection")}
+                          </Typography>
+                          <TextField
+                            label={t(language, "modelsNamePlaceholder")}
+                            value={editName}
+                            onChange={(event) => setEditName(event.target.value)}
+                            fullWidth
+                          />
+                          <FormControl fullWidth>
+                            <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
+                            <Select
+                              value={editCategoryId}
+                              label={t(language, "modelsCategoryPlaceholder")}
+                              onChange={(e) => setEditCategoryId(e.target.value)}
+                            >
+                              {openCategories.map((cat) => (
+                                <MenuItem key={cat.id} value={cat.id}>
+                                  {cat.name}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <TextField
+                            label={t(language, "modelsTeamPlaceholder")}
+                            value={editTeamId}
+                            onChange={(event) => setEditTeamId(event.target.value)}
+                            fullWidth
+                          />
+                          <Button
+                            variant="contained"
+                            onClick={saveModelChanges}
+                            disabled={savingModel || !editName.trim() || !editCategoryId}
+                          >
+                            {savingModel ? t(language, "modelsUploading") : t(language, "modelsSaveButton")}
+                          </Button>
+                        </Stack>
                       </Grid>
                       <Grid item xs={12} md={3}>
-                        <Button variant="outlined" onClick={addImage} fullWidth disabled={!image.trim()}>
-                          {t(language, "modelsAddImageButton")}
-                        </Button>
+                        <Stack spacing={1.5}>
+                          <TextField
+                            label={t(language, "modelsAddImagePlaceholder")}
+                            value={image}
+                            onChange={(event) => {
+                              setImage(event.target.value);
+                              setImageError("");
+                            }}
+                            error={!!imageError}
+                            helperText={imageError}
+                            fullWidth
+                          />
+                          <Button variant="outlined" onClick={addImage} fullWidth disabled={!image.trim()}>
+                            {t(language, "modelsAddImageButton")}
+                          </Button>
+                        </Stack>
                       </Grid>
                       <Grid item xs={12} md={3}>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          ref={fileInputRef}
-                          style={{ display: "none" }}
-                          onChange={handleFileChange}
-                        />
-                        <Button
-                          variant="outlined"
-                          startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />}
-                          onClick={() => fileInputRef.current?.click()}
-                          fullWidth
-                          disabled={uploading}
-                        >
-                          {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
-                        </Button>
+                        <Stack spacing={1}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileInputRef}
+                            style={{ display: "none" }}
+                            onChange={handleFileChange}
+                          />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            ref={cameraInputRef}
+                            style={{ display: "none" }}
+                            onChange={handleFileChange}
+                          />
+                          <Button
+                            variant="outlined"
+                            startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />}
+                            onClick={() => fileInputRef.current?.click()}
+                            fullWidth
+                            disabled={uploading}
+                          >
+                            {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            startIcon={<PhotoCameraIcon />}
+                            onClick={() => cameraInputRef.current?.click()}
+                            fullWidth
+                            disabled={uploading}
+                          >
+                            {t(language, "modelsCameraButton")}
+                          </Button>
+                        </Stack>
                       </Grid>
                     </Grid>
                   </Stack>
