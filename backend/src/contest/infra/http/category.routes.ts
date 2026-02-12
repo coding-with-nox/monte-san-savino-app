@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, judgeAssignmentsTable, modelsTable, votesTable } from "../persistence/schema";
@@ -96,8 +96,8 @@ export const categoryRoutes = new Elysia({ prefix: "/categories" })
           .from(votesTable)
           .where(
             and(
-              sql`${votesTable.modelId} = ANY(${modelIds})`,
-              sql`${votesTable.judgeId} = ANY(${judgeIds})`
+              inArray(votesTable.modelId, modelIds as any),
+              inArray(votesTable.judgeId, judgeIds as any)
             )
           );
         const distinctVotes = new Set(votes.map((vote) => `${vote.judgeId}:${vote.modelId}`)).size;
