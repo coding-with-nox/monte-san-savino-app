@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
+import crypto from "node:crypto";
 import { requireRole } from "./role.middleware";
 import { usersTable, userProfilesTable } from "../persistence/schema";
 import { BcryptHasher } from "../crypto/bcryptHasher";
@@ -8,6 +9,38 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
+  .post("/", async ({ tenantDb, body, set }) => {
+    if (body.password.length < 8) {
+      set.status = 400;
+      return { error: "Password must be at least 8 characters long" };
+    }
+    const existing = await tenantDb.select().from(usersTable).where(eq(usersTable.email, body.email));
+    if (existing.length > 0) {
+      set.status = 409;
+      return { error: "Email already registered" };
+    }
+    const id = crypto.randomUUID();
+    const passwordHash = await new BcryptHasher().hash(body.password);
+    await tenantDb.insert(usersTable).values({
+      id,
+      email: body.email,
+      role: body.role || "user",
+      passwordHash,
+      isActive: true
+    });
+    return { id, email: body.email, role: body.role || "user" };
+  }, {
+    body: t.Object({
+      email: t.String(),
+      password: t.String(),
+      role: t.Optional(t.String())
+    }),
+    detail: {
+      summary: "Crea utente (admin)",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
   .get("/", async ({ tenantDb }) => {
     return await tenantDb.select({
       id: usersTable.id,

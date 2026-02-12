@@ -1,22 +1,29 @@
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
-  Card,
-  CardContent,
   Chip,
+  Collapse,
   Container,
   FormControl,
   Grid,
+  IconButton,
   InputLabel,
-  List,
-  ListItem,
-  ListItemText,
   MenuItem,
+  Paper,
   Select,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Typography
 } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import CloseIcon from "@mui/icons-material/Close";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -47,6 +54,8 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   const [models, setModels] = useState<Model[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [message, setMessage] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   async function load() {
     setEnrollments(await api<Enrollment[]>("/enrollments"));
@@ -79,12 +88,33 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   }
 
   async function enroll() {
-    await api(`/events/${eventId}/enroll`, { method: "POST", body: JSON.stringify({ modelId: modelId || undefined, categoryId: categoryId || undefined }) });
+    setSaving(true);
+    try {
+      await api(`/events/${eventId}/enroll`, {
+        method: "POST",
+        body: JSON.stringify({
+          modelId: modelId || undefined,
+          categoryId: categoryId || undefined
+        })
+      });
+      setIsCreating(false);
+      setEventId("");
+      setModelId("");
+      setCategoryId("");
+      await load();
+      setMessage(t(language, "enrollmentsSubmitted"));
+    } catch (err: any) {
+      setMessage(err.message || "Unable to enroll");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startCreate() {
     setEventId("");
     setModelId("");
     setCategoryId("");
-    await load();
-    setMessage(t(language, "enrollmentsSubmitted"));
+    setIsCreating(true);
   }
 
   useEffect(() => {
@@ -100,152 +130,149 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   };
 
   const getModelName = (id: string | null | undefined) => {
-    if (!id) return "";
+    if (!id) return "—";
     const m = models.find((model) => model.id === id);
     return m ? m.name : id.slice(0, 8);
   };
 
   const getCategoryName = (id: string | null | undefined) => {
-    if (!id) return "";
+    if (!id) return "—";
     const c = categories.find((cat) => cat.id === id);
     return c ? c.name : id.slice(0, 8);
   };
 
-  // Split enrollments into active and past
+  const statusColor = (status: string) => {
+    switch (status) {
+      case "approved": return "success";
+      case "pending": return "warning";
+      case "paid": return "info";
+      case "rejected": return "error";
+      default: return "default";
+    }
+  };
+
   const activeEventIds = new Set(activeEvents.map((e) => e.id));
   const activeEnrollments = enrollments.filter((e) => activeEventIds.has(e.eventId));
   const pastEnrollments = enrollments.filter((e) => !activeEventIds.has(e.eventId));
 
-  return (
-    <Container maxWidth="lg">
-      <Stack spacing={3}>
-        <Typography variant="h4">{t(language, "enrollmentsTitle")}</Typography>
-        <Card>
-          <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>{t(language, "enrollmentsEventSelect")}</InputLabel>
-                  <Select
-                    value={eventId}
-                    label={t(language, "enrollmentsEventSelect")}
-                    onChange={(e) => setEventId(e.target.value)}
-                  >
-                    {activeEvents.map((ev) => (
-                      <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>{t(language, "enrollmentsModelSelect")}</InputLabel>
-                  <Select
-                    value={modelId}
-                    label={t(language, "enrollmentsModelSelect")}
-                    onChange={(e) => setModelId(e.target.value)}
-                  >
-                    <MenuItem value="">&mdash;</MenuItem>
-                    {models.map((m) => (
-                      <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>{t(language, "enrollmentsCategorySelect")}</InputLabel>
-                  <Select
-                    value={categoryId}
-                    label={t(language, "enrollmentsCategorySelect")}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                  >
-                    <MenuItem value="">&mdash;</MenuItem>
-                    {categories.filter((c) => c.status === "open").map((c) => (
-                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={2}>
-                <Button variant="contained" onClick={enroll} fullWidth disabled={!eventId}>
-                  {t(language, "enrollmentsButton")}
-                </Button>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+  const createPanel = (
+    <Box sx={{ p: 2 }}>
+      <Grid container spacing={2} alignItems="flex-start">
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth size="small">
+            <InputLabel>{t(language, "enrollmentsEventSelect")}</InputLabel>
+            <Select value={eventId} label={t(language, "enrollmentsEventSelect")} onChange={(e) => setEventId(e.target.value)}>
+              {activeEvents.map((ev) => (
+                <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <FormControl fullWidth size="small">
+            <InputLabel>{t(language, "enrollmentsModelSelect")}</InputLabel>
+            <Select value={modelId} label={t(language, "enrollmentsModelSelect")} onChange={(e) => setModelId(e.target.value)}>
+              <MenuItem value="">&mdash;</MenuItem>
+              {models.map((m) => (
+                <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <FormControl fullWidth size="small">
+            <InputLabel>{t(language, "enrollmentsCategorySelect")}</InputLabel>
+            <Select value={categoryId} label={t(language, "enrollmentsCategorySelect")} onChange={(e) => setCategoryId(e.target.value)}>
+              <MenuItem value="">&mdash;</MenuItem>
+              {categories.filter((c) => c.status === "open").map((c) => (
+                <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} md={2}>
+          <Button variant="contained" onClick={enroll} fullWidth disabled={saving || !eventId}>
+            {saving ? "..." : t(language, "enrollmentsButton")}
+          </Button>
+        </Grid>
+      </Grid>
+    </Box>
+  );
 
-        {/* Active enrollments */}
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              {t(language, "enrollmentsListTitle")}
-            </Typography>
-            <List dense>
-              {activeEnrollments.map((enrollment) => (
-                <ListItem key={enrollment.id} disableGutters>
-                  <ListItemText
-                    primary={getEventName(enrollment.eventId)}
-                    secondary={[
-                      getModelName(enrollment.modelId),
-                      getCategoryName(enrollment.categoryId),
-                      enrollment.checkedIn ? t(language, "enrollmentsCheckedIn") : ""
-                    ].filter(Boolean).join(" — ") || undefined}
-                  />
+  const renderTable = (items: Enrollment[], isPast: boolean) => (
+    <TableContainer component={Paper} variant="outlined">
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsEventSelect")}</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelSelect")}</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategorySelect")}</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {items.map((enrollment) => (
+            <TableRow key={enrollment.id} hover>
+              <TableCell>
+                <Typography fontWeight={600}>{getEventName(enrollment.eventId)}</Typography>
+              </TableCell>
+              <TableCell>{getModelName(enrollment.modelId)}</TableCell>
+              <TableCell>{getCategoryName(enrollment.categoryId)}</TableCell>
+              <TableCell>
+                <Stack direction="row" spacing={1} alignItems="center">
                   <Chip
                     label={enrollment.status}
                     size="small"
-                    color={
-                      enrollment.status === "approved" ? "success"
-                        : enrollment.status === "pending" ? "warning"
-                        : enrollment.status === "paid" ? "info"
-                        : enrollment.status === "rejected" ? "error"
-                        : "default"
-                    }
-                    sx={{ ml: 1 }}
+                    color={isPast ? "default" : statusColor(enrollment.status) as any}
                   />
-                </ListItem>
-              ))}
-              {activeEnrollments.length === 0 && (
-                <Typography variant="body2" color="text.secondary">—</Typography>
-              )}
-            </List>
-          </CardContent>
-        </Card>
+                  {enrollment.checkedIn && (
+                    <Chip label={t(language, "enrollmentsCheckedIn")} size="small" color="success" variant="outlined" />
+                  )}
+                </Stack>
+              </TableCell>
+            </TableRow>
+          ))}
+          {items.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={4} align="center">
+                <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>—</Typography>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
 
-        {/* Past enrollments */}
-        {pastEnrollments.length > 0 && (
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                {t(language, "enrollmentsPastTitle")}
-              </Typography>
-              <List dense>
-                {pastEnrollments.map((enrollment) => (
-                  <ListItem key={enrollment.id} disableGutters>
-                    <ListItemText
-                      primary={getEventName(enrollment.eventId)}
-                      secondary={[
-                        getModelName(enrollment.modelId),
-                        getCategoryName(enrollment.categoryId),
-                        enrollment.checkedIn ? t(language, "enrollmentsCheckedIn") : ""
-                      ].filter(Boolean).join(" — ") || undefined}
-                    />
-                    <Chip
-                      label={enrollment.status}
-                      size="small"
-                      color="default"
-                      sx={{ ml: 1 }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
-        )}
-
+  return (
+    <Container maxWidth="lg">
+      <Stack spacing={2}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="h4">{t(language, "enrollmentsTitle")}</Typography>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
+            {t(language, "enrollmentsButton")}
+          </Button>
+        </Stack>
         {message && <Alert severity="info" onClose={() => setMessage("")}>{message}</Alert>}
+        <Collapse in={isCreating}>
+          <Paper variant="outlined" sx={{ mb: 1 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
+              <Typography variant="subtitle2">{t(language, "enrollmentsButton")}</Typography>
+              <IconButton size="small" onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></IconButton>
+            </Stack>
+            {createPanel}
+          </Paper>
+        </Collapse>
+
+        <Typography variant="h6">{t(language, "enrollmentsListTitle")}</Typography>
+        {renderTable(activeEnrollments, false)}
+
+        {pastEnrollments.length > 0 && (
+          <>
+            <Typography variant="h6">{t(language, "enrollmentsPastTitle")}</Typography>
+            {renderTable(pastEnrollments, true)}
+          </>
+        )}
       </Stack>
     </Container>
   );

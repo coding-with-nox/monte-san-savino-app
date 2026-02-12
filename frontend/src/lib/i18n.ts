@@ -164,7 +164,15 @@ export const translations = {
     enrollmentsModelSelect: "Seleziona modello (opzionale)",
     enrollmentsCategorySelect: "Seleziona categoria (opzionale)",
     adminJudgeAssignments: "Assegnazioni attive",
-    adminMentionsList: "Menzioni assegnate"
+    adminMentionsList: "Menzioni assegnate",
+    navUsers: "Utenti",
+    usersTitle: "Utenti",
+    usersCreateButton: "Crea utente",
+    usersEmailPlaceholder: "Email",
+    usersPasswordPlaceholder: "Password",
+    usersRolePlaceholder: "Ruolo",
+    usersNoUsers: "Nessun utente.",
+    usersEmailExists: "Email già registrata."
   },
   en: {
     loginEyebrow: "Welcome back",
@@ -329,7 +337,15 @@ export const translations = {
     enrollmentsModelSelect: "Select model (optional)",
     enrollmentsCategorySelect: "Select category (optional)",
     adminJudgeAssignments: "Active assignments",
-    adminMentionsList: "Assigned mentions"
+    adminMentionsList: "Assigned mentions",
+    navUsers: "Users",
+    usersTitle: "Users",
+    usersCreateButton: "Create user",
+    usersEmailPlaceholder: "Email",
+    usersPasswordPlaceholder: "Password",
+    usersRolePlaceholder: "Role",
+    usersNoUsers: "No users.",
+    usersEmailExists: "Email already registered."
   }
 } as const;
 

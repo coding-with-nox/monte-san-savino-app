@@ -39,6 +39,7 @@ import Enrollments from "./pages/Enrollments";
 import PublicEvents from "./pages/PublicEvents";
 import Admin from "./pages/Admin";
 import StaffCheckin from "./pages/StaffCheckin";
+import Users from "./pages/Users";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
 
@@ -121,6 +122,7 @@ export default function App() {
     { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null },
     { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role },
     { label: t(language, "navStaff"), path: "/staff", minRole: "staff" as Role },
+    { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role },
     { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role }
   ];
 
@@ -265,6 +267,7 @@ export default function App() {
             <Route path="/public-events" element={<PublicEvents language={language} />} />
             <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />
             <Route path="/staff" element={<Protected><RequireRole min="staff"><StaffCheckin language={language} /></RequireRole></Protected>} />
+            <Route path="/users" element={<Protected><RequireRole min="manager"><Users language={language} /></RequireRole></Protected>} />
             <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin language={language} /></RequireRole></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
