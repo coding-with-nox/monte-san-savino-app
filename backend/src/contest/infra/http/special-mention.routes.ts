@@ -29,22 +29,28 @@ export const specialMentionRoutes = new Elysia({ prefix: "/awards/mentions" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .post("/", async ({ tenantDb, body, user }) => {
+  .post("/", async ({ tenantDb, body, user, set }) => {
+    const title = body.title.trim();
+    if (!title) {
+      set.status = 400;
+      return { error: "title is required" };
+    }
+
     const id = crypto.randomUUID();
     await tenantDb.insert(specialMentionsTable).values({
       id,
       eventId: body.eventId,
       modelId: body.modelId,
-      title: body.title,
+      title,
       description: body.description ?? null,
       awardedBy: user!.id
     });
     return { id };
   }, {
     body: t.Object({
-      eventId: t.String(),
-      modelId: t.String(),
-      title: t.String(),
+      eventId: t.String({ format: "uuid" }),
+      modelId: t.String({ format: "uuid" }),
+      title: t.String({ minLength: 1 }),
       description: t.Optional(t.String())
     }),
     detail: {

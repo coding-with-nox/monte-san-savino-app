@@ -22,18 +22,19 @@ export const judgeAdminRoutes = new Elysia({ prefix: "/admin/judges" })
   })
   .post("/assignments", async ({ tenantDb, body }) => {
     const id = crypto.randomUUID();
+    const categoryId = body.categoryId?.trim() ? body.categoryId.trim() : null;
     await tenantDb.insert(judgeAssignmentsTable).values({
       id,
       eventId: body.eventId,
       judgeId: body.judgeId,
-      categoryId: body.categoryId ?? null
+      categoryId
     });
     return { id };
   }, {
     body: t.Object({
-      eventId: t.String(),
-      judgeId: t.String(),
-      categoryId: t.Optional(t.String())
+      eventId: t.String({ format: "uuid" }),
+      judgeId: t.String({ format: "uuid" }),
+      categoryId: t.Optional(t.String({ format: "uuid" }))
     }),
     detail: {
       summary: "Assegna giudice (evento o categoria)",
