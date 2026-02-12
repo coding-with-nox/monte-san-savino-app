@@ -112,3 +112,9 @@ export const modificationRequestsTable = pgTable("modification_requests", {
   status: text("status").default("pending").notNull(), // pending | resolved | rejected
   createdAt: timestamp("created_at").defaultNow()
 });
+
+export const settingsTable = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});

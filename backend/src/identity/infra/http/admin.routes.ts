@@ -5,6 +5,7 @@ import { requireRole } from "./role.middleware";
 import { usersTable, userProfilesTable } from "../persistence/schema";
 import { BcryptHasher } from "../crypto/bcryptHasher";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
+import { EmailService } from "../../../shared/infra/email/emailService";
 
 export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
   .use(tenantMiddleware)
@@ -128,10 +129,22 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
     }
   })
   .post("/:userId/reset-password", async ({ tenantDb, params }) => {
+    const userRows = await tenantDb
+      .select({ email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.id, params.userId as any));
+    if (!userRows[0]) {
+      return { error: "User not found" };
+    }
     const tempPassword = `Temp-${Math.random().toString(36).slice(2, 10)}`;
     const passwordHash = await new BcryptHasher().hash(tempPassword);
     await tenantDb.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, params.userId as any));
-    return { temporaryPassword: tempPassword };
+    const emailService = new EmailService();
+    const emailSent = await emailService.sendPasswordReset({
+      to: userRows[0].email,
+      temporaryPassword: tempPassword
+    });
+    return { temporaryPassword: tempPassword, emailSent };
   }, {
     params: t.Object({ userId: t.String() }),
     detail: {

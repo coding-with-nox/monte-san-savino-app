@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Chip,
@@ -35,6 +36,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import ImageIcon from "@mui/icons-material/Image";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -55,6 +57,7 @@ export default function Models({ language }: ModelsProps) {
   const [uploading, setUploading] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
   const [message, setMessage] = useState("");
+  const [imagesEnabled, setImagesEnabled] = useState(false);
   const [editName, setEditName] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editTeamId, setEditTeamId] = useState("");
@@ -225,7 +228,16 @@ export default function Models({ language }: ModelsProps) {
     setDetail(d);
   }
 
-  useEffect(() => { load(); loadCategories(); }, []);
+  async function loadSettings() {
+    try {
+      const s = await api<Record<string, string>>("/settings");
+      setImagesEnabled(s.modelImages === "true");
+    } catch {
+      setImagesEnabled(false);
+    }
+  }
+
+  useEffect(() => { load(); loadCategories(); loadSettings(); }, []);
 
   const openCategories = categories.filter((c) => c.status === "open");
   const getCategoryName = (catId: string) => {
@@ -254,7 +266,7 @@ export default function Models({ language }: ModelsProps) {
             </Button>
           </Stack>
         </Grid>
-        {!isCreating && detail && (
+        {!isCreating && detail && imagesEnabled && (
           <Grid item xs={12} md={6}>
             <Stack spacing={1.5}>
               <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -320,6 +332,7 @@ export default function Models({ language }: ModelsProps) {
           <Table>
             <TableHead>
               <TableRow>
+                {imagesEnabled && <TableCell sx={{ fontWeight: 700, width: 60 }} />}
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
                 <TableCell align="right" sx={{ width: 100 }} />
@@ -329,6 +342,17 @@ export default function Models({ language }: ModelsProps) {
               {models.map((model) => (
                 <React.Fragment key={model.id}>
                   <TableRow hover sx={{ cursor: "pointer", "& > td": { borderBottom: expandedId === model.id ? "none" : undefined } }} onClick={() => openModel(model.id)} selected={expandedId === model.id}>
+                    {imagesEnabled && (
+                      <TableCell sx={{ width: 60, p: 1 }}>
+                        {model.imageUrl ? (
+                          <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
+                        ) : (
+                          <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: "action.hover" }}>
+                            <ImageIcon fontSize="small" color="disabled" />
+                          </Avatar>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
                     <TableCell><Chip size="small" label={getCategoryName(model.categoryId)} /></TableCell>
                     <TableCell align="right">
@@ -339,7 +363,7 @@ export default function Models({ language }: ModelsProps) {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={3} sx={{ p: 0 }}>
+                    <TableCell colSpan={imagesEnabled ? 4 : 3} sx={{ p: 0 }}>
                       <Collapse in={expandedId === model.id} unmountOnExit>
                         <Divider />
                         {editPanel}
@@ -350,7 +374,7 @@ export default function Models({ language }: ModelsProps) {
               ))}
               {models.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={3} align="center">
+                  <TableCell colSpan={imagesEnabled ? 4 : 3} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>{t(language, "modelsSelectHint")}</Typography>
                   </TableCell>
                 </TableRow>

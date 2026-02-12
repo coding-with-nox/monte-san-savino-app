@@ -4,7 +4,7 @@ import { and, eq, ilike } from "drizzle-orm";
 import { VoteRepositoryDrizzle } from "../persistence/voteRepository.drizzle";
 import { ModelReadRepositoryDrizzle } from "../persistence/modelReadRepository.drizzle";
 import { VoteModel } from "../../application/VoteModel";
-import { categoriesTable, judgeAssignmentsTable, modelsTable, modelImagesTable, registrationsTable } from "../persistence/schema";
+import { categoriesTable, eventsTable, judgeAssignmentsTable, modelsTable, modelImagesTable, registrationsTable } from "../persistence/schema";
 import { usersTable, userProfilesTable } from "../../../identity/infra/persistence/schema";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 
@@ -13,8 +13,9 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
   .use(requireRole("judge"))
   .get("/events", async ({ tenantDb, user }) => {
     return await tenantDb
-      .select({ eventId: judgeAssignmentsTable.eventId })
+      .select({ eventId: judgeAssignmentsTable.eventId, eventName: eventsTable.name })
       .from(judgeAssignmentsTable)
+      .innerJoin(eventsTable, eq(eventsTable.id, judgeAssignmentsTable.eventId))
       .where(eq(judgeAssignmentsTable.judgeId, user!.id as any));
   }, {
     detail: {
@@ -40,6 +41,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
         id: modelsTable.id,
         name: modelsTable.name,
         categoryId: modelsTable.categoryId,
+        categoryName: categoriesTable.name,
         imageUrl: modelsTable.imageUrl
       })
       .from(modelsTable)

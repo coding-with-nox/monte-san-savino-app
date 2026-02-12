@@ -1,12 +1,10 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
-  Autocomplete,
   Button,
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   Container,
   Grid,
   Stack,
@@ -20,6 +18,7 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import { MuiTelInput, matchIsValidTel } from "mui-tel-input";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import LocationPicker from "../lib/LocationPicker";
 
 type Profile = {
   email?: string;
@@ -33,12 +32,6 @@ type Profile = {
   emergencyContactName?: string | null;
 };
 
-type CityOption = {
-  displayName: string;
-  city: string;
-  country: string;
-};
-
 interface ProfileProps {
   language: Language;
 }
@@ -50,11 +43,6 @@ export default function Profile({ language }: ProfileProps) {
   const [message, setMessage] = useState("");
   const [phoneError, setPhoneError] = useState(false);
   const [emergencyPhoneError, setEmergencyPhoneError] = useState(false);
-
-  // City autocomplete state
-  const [cityOptions, setCityOptions] = useState<CityOption[]>([]);
-  const [cityLoading, setCityLoading] = useState(false);
-  const [cityInputValue, setCityInputValue] = useState("");
 
   async function load() {
     const res = await api<Profile>("/users/profile");
@@ -80,7 +68,6 @@ export default function Profile({ language }: ProfileProps) {
 
   function startEdit() {
     setEditProfile({ ...profile });
-    setCityInputValue(profile.city ?? "");
     setPhoneError(false);
     setEmergencyPhoneError(false);
     setEditing(true);
@@ -91,41 +78,6 @@ export default function Profile({ language }: ProfileProps) {
     setPhoneError(false);
     setEmergencyPhoneError(false);
   }
-
-  // Debounced city search via Photon API (Komoot / OpenStreetMap)
-  const searchCities = useCallback(
-    debounce(async (query: string) => {
-      if (query.length < 2) {
-        setCityOptions([]);
-        return;
-      }
-      setCityLoading(true);
-      try {
-        const res = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=10&lang=${language === "en" ? "en" : "default"}`
-        );
-        const data = await res.json();
-        const seen = new Set<string>();
-        const options: CityOption[] = [];
-        for (const feature of data.features || []) {
-          const p = feature.properties || {};
-          const city = p.city || p.name || "";
-          const country = p.country || "";
-          const key = `${city}|${country}`;
-          if (city && !seen.has(key)) {
-            seen.add(key);
-            options.push({ displayName: `${city}, ${country}`, city, country });
-          }
-        }
-        setCityOptions(options);
-      } catch {
-        setCityOptions([]);
-      } finally {
-        setCityLoading(false);
-      }
-    }, 300),
-    [language]
-  );
 
   useEffect(() => {
     load().catch((err) => setMessage(err.message));
@@ -317,55 +269,13 @@ export default function Profile({ language }: ProfileProps) {
               <LocationOnIcon color="primary" />
               <Typography variant="h6">{t(language, "profileAddressSection")}</Typography>
             </Stack>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <Autocomplete
-                  freeSolo
-                  options={cityOptions}
-                  getOptionLabel={(opt) =>
-                    typeof opt === "string" ? opt : opt.displayName
-                  }
-                  inputValue={cityInputValue}
-                  onInputChange={(_e, value) => {
-                    setCityInputValue(value);
-                    searchCities(value);
-                  }}
-                  onChange={(_e, value) => {
-                    if (typeof value === "string") {
-                      setEditProfile({ ...editProfile, city: value });
-                    } else if (value) {
-                      setEditProfile({ ...editProfile, city: value.displayName });
-                      setCityInputValue(value.displayName);
-                    }
-                  }}
-                  loading={cityLoading}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label={t(language, "profileCity")}
-                      fullWidth
-                      InputProps={{
-                        ...params.InputProps,
-                        endAdornment: (
-                          <>
-                            {cityLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                            {params.InputProps.endAdornment}
-                          </>
-                        )
-                      }}
-                    />
-                  )}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label={t(language, "profileAddress")}
-                  value={editProfile.address ?? ""}
-                  onChange={(e) => setEditProfile({ ...editProfile, address: e.target.value })}
-                  fullWidth
-                />
-              </Grid>
-            </Grid>
+            <LocationPicker
+              city={editProfile.city ?? ""}
+              address={editProfile.address ?? ""}
+              onCityChange={(val) => setEditProfile({ ...editProfile, city: val })}
+              onAddressChange={(val) => setEditProfile({ ...editProfile, address: val })}
+              language={language}
+            />
           </CardContent>
         </Card>
 
@@ -384,11 +294,3 @@ export default function Profile({ language }: ProfileProps) {
   );
 }
 
-// Simple debounce utility
-function debounce<T extends (...args: any[]) => any>(fn: T, ms: number) {
-  let timer: ReturnType<typeof setTimeout>;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), ms);
-  };
-}

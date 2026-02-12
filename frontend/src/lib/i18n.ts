@@ -172,7 +172,20 @@ export const translations = {
     usersPasswordPlaceholder: "Password",
     usersRolePlaceholder: "Ruolo",
     usersNoUsers: "Nessun utente.",
-    usersEmailExists: "Email già registrata."
+    usersEmailExists: "Email già registrata.",
+    usersEditTitle: "Modifica utente",
+    navSettings: "Impostazioni",
+    settingsTitle: "Impostazioni",
+    settingsSettingColumn: "Impostazione",
+    settingsValueColumn: "Valore",
+    settingsModelImages: "Immagini modelli",
+    judgeActionsColumn: "Azioni",
+    judgeVoteSuccess: "Voto registrato.",
+    judgeSelectEvent: "Seleziona un evento",
+    adminEmailSent: "Email inviata",
+    adminEmailNotSent: "Email non inviata",
+    mapLoading: "Caricamento indirizzo...",
+    mapClickHint: "Clicca sulla mappa per selezionare una posizione"
   },
   en: {
     loginEyebrow: "Welcome back",
@@ -345,7 +358,20 @@ export const translations = {
     usersPasswordPlaceholder: "Password",
     usersRolePlaceholder: "Role",
     usersNoUsers: "No users.",
-    usersEmailExists: "Email already registered."
+    usersEmailExists: "Email already registered.",
+    usersEditTitle: "Edit user",
+    navSettings: "Settings",
+    settingsTitle: "Settings",
+    settingsSettingColumn: "Setting",
+    settingsValueColumn: "Value",
+    settingsModelImages: "Model images",
+    judgeActionsColumn: "Actions",
+    judgeVoteSuccess: "Vote recorded.",
+    judgeSelectEvent: "Select an event",
+    adminEmailSent: "Email sent",
+    adminEmailNotSent: "Email not sent",
+    mapLoading: "Loading address...",
+    mapClickHint: "Click on the map to select a location"
   }
 } as const;
 
