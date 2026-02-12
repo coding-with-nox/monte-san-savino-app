@@ -150,7 +150,7 @@ export default function Admin({ language }: AdminProps) {
 
   async function assignJudge() {
     const body: Record<string, string> = { eventId: judgeAssignment.eventId, judgeId: judgeAssignment.judgeId };
-    if (judgeAssignment.categoryId) body.categoryId = judgeAssignment.categoryId;
+    if (judgeAssignment.categoryId.trim()) body.categoryId = judgeAssignment.categoryId.trim();
     await api("/admin/judges/assignments", { method: "POST", body: JSON.stringify(body) });
     setJudgeAssignment({ eventId: "", judgeId: "", categoryId: "" });
     setMessage(t(language, "adminJudgeAssigned"));
@@ -215,7 +215,14 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function createMention() {
-    await api("/awards/mentions", { method: "POST", body: JSON.stringify(mentionForm) });
+    await api("/awards/mentions", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: mentionForm.eventId,
+        modelId: mentionForm.modelId.trim(),
+        title: mentionForm.title.trim()
+      })
+    });
     setMentionForm({ eventId: "", modelId: "", title: "" });
     setMessage(t(language, "adminMentionCreate"));
     await load();
@@ -497,7 +504,12 @@ export default function Admin({ language }: AdminProps) {
                     </FormControl>
                   </Grid>
                   <Grid item xs={12} md={3}>
-                    <Button variant="contained" onClick={assignJudge} fullWidth>
+                    <Button
+                      variant="contained"
+                      onClick={assignJudge}
+                      fullWidth
+                      disabled={!judgeAssignment.eventId || !judgeAssignment.judgeId}
+                    >
                       {t(language, "adminJudgeAssignButton")}
                     </Button>
                   </Grid>
@@ -628,7 +640,12 @@ export default function Admin({ language }: AdminProps) {
                     />
                   </Grid>
                   <Grid item xs={12} md={3}>
-                    <Button variant="contained" onClick={createMention} fullWidth>
+                    <Button
+                      variant="contained"
+                      onClick={createMention}
+                      fullWidth
+                      disabled={!mentionForm.eventId || !mentionForm.modelId.trim() || !mentionForm.title.trim()}
+                    >
                       {t(language, "adminMentionCreate")}
                     </Button>
                   </Grid>
