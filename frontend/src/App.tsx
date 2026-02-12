@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, Link as RouterLink, useLocation } from "react-router-dom";
 import {
   AppBar,
+  Avatar,
   Box,
   Button,
   CssBaseline,
@@ -12,7 +13,9 @@ import {
   InputLabel,
   List,
   ListItemButton,
+  ListItemIcon,
   ListItemText,
+  Menu,
   MenuItem,
   Select,
   Stack,
@@ -25,8 +28,9 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
+import LogoutIcon from "@mui/icons-material/Logout";
+import PersonIcon from "@mui/icons-material/Person";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
 import Judge from "./pages/Judge";
 import Profile from "./pages/Profile";
 import Teams from "./pages/Teams";
@@ -35,7 +39,7 @@ import Enrollments from "./pages/Enrollments";
 import PublicEvents from "./pages/PublicEvents";
 import Admin from "./pages/Admin";
 import StaffCheckin from "./pages/StaffCheckin";
-import { getToken, getRole, roleAtLeast, Role } from "./lib/auth";
+import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -91,10 +95,26 @@ export default function App() {
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
 
   const role = getRole();
+  const [avatarMenuAnchor, setAvatarMenuAnchor] = useState<null | HTMLElement>(null);
+
+  const userInitial = (() => {
+    const token = getToken();
+    if (!token) return "?";
+    try {
+      const payload = decodeJwt(token);
+      const email = payload.email as string | undefined;
+      return email ? email[0].toUpperCase() : "?";
+    } catch { return "?"; }
+  })();
+
+  const handleLogout = () => {
+    setAvatarMenuAnchor(null);
+    clearToken();
+    window.location.href = "/login";
+  };
 
   const allNavItems = [
-    { label: t(language, "navHome"), path: "/", minRole: "user" as Role },
-    { label: t(language, "navProfile"), path: "/profile", minRole: "user" as Role },
+    { label: t(language, "navProfile"), path: "/", minRole: "user" as Role },
     { label: t(language, "navTeams"), path: "/teams", minRole: "user" as Role },
     { label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
     { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role },
@@ -132,6 +152,15 @@ export default function App() {
             <ListItemText primary={item.label} />
           </ListItemButton>
         ))}
+        {role && (
+          <>
+            <Divider />
+            <ListItemButton onClick={handleLogout}>
+              <ListItemIcon><LogoutIcon /></ListItemIcon>
+              <ListItemText primary={t(language, "logoutButton")} />
+            </ListItemButton>
+          </>
+        )}
       </List>
     </Box>
   );
@@ -187,6 +216,32 @@ export default function App() {
               >
                 {themeMode === "light" ? <Brightness4Icon /> : <Brightness7Icon />}
               </IconButton>
+              {role && (
+                <>
+                  <IconButton onClick={(e) => setAvatarMenuAnchor(e.currentTarget)} sx={{ p: 0 }}>
+                    <Avatar sx={{ width: 36, height: 36, bgcolor: "secondary.main", fontSize: 16 }}>
+                      {userInitial}
+                    </Avatar>
+                  </IconButton>
+                  <Menu
+                    anchorEl={avatarMenuAnchor}
+                    open={Boolean(avatarMenuAnchor)}
+                    onClose={() => setAvatarMenuAnchor(null)}
+                    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                    transformOrigin={{ vertical: "top", horizontal: "right" }}
+                  >
+                    <MenuItem component={RouterLink} to="/" onClick={() => setAvatarMenuAnchor(null)}>
+                      <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
+                      {t(language, "navProfile")}
+                    </MenuItem>
+                    <Divider />
+                    <MenuItem onClick={handleLogout}>
+                      <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
+                      {t(language, "logoutButton")}
+                    </MenuItem>
+                  </Menu>
+                </>
+              )}
             </Stack>
           </Toolbar>
         </AppBar>
@@ -203,8 +258,7 @@ export default function App() {
                 />
               )}
             />
-            <Route path="/" element={<Protected><Dashboard language={language} /></Protected>} />
-            <Route path="/profile" element={<Protected><Profile language={language} /></Protected>} />
+            <Route path="/" element={<Protected><Profile language={language} /></Protected>} />
             <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
             <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
             <Route path="/enrollments" element={<Protected><Enrollments language={language} /></Protected>} />
