@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray } from "drizzle-orm";
 import { VoteRepositoryDrizzle } from "../persistence/voteRepository.drizzle";
 import { ModelReadRepositoryDrizzle } from "../persistence/modelReadRepository.drizzle";
 import { VoteModel } from "../../application/VoteModel";
@@ -63,7 +63,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       .where(
         and(
           eq(votesTable.judgeId, user!.id as any),
-          sql`${votesTable.modelId} = ANY(${modelIds})`
+          inArray(votesTable.modelId, modelIds as any)
         )
       )
       .orderBy(desc(votesTable.createdAt), desc(votesTable.id));
