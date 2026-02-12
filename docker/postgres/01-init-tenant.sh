@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   avatar_url text
 );
 
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS emergency_contact_name text;
+
 CREATE TABLE IF NOT EXISTS teams (
   id uuid PRIMARY KEY,
   name text NOT NULL,
@@ -128,11 +130,16 @@ CREATE TABLE IF NOT EXISTS votes (
   created_at timestamp DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_votes_judge_model
+DROP INDEX IF EXISTS ux_votes_judge_model;
+
+CREATE INDEX IF NOT EXISTS ix_votes_judge_model
   ON votes (judge_id, model_id);
 
 CREATE INDEX IF NOT EXISTS ix_votes_model
   ON votes (model_id);
+
+CREATE INDEX IF NOT EXISTS ix_votes_model_created_at
+  ON votes (model_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS judge_assignments (
   id uuid PRIMARY KEY,
@@ -201,4 +208,10 @@ CREATE INDEX IF NOT EXISTS ix_mod_requests_model
 
 CREATE INDEX IF NOT EXISTS ix_mod_requests_judge
   ON modification_requests (judge_id);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key text PRIMARY KEY,
+  value text NOT NULL,
+  updated_at timestamp DEFAULT now()
+);
 SQL

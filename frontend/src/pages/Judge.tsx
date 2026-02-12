@@ -23,11 +23,21 @@ import {
 } from "@mui/material";
 import HowToVoteIcon from "@mui/icons-material/HowToVote";
 import EditNoteIcon from "@mui/icons-material/EditNote";
+import HistoryIcon from "@mui/icons-material/History";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
 type JudgeEvent = { eventId: string; eventName: string };
-type Model = { id: string; name: string; categoryId: string; categoryName: string; imageUrl?: string | null };
+type Model = {
+  id: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  imageUrl?: string | null;
+  currentRank?: number | null;
+  voteCount?: number;
+};
+type VoteHistoryEntry = { id: string; rank: number; createdAt: string };
 
 interface JudgeProps {
   language: Language;
@@ -45,6 +55,12 @@ export default function Judge({ language }: JudgeProps) {
   const [voteAnchor, setVoteAnchor] = useState<HTMLElement | null>(null);
   const [voteModelId, setVoteModelId] = useState("");
   const [voteRank, setVoteRank] = useState<number>(0);
+
+  // Vote history popover
+  const [historyAnchor, setHistoryAnchor] = useState<HTMLElement | null>(null);
+  const [historyModelId, setHistoryModelId] = useState("");
+  const [historyVotes, setHistoryVotes] = useState<VoteHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Modification request popover
   const [modAnchor, setModAnchor] = useState<HTMLElement | null>(null);
@@ -81,19 +97,43 @@ export default function Judge({ language }: JudgeProps) {
 
   // --- Vote ---
   function openVotePopover(el: HTMLElement, modelId: string) {
+    const currentModel = models.find((model) => model.id === modelId);
     setVoteModelId(modelId);
-    setVoteRank(0);
+    setVoteRank(currentModel?.currentRank ?? 0);
     setVoteAnchor(el);
   }
 
   async function submitVote() {
     try {
       await api("/judge/vote", { method: "POST", body: JSON.stringify({ modelId: voteModelId, rank: voteRank }) });
+      await loadModels();
+      if (historyModelId === voteModelId && historyAnchor) {
+        await loadHistory(voteModelId);
+      }
       showMessage(t(language, "judgeVoteSuccess"));
     } catch (err: any) {
       showMessage(err.message || "Error", "error");
     }
     setVoteAnchor(null);
+  }
+
+  async function loadHistory(modelId: string) {
+    setHistoryLoading(true);
+    try {
+      const rows = await api<VoteHistoryEntry[]>(`/judge/models/${modelId}/votes`);
+      setHistoryVotes(rows);
+    } catch (err: any) {
+      showMessage(err.message || "Error", "error");
+      setHistoryVotes([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function openHistoryPopover(el: HTMLElement, modelId: string) {
+    setHistoryModelId(modelId);
+    setHistoryAnchor(el);
+    await loadHistory(modelId);
   }
 
   // --- Modification request ---
@@ -156,7 +196,8 @@ export default function Judge({ language }: JudgeProps) {
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>{t(language, "judgeActionsColumn")}</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 160 }}>{t(language, "judgeCurrentVoteColumn")}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 170 }}>{t(language, "judgeActionsColumn")}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -164,8 +205,27 @@ export default function Judge({ language }: JudgeProps) {
                 <TableRow key={model.id} hover>
                   <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
                   <TableCell><Chip size="small" label={model.categoryName} /></TableCell>
+                  <TableCell>
+                    {model.currentRank === null || model.currentRank === undefined ? (
+                      <Chip size="small" label={t(language, "judgeNoVote")} color="error" variant="outlined" />
+                    ) : (
+                      <Chip
+                        size="small"
+                        label={`${model.currentRank} (${model.voteCount ?? 1})`}
+                        color="success"
+                      />
+                    )}
+                  </TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      <IconButton
+                        size="small"
+                        color="inherit"
+                        title={t(language, "judgeVoteHistoryTitle")}
+                        onClick={(e) => openHistoryPopover(e.currentTarget, model.id)}
+                      >
+                        <HistoryIcon fontSize="small" />
+                      </IconButton>
                       <IconButton
                         size="small"
                         color="primary"
@@ -188,7 +248,7 @@ export default function Judge({ language }: JudgeProps) {
               ))}
               {models.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={3} align="center">
+                  <TableCell colSpan={4} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
                       {t(language, "judgeSearchPlaceholder")}
                     </Typography>
@@ -217,6 +277,41 @@ export default function Judge({ language }: JudgeProps) {
             </Select>
           </FormControl>
           <Button variant="contained" size="small" onClick={submitVote}>{t(language, "judgeVoteButton")}</Button>
+        </Stack>
+      </Popover>
+
+      {/* Vote History Popover */}
+      <Popover
+        open={Boolean(historyAnchor)}
+        anchorEl={historyAnchor}
+        onClose={() => setHistoryAnchor(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Stack spacing={1} sx={{ p: 2, minWidth: 300, maxWidth: 420 }}>
+          <Typography variant="subtitle2">{t(language, "judgeVoteHistoryTitle")}</Typography>
+          {historyLoading && (
+            <Typography variant="body2" color="text.secondary">
+              {t(language, "judgeHistoryLoading")}
+            </Typography>
+          )}
+          {!historyLoading && historyVotes.length === 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {t(language, "judgeNoVote")}
+            </Typography>
+          )}
+          {!historyLoading && historyVotes.length > 0 && (
+            <Stack spacing={0.5}>
+              {historyVotes.map((vote) => (
+                <Stack key={vote.id} direction="row" justifyContent="space-between" alignItems="center">
+                  <Chip size="small" color="primary" label={`Rank ${vote.rank}`} />
+                  <Typography variant="caption" color="text.secondary">
+                    {new Date(vote.createdAt).toLocaleString()}
+                  </Typography>
+                </Stack>
+              ))}
+            </Stack>
+          )}
         </Stack>
       </Popover>
 

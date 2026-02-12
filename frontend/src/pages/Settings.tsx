@@ -74,6 +74,16 @@ export default function Settings({ language }: SettingsProps) {
                     <Switch
                       checked={settings[row.key] === "true"}
                       onChange={() => toggle(row.key)}
+                      sx={{
+                        "& .MuiSwitch-switchBase + .MuiSwitch-track": {
+                          backgroundColor: "error.main",
+                          opacity: 1
+                        },
+                        "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                          backgroundColor: "success.main",
+                          opacity: 1
+                        }
+                      }}
                     />
                   </TableCell>
                 </TableRow>

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, numeric } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 export const teamsTable = pgTable("teams", {
   id: uuid("id").primaryKey(),
@@ -63,7 +63,8 @@ export const votesTable = pgTable("votes", {
   rank: integer("rank").notNull(), // 0..3
   createdAt: timestamp("created_at").defaultNow()
 }, (t) => ({
-  uniq: uniqueIndex("ux_votes_judge_model").on(t.judgeId, t.modelId)
+  byJudgeModel: index("ix_votes_judge_model").on(t.judgeId, t.modelId),
+  byModelCreatedAt: index("ix_votes_model_created_at").on(t.modelId, t.createdAt)
 }));
 
 export const judgeAssignmentsTable = pgTable("judge_assignments", {

@@ -1,10 +1,10 @@
 import { Elysia, t } from "elysia";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
-import { and, eq, ilike } from "drizzle-orm";
+import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { VoteRepositoryDrizzle } from "../persistence/voteRepository.drizzle";
 import { ModelReadRepositoryDrizzle } from "../persistence/modelReadRepository.drizzle";
 import { VoteModel } from "../../application/VoteModel";
-import { categoriesTable, eventsTable, judgeAssignmentsTable, modelsTable, modelImagesTable, registrationsTable } from "../persistence/schema";
+import { categoriesTable, eventsTable, judgeAssignmentsTable, modelsTable, modelImagesTable, registrationsTable, votesTable } from "../persistence/schema";
 import { usersTable, userProfilesTable } from "../../../identity/infra/persistence/schema";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 
@@ -24,7 +24,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .get("/models", async ({ tenantDb, query }) => {
+  .get("/models", async ({ tenantDb, query, user }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
     const search = query?.search ? String(query.search) : null;
     let whereClause: any = undefined;
@@ -46,12 +46,76 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId));
-    return whereClause ? await queryBuilder.where(whereClause) : await queryBuilder;
+    const rows = whereClause ? await queryBuilder.where(whereClause) : await queryBuilder;
+    if (!rows.length) {
+      return [];
+    }
+
+    const modelIds = rows.map((row: any) => row.id);
+    const votes = await tenantDb
+      .select({
+        id: votesTable.id,
+        modelId: votesTable.modelId,
+        rank: votesTable.rank,
+        createdAt: votesTable.createdAt
+      })
+      .from(votesTable)
+      .where(
+        and(
+          eq(votesTable.judgeId, user!.id as any),
+          sql`${votesTable.modelId} = ANY(${modelIds})`
+        )
+      )
+      .orderBy(desc(votesTable.createdAt), desc(votesTable.id));
+
+    const latestByModel = new Map<string, { currentRank: number; voteCount: number }>();
+    for (const vote of votes) {
+      const current = latestByModel.get(vote.modelId);
+      if (!current) {
+        latestByModel.set(vote.modelId, { currentRank: vote.rank, voteCount: 1 });
+      } else {
+        current.voteCount += 1;
+      }
+    }
+
+    return rows.map((row: any) => {
+      const voteInfo = latestByModel.get(row.id);
+      return {
+        ...row,
+        currentRank: voteInfo?.currentRank ?? null,
+        voteCount: voteInfo?.voteCount ?? 0
+      };
+    });
   }, {
     detail: {
       summary: "Lista modelli giudicabili",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/models/:modelId/votes", async ({ tenantDb, user, params }) => {
+    const repo = new VoteRepositoryDrizzle(tenantDb);
+    const votes = await repo.listHistoryByJudgeAndModel(user!.id, params.modelId);
+    return votes.map((vote) => ({
+      id: vote.id,
+      rank: vote.rank,
+      createdAt: vote.createdAt.toISOString()
+    }));
+  }, {
+    params: t.Object({ modelId: t.String() }),
+    detail: {
+      summary: "Storico voti del giudice per modello",
+      tags: ["Judging"],
+      security: [{ bearerAuth: [] }]
+    },
+    response: {
+      200: t.Array(
+        t.Object({
+          id: t.String(),
+          rank: t.Number(),
+          createdAt: t.String()
+        })
+      )
     }
   })
   .get("/models/:modelId", async ({ tenantDb, params }) => {

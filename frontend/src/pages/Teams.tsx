@@ -31,7 +31,15 @@ import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
 type Team = { id: string; name: string; ownerId: string; role: string };
-type TeamDetail = { team?: Team; members?: { teamId: string; userId: string; role: string }[] };
+type TeamMember = {
+  teamId: string;
+  userId: string;
+  role: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+};
+type TeamDetail = { team?: Team; members?: TeamMember[] };
 
 interface TeamsProps {
   language: Language;
@@ -45,7 +53,7 @@ export default function Teams({ language }: TeamsProps) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [editName, setEditName] = useState("");
-  const [memberId, setMemberId] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
 
   async function load() {
     setTeams(await api<Team[]>("/teams"));
@@ -62,7 +70,7 @@ export default function Teams({ language }: TeamsProps) {
     setEditName(d.team?.name || "");
     setExpandedId(teamId);
     setIsCreating(false);
-    setMemberId("");
+    setMemberEmail("");
   }
 
   function closePanel() {
@@ -75,7 +83,7 @@ export default function Teams({ language }: TeamsProps) {
     setExpandedId(null);
     setDetail(null);
     setEditName("");
-    setMemberId("");
+    setMemberEmail("");
     setIsCreating(true);
   }
 
@@ -102,8 +110,8 @@ export default function Teams({ language }: TeamsProps) {
     if (!detail?.team) return;
     setSaving(true);
     try {
-      await api(`/teams/${detail.team.id}/members`, { method: "POST", body: JSON.stringify({ userId: memberId.trim() }) });
-      setMemberId("");
+      await api(`/teams/${detail.team.id}/members`, { method: "POST", body: JSON.stringify({ email: memberEmail.trim() }) });
+      setMemberEmail("");
       const d = await api<TeamDetail>(`/teams/${detail.team.id}`);
       setDetail(d);
     } catch (err: any) {
@@ -111,6 +119,14 @@ export default function Teams({ language }: TeamsProps) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function formatMemberName(member: TeamMember) {
+    const fullName = [member.firstName, member.lastName].filter(Boolean).join(" ").trim();
+    if (!fullName) {
+      return member.role;
+    }
+    return `${fullName} - ${member.role}`;
   }
 
   useEffect(() => {
@@ -154,8 +170,8 @@ export default function Teams({ language }: TeamsProps) {
                   {detail.members.map((member) => (
                     <ListItem key={member.userId} disableGutters>
                       <ListItemText
-                        primary={member.userId}
-                        secondary={member.role}
+                        primary={member.email || member.userId}
+                        secondary={formatMemberName(member)}
                         primaryTypographyProps={{ variant: "body2" }}
                       />
                     </ListItem>
@@ -169,15 +185,16 @@ export default function Teams({ language }: TeamsProps) {
               <Stack direction="row" spacing={1}>
                 <TextField
                   label={t(language, "teamsMemberPlaceholder")}
-                  value={memberId}
-                  onChange={(e) => setMemberId(e.target.value)}
+                  value={memberEmail}
+                  onChange={(e) => setMemberEmail(e.target.value)}
                   size="small"
+                  type="email"
                   fullWidth
                 />
                 <Button
                   variant="outlined"
                   onClick={addMember}
-                  disabled={saving || !memberId.trim()}
+                  disabled={saving || !memberEmail.trim()}
                 >
                   {t(language, "teamsAddMemberButton")}
                 </Button>

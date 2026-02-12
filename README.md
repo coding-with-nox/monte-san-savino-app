@@ -36,6 +36,7 @@ npm run dev
 Docs:
 - `docs/user-manual.md`
 - `docs/user-manual.pdf`
+- `docs/stage-deploy-gcp.md`
 - `helm/` for Kubernetes deployment
 
 ## Backend + API overview

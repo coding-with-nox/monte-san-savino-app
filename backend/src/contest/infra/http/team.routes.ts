@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { teamsTable, teamMembersTable } from "../persistence/schema";
+import { usersTable, userProfilesTable } from "../../../identity/infra/persistence/schema";
 
 export const teamRoutes = new Elysia({ prefix: "/teams" })
   .use(tenantMiddleware)
@@ -48,7 +49,19 @@ export const teamRoutes = new Elysia({ prefix: "/teams" })
       return { error: "Team not found" };
     }
     const team = await tenantDb.select().from(teamsTable).where(eq(teamsTable.id, params.teamId as any));
-    const members = await tenantDb.select().from(teamMembersTable).where(eq(teamMembersTable.teamId, params.teamId as any));
+    const members = await tenantDb
+      .select({
+        teamId: teamMembersTable.teamId,
+        userId: teamMembersTable.userId,
+        role: teamMembersTable.role,
+        email: usersTable.email,
+        firstName: userProfilesTable.firstName,
+        lastName: userProfilesTable.lastName
+      })
+      .from(teamMembersTable)
+      .leftJoin(usersTable, eq(usersTable.id, teamMembersTable.userId))
+      .leftJoin(userProfilesTable, eq(userProfilesTable.userId, teamMembersTable.userId))
+      .where(eq(teamMembersTable.teamId, params.teamId as any));
     return { team: team[0], members };
   }, {
     params: t.Object({ teamId: t.String() }),
@@ -107,15 +120,40 @@ export const teamRoutes = new Elysia({ prefix: "/teams" })
       set.status = 403;
       return { error: "Forbidden" };
     }
+    const requestedUserId = body.userId?.trim();
+    const requestedEmail = body.email?.trim();
+    if (!requestedUserId && !requestedEmail) {
+      set.status = 400;
+      return { error: "userId or email is required" };
+    }
+
+    let memberUserId = requestedUserId;
+    if (!memberUserId && requestedEmail) {
+      const rows = await tenantDb
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.email, requestedEmail));
+      memberUserId = rows[0]?.id;
+    }
+
+    if (!memberUserId) {
+      set.status = 404;
+      return { error: "User not found" };
+    }
+
     await tenantDb.insert(teamMembersTable).values({
       teamId: params.teamId,
-      userId: body.userId,
+      userId: memberUserId,
       role: body.role ?? "member"
     });
     return { added: true };
   }, {
     params: t.Object({ teamId: t.String() }),
-    body: t.Object({ userId: t.String(), role: t.Optional(t.String()) }),
+    body: t.Object({
+      userId: t.Optional(t.String()),
+      email: t.Optional(t.String()),
+      role: t.Optional(t.String())
+    }),
     detail: {
       summary: "Aggiungi membro",
       tags: ["Teams"],

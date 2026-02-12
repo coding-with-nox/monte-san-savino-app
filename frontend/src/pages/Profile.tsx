@@ -272,8 +272,8 @@ export default function Profile({ language }: ProfileProps) {
             <LocationPicker
               city={editProfile.city ?? ""}
               address={editProfile.address ?? ""}
-              onCityChange={(val) => setEditProfile({ ...editProfile, city: val })}
-              onAddressChange={(val) => setEditProfile({ ...editProfile, address: val })}
+              onCityChange={(val) => setEditProfile((prev) => ({ ...prev, city: val }))}
+              onAddressChange={(val) => setEditProfile((prev) => ({ ...prev, address: val }))}
               language={language}
             />
           </CardContent>

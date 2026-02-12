@@ -29,6 +29,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import { api, ApiError, API_BASE } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import ActiveSwitch from "../lib/ActiveSwitch";
 
 type Event = { id: string; name: string; status: string };
 type Category = { id: string; eventId: string; name: string; status: string };
@@ -680,11 +681,11 @@ export default function Admin({ language }: AdminProps) {
                           ))}
                         </Select>
                       </FormControl>
-                      <Chip
-                        label={user.isActive ? t(language, "adminUserActive") : t(language, "adminUserInactive")}
-                        color={user.isActive ? "success" : "default"}
-                        size="small"
-                        onClick={() => toggleUserActive(user.id, user.isActive)}
+                      <ActiveSwitch
+                        checked={user.isActive}
+                        onChange={() => toggleUserActive(user.id, user.isActive)}
+                        activeLabel={t(language, "adminUserActive")}
+                        inactiveLabel={t(language, "adminUserInactive")}
                       />
                       <IconButton size="small" onClick={() => openUserProfile(user.id)}>
                         <VisibilityIcon fontSize="small" />

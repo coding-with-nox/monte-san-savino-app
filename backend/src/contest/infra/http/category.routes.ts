@@ -86,23 +86,28 @@ export const categoryRoutes = new Elysia({ prefix: "/categories" })
         // Count expected votes vs actual votes
         const expectedVotes = judges.length * models.length;
         const modelIds = models.map(m => m.id);
+        const judgeIds = judges.map(j => j.judgeId);
 
-        const [result] = await tenantDb
-          .select({ count: sql<number>`count(*)` })
+        const votes = await tenantDb
+          .select({
+            judgeId: votesTable.judgeId,
+            modelId: votesTable.modelId
+          })
           .from(votesTable)
           .where(
             and(
               sql`${votesTable.modelId} = ANY(${modelIds})`,
-              sql`${votesTable.judgeId} = ANY(${judges.map(j => j.judgeId)})`
+              sql`${votesTable.judgeId} = ANY(${judgeIds})`
             )
           );
+        const distinctVotes = new Set(votes.map((vote) => `${vote.judgeId}:${vote.modelId}`)).size;
 
-        if (Number(result.count) < expectedVotes) {
+        if (distinctVotes < expectedVotes) {
           set.status = 400;
           return {
             error: "Cannot close category: not all judges have voted on all models",
             expected: expectedVotes,
-            actual: Number(result.count)
+            actual: distinctVotes
           };
         }
       }

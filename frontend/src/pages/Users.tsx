@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
   Chip,
   Container,
@@ -32,6 +33,7 @@ import LockResetIcon from "@mui/icons-material/LockReset";
 import { api, ApiError } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import LocationPicker from "../lib/LocationPicker";
+import ActiveSwitch from "../lib/ActiveSwitch";
 
 type User = { id: string; email: string; role: string; isActive: boolean };
 
@@ -144,9 +146,15 @@ export default function Users({ language }: UsersProps) {
 
   async function toggleActive() {
     if (!editProfile) return;
-    const newActive = !editProfile.isActive;
-    await api(`/admin/users/${editProfile.id}`, { method: "PATCH", body: JSON.stringify({ isActive: newActive }) });
-    setEditProfile({ ...editProfile, isActive: newActive });
+    await toggleUserActive(editProfile.id, editProfile.isActive);
+  }
+
+  async function toggleUserActive(userId: string, currentActive: boolean) {
+    const newActive = !currentActive;
+    await api(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ isActive: newActive }) });
+    if (editProfile && editProfile.id === userId) {
+      setEditProfile({ ...editProfile, isActive: newActive });
+    }
     await load();
   }
 
@@ -200,11 +208,14 @@ export default function Users({ language }: UsersProps) {
                   <TableCell><Typography fontWeight={600}>{user.email}</Typography></TableCell>
                   <TableCell><Chip size="small" label={user.role} /></TableCell>
                   <TableCell>
-                    <Chip
-                      size="small"
-                      label={user.isActive ? t(language, "adminUserActive") : t(language, "adminUserInactive")}
-                      color={user.isActive ? "success" : "default"}
-                    />
+                    <Box onClick={(e) => e.stopPropagation()}>
+                      <ActiveSwitch
+                        checked={user.isActive}
+                        onChange={() => toggleUserActive(user.id, user.isActive)}
+                        activeLabel={t(language, "adminUserActive")}
+                        inactiveLabel={t(language, "adminUserInactive")}
+                      />
+                    </Box>
                   </TableCell>
                   <TableCell align="right">
                     <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEditDialog(user.id); }} color="primary">
@@ -285,11 +296,11 @@ export default function Users({ language }: UsersProps) {
                       {roles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
                     </Select>
                   </FormControl>
-                  <Chip
-                    label={editProfile.isActive ? t(language, "adminUserActive") : t(language, "adminUserInactive")}
-                    color={editProfile.isActive ? "success" : "default"}
-                    size="small"
-                    onClick={toggleActive}
+                  <ActiveSwitch
+                    checked={editProfile.isActive}
+                    onChange={toggleActive}
+                    activeLabel={t(language, "adminUserActive")}
+                    inactiveLabel={t(language, "adminUserInactive")}
                   />
                   <Button variant="outlined" size="small" startIcon={<LockResetIcon />} onClick={resetPassword}>
                     {t(language, "adminResetPasswordButton")}
@@ -301,27 +312,27 @@ export default function Users({ language }: UsersProps) {
                 {/* Profile fields — view mode */}
                 {!editingFields && (
                   <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileFirstName")}</Typography>
                       <Typography>{editProfile.firstName || "—"}</Typography>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileLastName")}</Typography>
                       <Typography>{editProfile.lastName || "—"}</Typography>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profilePhone")}</Typography>
                       <Typography>{editProfile.phone || "—"}</Typography>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileEmergencyContact")}</Typography>
                       <Typography>{editProfile.emergencyContact || "—"}</Typography>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileCity")}</Typography>
                       <Typography>{editProfile.city || "—"}</Typography>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileAddress")}</Typography>
                       <Typography>{editProfile.address || "—"}</Typography>
                     </Grid>
@@ -332,24 +343,24 @@ export default function Users({ language }: UsersProps) {
                 {editingFields && (
                   <Stack spacing={2}>
                     <Grid container spacing={2}>
-                      <Grid item xs={6}>
+                      <Grid item xs={12} sm={6}>
                         <TextField label={t(language, "profileFirstName")} value={profileForm.firstName ?? ""} onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })} fullWidth />
                       </Grid>
-                      <Grid item xs={6}>
+                      <Grid item xs={12} sm={6}>
                         <TextField label={t(language, "profileLastName")} value={profileForm.lastName ?? ""} onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })} fullWidth />
                       </Grid>
-                      <Grid item xs={6}>
+                      <Grid item xs={12} sm={6}>
                         <TextField label={t(language, "profilePhone")} value={profileForm.phone ?? ""} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} fullWidth />
                       </Grid>
-                      <Grid item xs={6}>
+                      <Grid item xs={12} sm={6}>
                         <TextField label={t(language, "profileEmergencyContact")} value={profileForm.emergencyContact ?? ""} onChange={(e) => setProfileForm({ ...profileForm, emergencyContact: e.target.value })} fullWidth />
                       </Grid>
                     </Grid>
                     <LocationPicker
                       city={profileForm.city ?? ""}
                       address={profileForm.address ?? ""}
-                      onCityChange={(val) => setProfileForm({ ...profileForm, city: val })}
-                      onAddressChange={(val) => setProfileForm({ ...profileForm, address: val })}
+                      onCityChange={(val) => setProfileForm((prev) => ({ ...prev, city: val }))}
+                      onAddressChange={(val) => setProfileForm((prev) => ({ ...prev, address: val }))}
                       language={language}
                     />
                   </Stack>
