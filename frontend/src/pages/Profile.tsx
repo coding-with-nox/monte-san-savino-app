@@ -8,17 +8,16 @@ import {
   Container,
   Grid,
   Stack,
-  TextField,
   Typography
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import PersonIcon from "@mui/icons-material/Person";
 import PhoneIcon from "@mui/icons-material/Phone";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
-import { MuiTelInput, matchIsValidTel } from "mui-tel-input";
+import { matchIsValidTel } from "mui-tel-input";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
-import LocationPicker from "../lib/LocationPicker";
+import ProfileEditSections from "../components/ProfileEditSections";
 
 type Profile = {
   email?: string;
@@ -181,103 +180,16 @@ export default function Profile({ language }: ProfileProps) {
         <Typography variant="h4">{t(language, "profileTitle")}</Typography>
 
         {/* Personal Data */}
-        <Card>
-          <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-              <PersonIcon color="primary" />
-              <Typography variant="h6">{t(language, "profilePersonalSection")}</Typography>
-            </Stack>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label={t(language, "profileFirstName")}
-                  value={editProfile.firstName ?? ""}
-                  onChange={(e) => setEditProfile({ ...editProfile, firstName: e.target.value })}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label={t(language, "profileLastName")}
-                  value={editProfile.lastName ?? ""}
-                  onChange={(e) => setEditProfile({ ...editProfile, lastName: e.target.value })}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField label="Email" value={editProfile.email ?? ""} fullWidth disabled />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField label={t(language, "profileRole")} value={editProfile.role ?? ""} fullWidth disabled />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-
-        {/* Contact Data */}
-        <Card>
-          <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-              <PhoneIcon color="primary" />
-              <Typography variant="h6">{t(language, "profileContactSection")}</Typography>
-            </Stack>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <MuiTelInput
-                  label={t(language, "profilePhone")}
-                  value={editProfile.phone ?? ""}
-                  onChange={(value) => {
-                    setEditProfile({ ...editProfile, phone: value });
-                    setPhoneError(value ? !matchIsValidTel(value) : false);
-                  }}
-                  defaultCountry="IT"
-                  fullWidth
-                  error={phoneError}
-                  helperText={phoneError ? t(language, "profilePhoneError") : ""}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label={t(language, "profileEmergencyName")}
-                  value={editProfile.emergencyContactName ?? ""}
-                  onChange={(e) => setEditProfile({ ...editProfile, emergencyContactName: e.target.value })}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <MuiTelInput
-                  label={t(language, "profileEmergencyContact")}
-                  value={editProfile.emergencyContact ?? ""}
-                  onChange={(value) => {
-                    setEditProfile({ ...editProfile, emergencyContact: value });
-                    setEmergencyPhoneError(value ? !matchIsValidTel(value) : false);
-                  }}
-                  defaultCountry="IT"
-                  fullWidth
-                  error={emergencyPhoneError}
-                  helperText={emergencyPhoneError ? t(language, "profilePhoneError") : ""}
-                />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-
-        {/* Address Data */}
-        <Card>
-          <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-              <LocationOnIcon color="primary" />
-              <Typography variant="h6">{t(language, "profileAddressSection")}</Typography>
-            </Stack>
-            <LocationPicker
-              city={editProfile.city ?? ""}
-              address={editProfile.address ?? ""}
-              onCityChange={(val) => setEditProfile((prev) => ({ ...prev, city: val }))}
-              onAddressChange={(val) => setEditProfile((prev) => ({ ...prev, address: val }))}
-              language={language}
-            />
-          </CardContent>
-        </Card>
+        <ProfileEditSections
+          language={language}
+          value={editProfile}
+          onChange={(next) => setEditProfile(next)}
+          phoneError={phoneError}
+          emergencyPhoneError={emergencyPhoneError}
+          onPhoneErrorChange={setPhoneError}
+          onEmergencyPhoneErrorChange={setEmergencyPhoneError}
+          showIdentityFields
+        />
 
         <Stack direction="row" spacing={2}>
           <Button variant="contained" onClick={save}>

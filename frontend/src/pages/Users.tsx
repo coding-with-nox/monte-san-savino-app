@@ -30,10 +30,11 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import LockResetIcon from "@mui/icons-material/LockReset";
+import { matchIsValidTel } from "mui-tel-input";
 import { api, ApiError } from "../lib/api";
 import { Language, t } from "../lib/i18n";
-import LocationPicker from "../lib/LocationPicker";
 import ActiveSwitch from "../lib/ActiveSwitch";
+import ProfileEditSections from "../components/ProfileEditSections";
 
 type User = { id: string; email: string; role: string; isActive: boolean };
 
@@ -73,6 +74,8 @@ export default function Users({ language }: UsersProps) {
   const [editProfile, setEditProfile] = useState<UserProfile | null>(null);
   const [editingFields, setEditingFields] = useState(false);
   const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
+  const [phoneError, setPhoneError] = useState(false);
+  const [emergencyPhoneError, setEmergencyPhoneError] = useState(false);
 
   async function load() {
     setUsers(await api<User[]>("/admin/users"));
@@ -128,6 +131,8 @@ export default function Users({ language }: UsersProps) {
       emergencyContactName: profile.emergencyContactName
     });
     setEditingFields(false);
+    setPhoneError(false);
+    setEmergencyPhoneError(false);
     setEditOpen(true);
   }
 
@@ -135,6 +140,8 @@ export default function Users({ language }: UsersProps) {
     setEditOpen(false);
     setEditProfile(null);
     setEditingFields(false);
+    setPhoneError(false);
+    setEmergencyPhoneError(false);
   }
 
   async function updateRole(role: string) {
@@ -172,6 +179,14 @@ export default function Users({ language }: UsersProps) {
 
   async function saveProfile() {
     if (!editProfile) return;
+    if (profileForm.phone && !matchIsValidTel(profileForm.phone)) {
+      setPhoneError(true);
+      return;
+    }
+    if (profileForm.emergencyContact && !matchIsValidTel(profileForm.emergencyContact)) {
+      setEmergencyPhoneError(true);
+      return;
+    }
     await api(`/admin/users/${editProfile.id}/profile`, {
       method: "PUT",
       body: JSON.stringify(profileForm)
@@ -278,7 +293,13 @@ export default function Users({ language }: UsersProps) {
       </Dialog>
 
       {/* Edit User Dialog */}
-      <Dialog open={editOpen} onClose={closeEditDialog} maxWidth="sm" fullWidth>
+  <Dialog
+    open={editOpen}
+    onClose={closeEditDialog}
+    maxWidth="lg"
+    fullWidth
+    PaperProps={{ sx: { width: "min(1100px, 95vw)" } }}
+  >
         {editProfile && (
           <>
             <DialogTitle>{editProfile.email} — {t(language, "usersEditTitle")}</DialogTitle>
@@ -341,36 +362,36 @@ export default function Users({ language }: UsersProps) {
 
                 {/* Profile fields — edit mode */}
                 {editingFields && (
-                  <Stack spacing={2}>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <TextField label={t(language, "profileFirstName")} value={profileForm.firstName ?? ""} onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })} fullWidth />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField label={t(language, "profileLastName")} value={profileForm.lastName ?? ""} onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })} fullWidth />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField label={t(language, "profilePhone")} value={profileForm.phone ?? ""} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} fullWidth />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField label={t(language, "profileEmergencyContact")} value={profileForm.emergencyContact ?? ""} onChange={(e) => setProfileForm({ ...profileForm, emergencyContact: e.target.value })} fullWidth />
-                      </Grid>
-                    </Grid>
-                    <LocationPicker
-                      city={profileForm.city ?? ""}
-                      address={profileForm.address ?? ""}
-                      onCityChange={(val) => setProfileForm((prev) => ({ ...prev, city: val }))}
-                      onAddressChange={(val) => setProfileForm((prev) => ({ ...prev, address: val }))}
-                      language={language}
-                    />
-                  </Stack>
+                  <ProfileEditSections
+                    language={language}
+                    value={profileForm}
+                    onChange={(next) => setProfileForm(next)}
+                    phoneError={phoneError}
+                    emergencyPhoneError={emergencyPhoneError}
+                    onPhoneErrorChange={setPhoneError}
+                    onEmergencyPhoneErrorChange={setEmergencyPhoneError}
+                    showIdentityFields={false}
+                  />
                 )}
               </Stack>
             </DialogContent>
             <DialogActions>
               {!editingFields ? (
                 <>
-                  <Button onClick={() => { setEditingFields(true); setProfileForm({ firstName: editProfile.firstName, lastName: editProfile.lastName, phone: editProfile.phone, city: editProfile.city, address: editProfile.address, emergencyContact: editProfile.emergencyContact, emergencyContactName: editProfile.emergencyContactName }); }}>
+                  <Button onClick={() => {
+                    setEditingFields(true);
+                    setPhoneError(false);
+                    setEmergencyPhoneError(false);
+                    setProfileForm({
+                      firstName: editProfile.firstName,
+                      lastName: editProfile.lastName,
+                      phone: editProfile.phone,
+                      city: editProfile.city,
+                      address: editProfile.address,
+                      emergencyContact: editProfile.emergencyContact,
+                      emergencyContactName: editProfile.emergencyContactName
+                    });
+                  }}>
                     {t(language, "profileEditButton")}
                   </Button>
                   <Button onClick={closeEditDialog}>{t(language, "adminDialogClose")}</Button>
