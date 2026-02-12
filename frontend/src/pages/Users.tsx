@@ -30,6 +30,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import LockResetIcon from "@mui/icons-material/LockReset";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import { matchIsValidTel } from "mui-tel-input";
 import { api, ApiError } from "../lib/api";
 import { Language, t } from "../lib/i18n";
@@ -233,6 +234,9 @@ export default function Users({ language }: UsersProps) {
                     </Box>
                   </TableCell>
                   <TableCell align="right">
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEditDialog(user.id); }} color="secondary">
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
                     <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEditDialog(user.id); }} color="primary">
                       <EditIcon fontSize="small" />
                     </IconButton>

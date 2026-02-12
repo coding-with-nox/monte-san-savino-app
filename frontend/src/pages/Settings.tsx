@@ -4,7 +4,6 @@ import {
   Container,
   Paper,
   Stack,
-  Switch,
   Table,
   TableBody,
   TableCell,
@@ -15,6 +14,7 @@ import {
 } from "@mui/material";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import ActiveSwitch from "../lib/ActiveSwitch";
 
 interface SettingsProps {
   language: Language;
@@ -71,19 +71,11 @@ export default function Settings({ language }: SettingsProps) {
                 <TableRow key={row.key}>
                   <TableCell><Typography>{t(language, row.labelKey)}</Typography></TableCell>
                   <TableCell align="right">
-                    <Switch
+                    <ActiveSwitch
                       checked={settings[row.key] === "true"}
                       onChange={() => toggle(row.key)}
-                      sx={{
-                        "& .MuiSwitch-switchBase + .MuiSwitch-track": {
-                          backgroundColor: "error.main",
-                          opacity: 1
-                        },
-                        "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
-                          backgroundColor: "success.main",
-                          opacity: 1
-                        }
-                      }}
+                      activeLabel={t(language, "adminUserActive")}
+                      inactiveLabel={t(language, "adminUserInactive")}
                     />
                   </TableCell>
                 </TableRow>
