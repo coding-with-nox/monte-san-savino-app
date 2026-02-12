@@ -3,11 +3,9 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
   Chip,
   CircularProgress,
+  Collapse,
   Container,
   Divider,
   FormControl,
@@ -15,19 +13,24 @@ import {
   IconButton,
   InputLabel,
   Link,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
   MenuItem,
+  Paper,
   Select,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Tooltip,
   Typography
 } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import CloseIcon from "@mui/icons-material/Close";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { api } from "../lib/api";
@@ -53,10 +56,9 @@ function isValidUrl(str: string): boolean {
 export default function Models({ language }: ModelsProps) {
   const [models, setModels] = useState<Model[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [teamId, setTeamId] = useState("");
-  const [selected, setSelected] = useState<ModelDetail | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ModelDetail | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [image, setImage] = useState("");
   const [imageError, setImageError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -80,34 +82,61 @@ export default function Models({ language }: ModelsProps) {
     }
   }
 
-  async function create() {
-    await api("/models", {
-      method: "POST",
-      body: JSON.stringify({
-        name,
-        categoryId,
-        teamId: teamId || undefined
-      })
-    });
-    setName("");
-    setCategoryId("");
-    setTeamId("");
-    await load();
+  async function openModel(modelId: string) {
+    if (expandedId === modelId) {
+      setExpandedId(null);
+      setDetail(null);
+      setIsCreating(false);
+      return;
+    }
+    const d = await api<ModelDetail>(`/models/${modelId}`);
+    setDetail(d);
+    setEditName(d.model.name);
+    setEditCategoryId(d.model.categoryId);
+    setEditTeamId(d.model.teamId || "");
+    setExpandedId(modelId);
+    setIsCreating(false);
+    setImage("");
+    setImageError("");
   }
 
-  async function openModel(modelId: string) {
-    const detail = await api<ModelDetail>(`/models/${modelId}`);
-    setSelected(detail);
-    setEditName(detail.model.name);
-    setEditCategoryId(detail.model.categoryId);
-    setEditTeamId(detail.model.teamId || "");
+  function startCreate() {
+    setExpandedId(null);
+    setDetail(null);
+    setEditName("");
+    setEditCategoryId("");
+    setEditTeamId("");
+    setIsCreating(true);
+    setImage("");
+    setImageError("");
+  }
+
+  async function createModel() {
+    setSavingModel(true);
+    try {
+      const result = await api<{ id: string }>("/models", {
+        method: "POST",
+        body: JSON.stringify({
+          name: editName.trim(),
+          categoryId: editCategoryId,
+          teamId: editTeamId.trim() || undefined
+        })
+      });
+      await load();
+      setIsCreating(false);
+      await openModel(result.id);
+    } catch (err: any) {
+      setMessage(err.message || "Unable to create model");
+    } finally {
+      setSavingModel(false);
+    }
   }
 
   async function saveModelChanges() {
-    if (!selected?.model) return;
+    if (!detail?.model) return;
     setSavingModel(true);
     try {
-      await api(`/models/${selected.model.id}`, {
+      await api(`/models/${detail.model.id}`, {
         method: "PUT",
         body: JSON.stringify({
           name: editName.trim(),
@@ -116,7 +145,8 @@ export default function Models({ language }: ModelsProps) {
         })
       });
       await load();
-      await openModel(selected.model.id);
+      const d = await api<ModelDetail>(`/models/${detail.model.id}`);
+      setDetail(d);
     } catch (err: any) {
       setMessage(err.message || "Unable to save model");
     } finally {
@@ -124,8 +154,17 @@ export default function Models({ language }: ModelsProps) {
     }
   }
 
+  async function deleteModel(modelId: string) {
+    await api(`/models/${modelId}`, { method: "DELETE" });
+    if (expandedId === modelId) {
+      setExpandedId(null);
+      setDetail(null);
+    }
+    await load();
+  }
+
   async function addImage() {
-    if (!selected?.model) return;
+    if (!detail?.model) return;
     const trimmed = image.trim();
     if (!trimmed) return;
     if (!isValidUrl(trimmed)) {
@@ -133,9 +172,10 @@ export default function Models({ language }: ModelsProps) {
       return;
     }
     setImageError("");
-    await api(`/models/${selected.model.id}/images`, { method: "POST", body: JSON.stringify({ url: trimmed }) });
+    await api(`/models/${detail.model.id}/images`, { method: "POST", body: JSON.stringify({ url: trimmed }) });
     setImage("");
-    await openModel(selected.model.id);
+    const d = await api<ModelDetail>(`/models/${detail.model.id}`);
+    setDetail(d);
   }
 
   async function resizeImageForUpload(file: File): Promise<File | Blob> {
@@ -184,13 +224,13 @@ export default function Models({ language }: ModelsProps) {
   }
 
   async function uploadFile(file: File) {
-    if (!selected?.model) return;
+    if (!detail?.model) return;
     setUploading(true);
     try {
       const optimizedFile = await resizeImageForUpload(file);
       const contentType = optimizedFile.type || file.type || "image/jpeg";
       const { uploadUrl, publicUrl } = await api<{ uploadUrl: string; publicUrl: string }>(
-        `/models/${selected.model.id}/image-upload`,
+        `/models/${detail.model.id}/image-upload`,
         { method: "POST", body: JSON.stringify({ contentType }) }
       );
       await fetch(uploadUrl, {
@@ -198,8 +238,9 @@ export default function Models({ language }: ModelsProps) {
         headers: { "Content-Type": contentType },
         body: optimizedFile
       });
-      await api(`/models/${selected.model.id}/images`, { method: "POST", body: JSON.stringify({ url: publicUrl }) });
-      await openModel(selected.model.id);
+      await api(`/models/${detail.model.id}/images`, { method: "POST", body: JSON.stringify({ url: publicUrl }) });
+      const d = await api<ModelDetail>(`/models/${detail.model.id}`);
+      setDetail(d);
     } catch (err: any) {
       setMessage(err.message || "Upload failed");
     } finally {
@@ -215,9 +256,10 @@ export default function Models({ language }: ModelsProps) {
   }
 
   async function deleteImage(imageId: string) {
-    if (!selected?.model) return;
-    await api(`/models/${selected.model.id}/images/${imageId}`, { method: "DELETE" });
-    await openModel(selected.model.id);
+    if (!detail?.model) return;
+    await api(`/models/${detail.model.id}/images/${imageId}`, { method: "DELETE" });
+    const d = await api<ModelDetail>(`/models/${detail.model.id}`);
+    setDetail(d);
   }
 
   useEffect(() => {
@@ -232,285 +274,286 @@ export default function Models({ language }: ModelsProps) {
     return cat ? cat.name : catId;
   };
 
-  return (
-    <Container maxWidth="lg">
-      <Stack spacing={3}>
-        <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
-        {message && <Alert severity="error" onClose={() => setMessage("")}>{message}</Alert>}
-        <Card>
-          <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={3}>
-                <TextField
-                  label={t(language, "modelsNamePlaceholder")}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
-                  <Select
-                    value={categoryId}
-                    label={t(language, "modelsCategoryPlaceholder")}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                  >
-                    {openCategories.map((cat) => (
-                      <MenuItem key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <TextField
-                  label={t(language, "modelsTeamPlaceholder")}
-                  value={teamId}
-                  onChange={(event) => setTeamId(event.target.value)}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Button variant="contained" onClick={create} fullWidth disabled={!name || !categoryId}>
-                  {t(language, "modelsCreateButton")}
-                </Button>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-        <Grid container spacing={2}>
+  const detailPanel = (
+    <Box sx={{ p: 2 }}>
+      <Stack spacing={2.5}>
+        <Grid container spacing={2} alignItems="flex-start">
           <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title={t(language, "modelsListTitle")} />
-              <CardContent sx={{ pt: 0 }}>
-                <List dense disablePadding>
-                  {models.map((model) => (
-                    <ListItem key={model.id} disableGutters divider>
-                      <ListItemButton
-                        onClick={() => openModel(model.id)}
-                        selected={selected?.model?.id === model.id}
-                        sx={{ px: 2, py: 1.25 }}
-                      >
-                        <ListItemText
-                          primary={model.name}
-                          secondary={getCategoryName(model.categoryId)}
-                          primaryTypographyProps={{ fontWeight: 600 }}
-                        />
-                      </ListItemButton>
-                    </ListItem>
+            <Stack spacing={1.5}>
+              <Typography variant="subtitle1" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <EditIcon fontSize="small" />
+                {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
+              </Typography>
+              <TextField
+                label={t(language, "modelsNamePlaceholder")}
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                fullWidth
+                size="small"
+              />
+              <FormControl fullWidth size="small">
+                <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
+                <Select
+                  value={editCategoryId}
+                  label={t(language, "modelsCategoryPlaceholder")}
+                  onChange={(e) => setEditCategoryId(e.target.value)}
+                >
+                  {openCategories.map((cat) => (
+                    <MenuItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </MenuItem>
                   ))}
-                </List>
-              </CardContent>
-            </Card>
+                </Select>
+              </FormControl>
+              <TextField
+                label={t(language, "modelsTeamPlaceholder")}
+                value={editTeamId}
+                onChange={(event) => setEditTeamId(event.target.value)}
+                fullWidth
+                size="small"
+              />
+              <Button
+                variant="contained"
+                onClick={isCreating ? createModel : saveModelChanges}
+                disabled={savingModel || !editName.trim() || !editCategoryId}
+                fullWidth
+              >
+                {savingModel ? t(language, "modelsUploading") : isCreating ? t(language, "modelsCreateButton") : t(language, "modelsSaveButton")}
+              </Button>
+            </Stack>
           </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader title={t(language, "modelsDetailTitle")} />
-              <CardContent sx={{ pt: 0 }}>
-                {selected?.model ? (
-                  <Stack spacing={2.5}>
-                    <Stack spacing={1}>
-                      <Typography variant="h5" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-                        {selected.model.name}
-                      </Typography>
-                      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
-                        <Chip
-                          size="small"
-                          label={`${t(language, "modelsCategoryPlaceholder")}: ${getCategoryName(selected.model.categoryId)}`}
-                        />
-                        {selected.model.teamId ? (
-                          <Chip size="small" variant="outlined" label={`Team: ${selected.model.teamId}`} />
-                        ) : null}
-                      </Stack>
-                    </Stack>
 
-                    <Divider />
+          {!isCreating && detail && (
+            <Grid item xs={12} md={6}>
+              <Stack spacing={1.5}>
+                <Typography variant="subtitle1" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <UploadFileIcon fontSize="small" />
+                  {t(language, "modelsImagesSection")}
+                </Typography>
 
-                    <Grid container spacing={2} alignItems="flex-start">
-                      <Grid item xs={12} md={6}>
-                        <Stack spacing={1.5}>
-                          <Typography variant="subtitle1" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                            <EditIcon fontSize="small" />
-                            {t(language, "modelsEditSection")}
-                          </Typography>
-                          <TextField
-                            label={t(language, "modelsNamePlaceholder")}
-                            value={editName}
-                            onChange={(event) => setEditName(event.target.value)}
-                            fullWidth
+                {detail.images.length > 0 ? (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(3, 1fr)" },
+                      gap: 1
+                    }}
+                  >
+                    {detail.images.map((img) => (
+                      <Box key={img.id} sx={{ minWidth: 0 }}>
+                        <Box
+                          sx={{
+                            position: "relative",
+                            borderRadius: 1,
+                            overflow: "hidden",
+                            border: "1px solid",
+                            borderColor: "divider",
+                            bgcolor: "action.hover"
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={img.url}
+                            alt=""
+                            sx={{ width: "100%", height: 120, objectFit: "cover", display: "block" }}
+                            onError={(e: any) => {
+                              e.target.style.display = "none";
+                            }}
                           />
-                          <FormControl fullWidth>
-                            <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
-                            <Select
-                              value={editCategoryId}
-                              label={t(language, "modelsCategoryPlaceholder")}
-                              onChange={(e) => setEditCategoryId(e.target.value)}
-                            >
-                              {openCategories.map((cat) => (
-                                <MenuItem key={cat.id} value={cat.id}>
-                                  {cat.name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                          <TextField
-                            label={t(language, "modelsTeamPlaceholder")}
-                            value={editTeamId}
-                            onChange={(event) => setEditTeamId(event.target.value)}
-                            fullWidth
-                          />
-                          <Button
-                            variant="contained"
-                            onClick={saveModelChanges}
-                            disabled={savingModel || !editName.trim() || !editCategoryId}
-                            fullWidth
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => deleteImage(img.id)}
+                            sx={{
+                              position: "absolute",
+                              top: 6,
+                              right: 6,
+                              bgcolor: "rgba(0,0,0,0.55)",
+                              "&:hover": { bgcolor: "rgba(0,0,0,0.75)" }
+                            }}
                           >
-                            {savingModel ? t(language, "modelsUploading") : t(language, "modelsSaveButton")}
-                          </Button>
-                        </Stack>
-                      </Grid>
-
-                      <Grid item xs={12} md={6}>
-                        <Stack spacing={1.5}>
-                          <Typography variant="subtitle1" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                            <UploadFileIcon fontSize="small" />
-                            {t(language, "modelsImagesSection")}
+                            <DeleteIcon sx={{ color: "#fff" }} fontSize="small" />
+                          </IconButton>
+                        </Box>
+                        <Tooltip title={img.url}>
+                          <Typography variant="caption" noWrap sx={{ display: "block", mt: 0.5 }}>
+                            <Link href={img.url} target="_blank" rel="noreferrer" underline="hover" color="inherit">
+                              {img.url}
+                            </Link>
                           </Typography>
-
-                          {selected.images.length > 0 ? (
-                            <Box
-                              sx={{
-                                display: "grid",
-                                gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(3, 1fr)", md: "repeat(2, 1fr)" },
-                                gap: 1
-                              }}
-                            >
-                              {selected.images.map((img) => (
-                                <Box key={img.id} sx={{ minWidth: 0 }}>
-                                  <Box
-                                    sx={{
-                                      position: "relative",
-                                      borderRadius: 1,
-                                      overflow: "hidden",
-                                      border: "1px solid",
-                                      borderColor: "divider",
-                                      bgcolor: "action.hover"
-                                    }}
-                                  >
-                                    <Box
-                                      component="img"
-                                      src={img.url}
-                                      alt=""
-                                      sx={{ width: "100%", height: 120, objectFit: "cover", display: "block" }}
-                                      onError={(e: any) => {
-                                        e.target.style.display = "none";
-                                      }}
-                                    />
-                                    <IconButton
-                                      size="small"
-                                      color="error"
-                                      onClick={() => deleteImage(img.id)}
-                                      sx={{
-                                        position: "absolute",
-                                        top: 6,
-                                        right: 6,
-                                        bgcolor: "rgba(0,0,0,0.55)",
-                                        "&:hover": { bgcolor: "rgba(0,0,0,0.75)" }
-                                      }}
-                                    >
-                                      <DeleteIcon sx={{ color: "#fff" }} fontSize="small" />
-                                    </IconButton>
-                                  </Box>
-                                  <Tooltip title={img.url}>
-                                    <Typography variant="caption" noWrap sx={{ display: "block", mt: 0.5 }}>
-                                      <Link href={img.url} target="_blank" rel="noreferrer" underline="hover" color="inherit">
-                                        {img.url}
-                                      </Link>
-                                    </Typography>
-                                  </Tooltip>
-                                </Box>
-                              ))}
-                            </Box>
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              {t(language, "modelsNoImages")}
-                            </Typography>
-                          )}
-
-                          <Stack spacing={1}>
-                            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "flex-start" }}>
-                              <TextField
-                                label={t(language, "modelsAddImagePlaceholder")}
-                                value={image}
-                                onChange={(event) => {
-                                  setImage(event.target.value);
-                                  setImageError("");
-                                }}
-                                error={!!imageError}
-                                helperText={imageError}
-                                fullWidth
-                              />
-                              <Button
-                                variant="outlined"
-                                onClick={addImage}
-                                disabled={!image.trim()}
-                                sx={{ minWidth: { sm: 180 } }}
-                              >
-                                {t(language, "modelsAddImageButton")}
-                              </Button>
-                            </Stack>
-
-                            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                ref={fileInputRef}
-                                style={{ display: "none" }}
-                                onChange={handleFileChange}
-                              />
-                              <input
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                ref={cameraInputRef}
-                                style={{ display: "none" }}
-                                onChange={handleFileChange}
-                              />
-                              <Button
-                                variant="outlined"
-                                startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />}
-                                onClick={() => fileInputRef.current?.click()}
-                                fullWidth
-                                disabled={uploading}
-                              >
-                                {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
-                              </Button>
-                              <Button
-                                variant="outlined"
-                                startIcon={<PhotoCameraIcon />}
-                                onClick={() => cameraInputRef.current?.click()}
-                                fullWidth
-                                disabled={uploading}
-                              >
-                                {t(language, "modelsCameraButton")}
-                              </Button>
-                            </Stack>
-                          </Stack>
-                        </Stack>
-                      </Grid>
-                    </Grid>
-                  </Stack>
+                        </Tooltip>
+                      </Box>
+                    ))}
+                  </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    {t(language, "modelsSelectHint")}
+                    {t(language, "modelsNoImages")}
                   </Typography>
                 )}
-              </CardContent>
-            </Card>
-          </Grid>
+
+                <Stack spacing={1}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "flex-start" }}>
+                    <TextField
+                      label={t(language, "modelsAddImagePlaceholder")}
+                      value={image}
+                      onChange={(event) => {
+                        setImage(event.target.value);
+                        setImageError("");
+                      }}
+                      error={!!imageError}
+                      helperText={imageError}
+                      fullWidth
+                      size="small"
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={addImage}
+                      disabled={!image.trim()}
+                      sx={{ minWidth: { sm: 180 } }}
+                    >
+                      {t(language, "modelsAddImageButton")}
+                    </Button>
+                  </Stack>
+
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={fileInputRef}
+                      style={{ display: "none" }}
+                      onChange={handleFileChange}
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      ref={cameraInputRef}
+                      style={{ display: "none" }}
+                      onChange={handleFileChange}
+                    />
+                    <Button
+                      variant="outlined"
+                      startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />}
+                      onClick={() => fileInputRef.current?.click()}
+                      fullWidth
+                      disabled={uploading}
+                    >
+                      {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<PhotoCameraIcon />}
+                      onClick={() => cameraInputRef.current?.click()}
+                      fullWidth
+                      disabled={uploading}
+                    >
+                      {t(language, "modelsCameraButton")}
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Stack>
+            </Grid>
+          )}
         </Grid>
+      </Stack>
+    </Box>
+  );
+
+  return (
+    <Container maxWidth="lg">
+      <Stack spacing={2}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
+            {t(language, "modelsCreateButton")}
+          </Button>
+        </Stack>
+
+        {message && <Alert severity="error" onClose={() => setMessage("")}>{message}</Alert>}
+
+        <Collapse in={isCreating}>
+          <Paper variant="outlined" sx={{ mb: 1 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
+              <Typography variant="subtitle2">{t(language, "modelsCreateButton")}</Typography>
+              <IconButton size="small" onClick={() => setIsCreating(false)}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+            {detailPanel}
+          </Paper>
+        </Collapse>
+
+        <TableContainer component={Paper} variant="outlined">
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 100 }} />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {models.map((model) => (
+                <React.Fragment key={model.id}>
+                  <TableRow
+                    hover
+                    sx={{ cursor: "pointer", "& > td": { borderBottom: expandedId === model.id ? "none" : undefined } }}
+                    onClick={() => openModel(model.id)}
+                    selected={expandedId === model.id}
+                  >
+                    <TableCell>
+                      <Typography fontWeight={600}>{model.name}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip size="small" label={getCategoryName(model.categoryId)} />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openModel(model.id);
+                          }}
+                          color="primary"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteModel(model.id);
+                          }}
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell colSpan={3} sx={{ p: 0 }}>
+                      <Collapse in={expandedId === model.id} unmountOnExit>
+                        <Divider />
+                        {detailPanel}
+                      </Collapse>
+                    </TableCell>
+                  </TableRow>
+                </React.Fragment>
+              ))}
+              {models.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={3} align="center">
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+                      {t(language, "modelsSelectHint")}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Stack>
     </Container>
   );
