@@ -9,7 +9,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
   .use(requireRole("user"))
   .get("/", async ({ tenantDb, user, query }) => {
     const search = query?.search ? String(query.search) : null;
-    const clauses = [eq(modelsTable.userId, user.id as any)];
+    const clauses = [eq(modelsTable.userId, user!.id as any)];
     if (search) clauses.push(ilike(modelsTable.name, `%${search}%`));
     return await tenantDb.select().from(modelsTable).where(and(...clauses));
   }, {
@@ -23,7 +23,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     const modelId = crypto.randomUUID();
     await tenantDb.insert(modelsTable).values({
       id: modelId,
-      userId: user.id as any,
+      userId: user!.id as any,
       categoryId: body.categoryId,
       teamId: body.teamId ?? null,
       name: body.name,
@@ -47,7 +47,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     const rows = await tenantDb
       .select()
       .from(modelsTable)
-      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user.id as any)));
+      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user!.id as any)));
     if (!rows.length) {
       set.status = 404;
       return { error: "Not found" };
@@ -66,7 +66,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     const rows = await tenantDb
       .select()
       .from(modelsTable)
-      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user.id as any)));
+      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user!.id as any)));
     if (!rows.length) {
       set.status = 404;
       return { error: "Not found" };
@@ -91,7 +91,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     const rows = await tenantDb
       .select()
       .from(modelsTable)
-      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user.id as any)));
+      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user!.id as any)));
     if (!rows.length) {
       set.status = 404;
       return { error: "Not found" };
@@ -111,7 +111,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     const rows = await tenantDb
       .select()
       .from(modelsTable)
-      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user.id as any)));
+      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user!.id as any)));
     if (!rows.length) {
       set.status = 404;
       return { error: "Not found" };
@@ -132,7 +132,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     const rows = await tenantDb
       .select()
       .from(modelsTable)
-      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user.id as any)));
+      .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user!.id as any)));
     if (!rows.length) {
       set.status = 404;
       return { error: "Not found" };

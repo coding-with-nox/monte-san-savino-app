@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import cors from "@elysiajs/cors";
 import swagger from "@elysiajs/swagger";
+import { loggerMiddleware } from "../shared/infra/logger/logger.middleware";
 import { tenantMiddleware } from "../tenancy/infra/http/tenant.middleware";
 import { authMiddleware } from "../identity/infra/http/auth.middleware";
 import { identityRoutes } from "../identity/infra/http/identity.routes";
@@ -33,6 +34,7 @@ export function buildApp() {
     .filter(Boolean);
 
   return new Elysia()
+    .use(loggerMiddleware)
     .use(cors({
       origin: corsOrigins.length > 0 ? corsOrigins : true,
       allowedHeaders: ["Authorization", "Content-Type"]

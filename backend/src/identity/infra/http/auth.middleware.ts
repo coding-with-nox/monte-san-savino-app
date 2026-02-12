@@ -1,7 +1,9 @@
 import { Elysia } from "elysia";
 import { JwtTokenService } from "../tokens/jwtTokenService";
 
-export const authMiddleware = new Elysia({ name: "auth" }).derive(async ({ headers }) => {
+export type AuthUser = { id: string; email: string; role: string; tenantId: any };
+
+export const authMiddleware = new Elysia({ name: "auth" }).derive(async ({ headers }): Promise<{ user: AuthUser | null }> => {
   const auth = headers.authorization;
   if (!auth || !auth.startsWith("Bearer ")) return { user: null };
   const token = auth.substring(7);
@@ -14,4 +16,4 @@ export const authMiddleware = new Elysia({ name: "auth" }).derive(async ({ heade
   } catch {
     return { user: null };
   }
-}).as("plugin");
+}).as("scoped");

@@ -10,7 +10,7 @@ export const userEnrollmentRoutes = new Elysia({ prefix: "/enrollments" })
   .use(tenantMiddleware)
   .use(requireRole("user"))
   .get("/", async ({ tenantDb, user }) => {
-    return await tenantDb.select().from(registrationsTable).where(eq(registrationsTable.userId, user.id as any));
+    return await tenantDb.select().from(registrationsTable).where(eq(registrationsTable.userId, user!.id as any));
   }, {
     detail: {
       summary: "Lista iscrizioni utente",
@@ -22,7 +22,7 @@ export const userEnrollmentRoutes = new Elysia({ prefix: "/enrollments" })
     const rows = await tenantDb
       .select()
       .from(registrationsTable)
-      .where(and(eq(registrationsTable.id, params.enrollmentId as any), eq(registrationsTable.userId, user.id as any)));
+      .where(and(eq(registrationsTable.id, params.enrollmentId as any), eq(registrationsTable.userId, user!.id as any)));
     if (!rows.length) {
       set.status = 404;
       return { error: "Not found" };

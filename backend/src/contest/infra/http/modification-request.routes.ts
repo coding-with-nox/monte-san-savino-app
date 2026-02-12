@@ -12,7 +12,7 @@ export const judgeModificationRoutes = new Elysia({ prefix: "/judge/modification
     return await tenantDb
       .select()
       .from(modificationRequestsTable)
-      .where(eq(modificationRequestsTable.judgeId, user.id as any));
+      .where(eq(modificationRequestsTable.judgeId, user!.id as any));
   }, {
     detail: {
       summary: "Le mie richieste di modifica",
@@ -25,7 +25,7 @@ export const judgeModificationRoutes = new Elysia({ prefix: "/judge/modification
     await tenantDb.insert(modificationRequestsTable).values({
       id,
       modelId: body.modelId,
-      judgeId: user.id,
+      judgeId: user!.id,
       reason: body.reason,
       status: "pending"
     });

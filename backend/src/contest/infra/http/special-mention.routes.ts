@@ -37,7 +37,7 @@ export const specialMentionRoutes = new Elysia({ prefix: "/awards/mentions" })
       modelId: body.modelId,
       title: body.title,
       description: body.description ?? null,
-      awardedBy: user.id
+      awardedBy: user!.id
     });
     return { id };
   }, {

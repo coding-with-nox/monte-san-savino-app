@@ -9,8 +9,8 @@ export const teamRoutes = new Elysia({ prefix: "/teams" })
   .use(requireRole("user"))
   .post("/", async ({ tenantDb, user, body }) => {
     const teamId = crypto.randomUUID();
-    await tenantDb.insert(teamsTable).values({ id: teamId, name: body.name, ownerId: user.id as any });
-    await tenantDb.insert(teamMembersTable).values({ teamId, userId: user.id as any, role: "owner" });
+    await tenantDb.insert(teamsTable).values({ id: teamId, name: body.name, ownerId: user!.id as any });
+    await tenantDb.insert(teamMembersTable).values({ teamId, userId: user!.id as any, role: "owner" });
     return { id: teamId, name: body.name };
   }, {
     body: t.Object({ name: t.String() }),
@@ -30,7 +30,7 @@ export const teamRoutes = new Elysia({ prefix: "/teams" })
       })
       .from(teamMembersTable)
       .innerJoin(teamsTable, eq(teamMembersTable.teamId, teamsTable.id))
-      .where(eq(teamMembersTable.userId, user.id as any));
+      .where(eq(teamMembersTable.userId, user!.id as any));
   }, {
     detail: {
       summary: "Lista team utente",
@@ -42,7 +42,7 @@ export const teamRoutes = new Elysia({ prefix: "/teams" })
     const membership = await tenantDb
       .select({ teamId: teamMembersTable.teamId })
       .from(teamMembersTable)
-      .where(and(eq(teamMembersTable.teamId, params.teamId as any), eq(teamMembersTable.userId, user.id as any)));
+      .where(and(eq(teamMembersTable.teamId, params.teamId as any), eq(teamMembersTable.userId, user!.id as any)));
     if (!membership.length) {
       set.status = 404;
       return { error: "Team not found" };
@@ -62,7 +62,7 @@ export const teamRoutes = new Elysia({ prefix: "/teams" })
     const owner = await tenantDb
       .select()
       .from(teamsTable)
-      .where(and(eq(teamsTable.id, params.teamId as any), eq(teamsTable.ownerId, user.id as any)));
+      .where(and(eq(teamsTable.id, params.teamId as any), eq(teamsTable.ownerId, user!.id as any)));
     if (!owner.length) {
       set.status = 403;
       return { error: "Forbidden" };
@@ -82,7 +82,7 @@ export const teamRoutes = new Elysia({ prefix: "/teams" })
     const owner = await tenantDb
       .select()
       .from(teamsTable)
-      .where(and(eq(teamsTable.id, params.teamId as any), eq(teamsTable.ownerId, user.id as any)));
+      .where(and(eq(teamsTable.id, params.teamId as any), eq(teamsTable.ownerId, user!.id as any)));
     if (!owner.length) {
       set.status = 403;
       return { error: "Forbidden" };
@@ -102,7 +102,7 @@ export const teamRoutes = new Elysia({ prefix: "/teams" })
     const owner = await tenantDb
       .select()
       .from(teamsTable)
-      .where(and(eq(teamsTable.id, params.teamId as any), eq(teamsTable.ownerId, user.id as any)));
+      .where(and(eq(teamsTable.id, params.teamId as any), eq(teamsTable.ownerId, user!.id as any)));
     if (!owner.length) {
       set.status = 403;
       return { error: "Forbidden" };
@@ -126,7 +126,7 @@ export const teamRoutes = new Elysia({ prefix: "/teams" })
     const owner = await tenantDb
       .select()
       .from(teamsTable)
-      .where(and(eq(teamsTable.id, params.teamId as any), eq(teamsTable.ownerId, user.id as any)));
+      .where(and(eq(teamsTable.id, params.teamId as any), eq(teamsTable.ownerId, user!.id as any)));
     if (!owner.length) {
       set.status = 403;
       return { error: "Forbidden" };

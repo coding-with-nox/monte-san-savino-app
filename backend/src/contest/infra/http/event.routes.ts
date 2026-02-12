@@ -86,7 +86,7 @@ export const enrollmentRoutes = new Elysia({ prefix: "/events" })
     const existing = await tenantDb
       .select()
       .from(registrationsTable)
-      .where(and(eq(registrationsTable.userId, user.id as any), eq(registrationsTable.eventId, params.eventId as any)));
+      .where(and(eq(registrationsTable.userId, user!.id as any), eq(registrationsTable.eventId, params.eventId as any)));
     if (existing.length) {
       set.status = 400;
       return { error: "Already enrolled" };
@@ -94,7 +94,7 @@ export const enrollmentRoutes = new Elysia({ prefix: "/events" })
     const id = crypto.randomUUID();
     await tenantDb.insert(registrationsTable).values({
       id,
-      userId: user.id as any,
+      userId: user!.id as any,
       eventId: params.eventId,
       modelId: body.modelId ?? null,
       categoryId: body.categoryId ?? null,

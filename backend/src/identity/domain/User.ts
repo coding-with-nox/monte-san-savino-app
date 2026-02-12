@@ -7,7 +7,8 @@ export class User {
     public email: Email,
     public role: Role,
     public passwordHash: string,
-    public isActive: boolean = true
+    public isActive: boolean = true,
+    public tenantId?: string | null
   ) {}
   canLogin(): boolean { return this.isActive; }
 }

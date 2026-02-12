@@ -15,5 +15,6 @@ export function requireRole(minimum: Role) {
         set.status = 403;
         return { error: "Forbidden" };
       }
-    });
+    })
+    .as("scoped");
 }
