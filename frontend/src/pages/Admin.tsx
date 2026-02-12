@@ -26,10 +26,8 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import { api, ApiError, API_BASE } from "../lib/api";
 import { Language, t } from "../lib/i18n";
-import ActiveSwitch from "../lib/ActiveSwitch";
 
 type Event = { id: string; name: string; status: string };
 type Category = { id: string; eventId: string; name: string; status: string };
@@ -39,19 +37,6 @@ type Sponsor = { id: string; eventId: string; name: string; tier: string };
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
 type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null };
-
-type UserProfile = {
-  id: string;
-  email: string;
-  role: string;
-  isActive: boolean;
-  firstName?: string | null;
-  lastName?: string | null;
-  phone?: string | null;
-  city?: string | null;
-  address?: string | null;
-  emergencyContact?: string | null;
-};
 
 interface AdminProps {
   language: Language;
@@ -73,12 +58,6 @@ export default function Admin({ language }: AdminProps) {
   const [sponsorForm, setSponsorForm] = useState({ eventId: "", name: "", tier: "bronze" });
   const [mentionForm, setMentionForm] = useState({ eventId: "", modelId: "", title: "" });
   const [message, setMessage] = useState("");
-
-  // User profile dialog state
-  const [profileDialog, setProfileDialog] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
 
   // Category edit dialog state
   const [categoryEditDialog, setCategoryEditDialog] = useState(false);
@@ -162,47 +141,6 @@ export default function Admin({ language }: AdminProps) {
     await load();
   }
 
-  async function resetPassword(userId: string) {
-    const res = await api<{ temporaryPassword: string }>(`/admin/users/${userId}/reset-password`, { method: "POST" });
-    setMessage(`${t(language, "adminTempPassword")}: ${res.temporaryPassword}`);
-  }
-
-  async function updateUserRole(userId: string, role: string) {
-    await api(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) });
-    await load();
-  }
-
-  async function toggleUserActive(userId: string, isActive: boolean) {
-    await api(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ isActive: !isActive }) });
-    await load();
-  }
-
-  async function openUserProfile(userId: string) {
-    const profile = await api<UserProfile>(`/admin/users/${userId}/profile`);
-    setSelectedProfile(profile);
-    setProfileForm({
-      firstName: profile.firstName,
-      lastName: profile.lastName,
-      phone: profile.phone,
-      city: profile.city,
-      address: profile.address,
-      emergencyContact: profile.emergencyContact
-    });
-    setEditingProfile(false);
-    setProfileDialog(true);
-  }
-
-  async function saveUserProfile() {
-    if (!selectedProfile) return;
-    await api(`/admin/users/${selectedProfile.id}/profile`, {
-      method: "PUT",
-      body: JSON.stringify(profileForm)
-    });
-    setEditingProfile(false);
-    await openUserProfile(selectedProfile.id);
-    setMessage(t(language, "adminProfileSaved"));
-  }
-
   async function createSponsor() {
     await api("/sponsors", { method: "POST", body: JSON.stringify(sponsorForm) });
     setSponsorForm({ eventId: "", name: "", tier: "bronze" });
@@ -254,8 +192,6 @@ export default function Admin({ language }: AdminProps) {
 
   const enrollmentStatuses = ["pending", "approved", "rejected", "paid"];
   const eventStatuses = ["draft", "active", "closed"];
-  const roles = ["user", "staff", "judge", "manager", "admin"];
-
   const getEventName = (eid: string) => {
     const ev = events.find((e) => e.id === eid);
     return ev ? ev.name : eid.slice(0, 8);
@@ -279,7 +215,7 @@ export default function Admin({ language }: AdminProps) {
         {message && <Alert severity="info" onClose={() => setMessage("")}>{message}</Alert>}
         <Grid container spacing={2}>
           {/* Events */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -337,7 +273,7 @@ export default function Admin({ language }: AdminProps) {
           </Grid>
 
           {/* Categories with Status */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -404,7 +340,7 @@ export default function Admin({ language }: AdminProps) {
           </Grid>
 
           {/* Enrollments */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -450,7 +386,7 @@ export default function Admin({ language }: AdminProps) {
           </Grid>
 
           {/* Judge Assignments (with optional category) */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -539,7 +475,7 @@ export default function Admin({ language }: AdminProps) {
           </Grid>
 
           {/* Sponsors */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -602,7 +538,7 @@ export default function Admin({ language }: AdminProps) {
           </Grid>
 
           {/* Special Mentions */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -674,51 +610,8 @@ export default function Admin({ language }: AdminProps) {
             </Card>
           </Grid>
 
-          {/* Users */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "adminUsersTitle")}
-                </Typography>
-                <Stack spacing={1}>
-                  {users.map((user) => (
-                    <Stack key={user.id} direction="row" spacing={2} alignItems="center">
-                      <Typography variant="body2" sx={{ flex: 1 }}>
-                        {user.email}
-                      </Typography>
-                      <FormControl size="small" sx={{ minWidth: 120 }}>
-                        <Select
-                          value={user.role}
-                          onChange={(e) => updateUserRole(user.id, e.target.value)}
-                          size="small"
-                        >
-                          {roles.map((r) => (
-                            <MenuItem key={r} value={r}>{r}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <ActiveSwitch
-                        checked={user.isActive}
-                        onChange={() => toggleUserActive(user.id, user.isActive)}
-                        activeLabel={t(language, "adminUserActive")}
-                        inactiveLabel={t(language, "adminUserInactive")}
-                      />
-                      <IconButton size="small" onClick={() => openUserProfile(user.id)}>
-                        <VisibilityIcon fontSize="small" />
-                      </IconButton>
-                      <Button variant="outlined" size="small" onClick={() => resetPassword(user.id)}>
-                        {t(language, "adminResetPasswordButton")}
-                      </Button>
-                    </Stack>
-                  ))}
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-
           {/* Modification Requests */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -755,7 +648,7 @@ export default function Admin({ language }: AdminProps) {
           </Grid>
 
           {/* Export */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -774,112 +667,6 @@ export default function Admin({ language }: AdminProps) {
           </Grid>
         </Grid>
       </Stack>
-
-      {/* User Profile Dialog */}
-      <Dialog open={profileDialog} onClose={() => setProfileDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {selectedProfile?.email ?? ""} — {t(language, "adminProfileTitle")}
-        </DialogTitle>
-        <DialogContent>
-          {selectedProfile && !editingProfile && (
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">{t(language, "profileFirstName")}</Typography>
-                  <Typography>{selectedProfile.firstName || "—"}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">{t(language, "profileLastName")}</Typography>
-                  <Typography>{selectedProfile.lastName || "—"}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">{t(language, "profilePhone")}</Typography>
-                  <Typography>{selectedProfile.phone || "—"}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">{t(language, "profileEmergencyContact")}</Typography>
-                  <Typography>{selectedProfile.emergencyContact || "—"}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">{t(language, "profileCity")}</Typography>
-                  <Typography>{selectedProfile.city || "—"}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">{t(language, "profileAddress")}</Typography>
-                  <Typography>{selectedProfile.address || "—"}</Typography>
-                </Grid>
-              </Grid>
-            </Stack>
-          )}
-          {selectedProfile && editingProfile && (
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <TextField
-                    label={t(language, "profileFirstName")}
-                    value={profileForm.firstName ?? ""}
-                    onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
-                    fullWidth
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    label={t(language, "profileLastName")}
-                    value={profileForm.lastName ?? ""}
-                    onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
-                    fullWidth
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    label={t(language, "profilePhone")}
-                    value={profileForm.phone ?? ""}
-                    onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                    fullWidth
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    label={t(language, "profileEmergencyContact")}
-                    value={profileForm.emergencyContact ?? ""}
-                    onChange={(e) => setProfileForm({ ...profileForm, emergencyContact: e.target.value })}
-                    fullWidth
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    label={t(language, "profileCity")}
-                    value={profileForm.city ?? ""}
-                    onChange={(e) => setProfileForm({ ...profileForm, city: e.target.value })}
-                    fullWidth
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    label={t(language, "profileAddress")}
-                    value={profileForm.address ?? ""}
-                    onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
-                    fullWidth
-                  />
-                </Grid>
-              </Grid>
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          {!editingProfile ? (
-            <>
-              <Button onClick={() => setEditingProfile(true)}>{t(language, "profileEditButton")}</Button>
-              <Button onClick={() => setProfileDialog(false)}>{t(language, "adminDialogClose")}</Button>
-            </>
-          ) : (
-            <>
-              <Button onClick={saveUserProfile} variant="contained">{t(language, "profileSaveButton")}</Button>
-              <Button onClick={() => setEditingProfile(false)}>{t(language, "profileCancelButton")}</Button>
-            </>
-          )}
-        </DialogActions>
-      </Dialog>
 
       {/* Category Edit Dialog */}
       <Dialog open={categoryEditDialog} onClose={() => setCategoryEditDialog(false)} maxWidth="xs" fullWidth>

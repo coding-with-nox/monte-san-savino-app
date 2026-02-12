@@ -205,8 +205,8 @@ export default function Enrollments({ language }: EnrollmentsProps) {
         <TableHead>
           <TableRow>
             <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsEventSelect")}</TableCell>
-            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelSelect")}</TableCell>
-            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategorySelect")}</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelColumn")}</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategoryColumn")}</TableCell>
             <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
           </TableRow>
         </TableHead>
