@@ -5,7 +5,12 @@ import { settingsTable } from "../persistence/schema";
 
 const DEFAULTS: Record<string, string> = {
   modelImages: "true",
-  printCodePrefix: "MSS"
+  printCodePrefix: "MSS",
+  exportIncludeModelCode: "true",
+  exportIncludeModelDescription: "true",
+  exportIncludeParticipantEmail: "true",
+  excelSheetName: "Export",
+  excelFilePrefix: "contest-export"
 };
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })

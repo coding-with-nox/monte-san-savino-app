@@ -25,13 +25,18 @@ interface SettingsProps {
 export default function Settings({ language }: SettingsProps) {
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [prefixDraft, setPrefixDraft] = useState("");
+  const [sheetNameDraft, setSheetNameDraft] = useState("");
+  const [filePrefixDraft, setFilePrefixDraft] = useState("");
   const [savingPrefix, setSavingPrefix] = useState(false);
+  const [savingExcelLayout, setSavingExcelLayout] = useState(false);
   const [message, setMessage] = useState("");
 
   async function load() {
     const res = await api<Record<string, string>>("/settings");
     setSettings(res);
     setPrefixDraft(res.printCodePrefix ?? "MSS");
+    setSheetNameDraft(res.excelSheetName ?? "Export");
+    setFilePrefixDraft(res.excelFilePrefix ?? "contest-export");
   }
 
   async function toggle(key: string) {
@@ -69,6 +74,32 @@ export default function Settings({ language }: SettingsProps) {
       setSettings(prev);
     } finally {
       setSavingPrefix(false);
+    }
+  }
+
+  async function saveExcelLayout() {
+    const sheetName = sheetNameDraft.trim();
+    const filePrefix = filePrefixDraft.trim();
+    if (!sheetName || !filePrefix) {
+      setMessage(t(language, "settingsExcelLayoutError"));
+      return;
+    }
+    const prev = { ...settings };
+    setSavingExcelLayout(true);
+    setSettings({ ...settings, excelSheetName: sheetName, excelFilePrefix: filePrefix });
+    try {
+      await api("/admin/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          excelSheetName: sheetName,
+          excelFilePrefix: filePrefix
+        })
+      });
+    } catch (err: any) {
+      setMessage(err.message || "Error");
+      setSettings(prev);
+    } finally {
+      setSavingExcelLayout(false);
     }
   }
 
@@ -113,6 +144,70 @@ export default function Settings({ language }: SettingsProps) {
                     />
                     <Button variant="contained" onClick={savePrefix} disabled={savingPrefix || !prefixDraft.trim()}>
                       {savingPrefix ? "..." : t(language, "profileSaveButton")}
+                    </Button>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><Typography>{t(language, "settingsExportIncludeCode")}</Typography></TableCell>
+                <TableCell align="right">
+                  <ActiveSwitch
+                    checked={settings.exportIncludeModelCode !== "false"}
+                    onChange={() => toggle("exportIncludeModelCode")}
+                    activeLabel={t(language, "adminUserActive")}
+                    inactiveLabel={t(language, "adminUserInactive")}
+                  />
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><Typography>{t(language, "settingsExportIncludeDescription")}</Typography></TableCell>
+                <TableCell align="right">
+                  <ActiveSwitch
+                    checked={settings.exportIncludeModelDescription !== "false"}
+                    onChange={() => toggle("exportIncludeModelDescription")}
+                    activeLabel={t(language, "adminUserActive")}
+                    inactiveLabel={t(language, "adminUserInactive")}
+                  />
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><Typography>{t(language, "settingsExportIncludeEmail")}</Typography></TableCell>
+                <TableCell align="right">
+                  <ActiveSwitch
+                    checked={settings.exportIncludeParticipantEmail !== "false"}
+                    onChange={() => toggle("exportIncludeParticipantEmail")}
+                    activeLabel={t(language, "adminUserActive")}
+                    inactiveLabel={t(language, "adminUserInactive")}
+                  />
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><Typography>{t(language, "settingsExcelSheetName")}</Typography></TableCell>
+                <TableCell align="right">
+                  <TextField
+                    size="small"
+                    value={sheetNameDraft}
+                    onChange={(event) => setSheetNameDraft(event.target.value)}
+                    sx={{ minWidth: 220 }}
+                  />
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><Typography>{t(language, "settingsExcelFilePrefix")}</Typography></TableCell>
+                <TableCell align="right">
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <TextField
+                      size="small"
+                      value={filePrefixDraft}
+                      onChange={(event) => setFilePrefixDraft(event.target.value)}
+                      sx={{ minWidth: 220 }}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={saveExcelLayout}
+                      disabled={savingExcelLayout || !sheetNameDraft.trim() || !filePrefixDraft.trim()}
+                    >
+                      {savingExcelLayout ? "..." : t(language, "profileSaveButton")}
                     </Button>
                   </Stack>
                 </TableCell>
