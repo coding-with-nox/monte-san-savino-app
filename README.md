@@ -38,6 +38,7 @@ Docs:
 - `docs/user-manual.md`
 - `docs/user-manual.pdf`
 - `docs/stage-deploy-gcp.md`
+- `docs/stage-deploy-single-vm.md`
 - `helm/` for Kubernetes deployment
 
 ## Backend + API overview
