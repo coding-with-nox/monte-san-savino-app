@@ -4,7 +4,8 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 import { settingsTable } from "../persistence/schema";
 
 const DEFAULTS: Record<string, string> = {
-  modelImages: "true"
+  modelImages: "true",
+  printCodePrefix: "MSS"
 };
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })

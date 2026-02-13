@@ -80,12 +80,13 @@ CREATE TABLE IF NOT EXISTS registrations (
   event_id uuid NOT NULL,
   model_id uuid,
   category_id uuid,
-  status text NOT NULL,
+  status text NOT NULL DEFAULT 'accepted',
   checked_in boolean NOT NULL DEFAULT false
 );
 
 ALTER TABLE registrations ADD COLUMN IF NOT EXISTS model_id uuid;
 ALTER TABLE registrations ADD COLUMN IF NOT EXISTS category_id uuid;
+ALTER TABLE registrations ALTER COLUMN status SET DEFAULT 'accepted';
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_reg_user_event
   ON registrations (user_id, event_id);
@@ -102,10 +103,17 @@ CREATE TABLE IF NOT EXISTS models (
   team_id uuid,
   category_id uuid NOT NULL,
   name text NOT NULL,
+  description text,
+  code text,
   image_url text
 );
 
 ALTER TABLE models ADD COLUMN IF NOT EXISTS team_id uuid;
+ALTER TABLE models ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE models ADD COLUMN IF NOT EXISTS code text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_models_code
+  ON models (code);
 
 CREATE INDEX IF NOT EXISTS ix_models_category
   ON models (category_id);
@@ -130,6 +138,8 @@ CREATE TABLE IF NOT EXISTS votes (
   created_at timestamp DEFAULT now()
 );
 
+ALTER TABLE votes DROP CONSTRAINT IF EXISTS ux_votes_judge_model;
+ALTER TABLE votes DROP CONSTRAINT IF EXISTS votes_judge_id_model_id_key;
 DROP INDEX IF EXISTS ux_votes_judge_model;
 
 CREATE INDEX IF NOT EXISTS ix_votes_judge_model

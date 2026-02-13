@@ -98,10 +98,10 @@ export const enrollmentRoutes = new Elysia({ prefix: "/events" })
       eventId: params.eventId,
       modelId: body.modelId ?? null,
       categoryId: body.categoryId ?? null,
-      status: "pending",
+      status: "accepted",
       checkedIn: false
     });
-    return { id, status: "pending" };
+    return { id, status: "accepted" };
   }, {
     params: t.Object({ eventId: t.String() }),
     body: t.Object({

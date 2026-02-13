@@ -52,18 +52,6 @@ export const adminEnrollmentRoutes = new Elysia({ prefix: "/admin/enrollments" }
       tags: ["Enrollments"],
       security: [{ bearerAuth: [] }]
     }
-  })
-  .patch("/:enrollmentId/status", async ({ tenantDb, params, body }) => {
-    await tenantDb.update(registrationsTable).set({ status: body.status }).where(eq(registrationsTable.id, params.enrollmentId as any));
-    return { updated: true };
-  }, {
-    params: t.Object({ enrollmentId: t.String() }),
-    body: t.Object({ status: t.String() }),
-    detail: {
-      summary: "Aggiorna stato iscrizione",
-      tags: ["Enrollments"],
-      security: [{ bearerAuth: [] }]
-    }
   });
 
 export const staffCheckinRoutes = new Elysia({ prefix: "/staff" })
