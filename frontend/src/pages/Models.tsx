@@ -40,7 +40,15 @@ import ImageIcon from "@mui/icons-material/Image";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
-type Model = { id: string; name: string; categoryId: string; teamId?: string | null; imageUrl?: string | null };
+type Model = {
+  id: string;
+  name: string;
+  description?: string | null;
+  code?: string | null;
+  categoryId: string;
+  teamId?: string | null;
+  imageUrl?: string | null;
+};
 type ModelDetail = { model: Model; images: { id: string; url: string }[] };
 type Category = { id: string; eventId: string; name: string; status: string };
 
@@ -59,6 +67,7 @@ export default function Models({ language }: ModelsProps) {
   const [message, setMessage] = useState("");
   const [imagesEnabled, setImagesEnabled] = useState(false);
   const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editTeamId, setEditTeamId] = useState("");
   const [attachName, setAttachName] = useState("");
@@ -86,6 +95,7 @@ export default function Models({ language }: ModelsProps) {
     const d = await api<ModelDetail>(`/models/${modelId}`);
     setDetail(d);
     setEditName(d.model.name);
+    setEditDescription(d.model.description || "");
     setEditCategoryId(d.model.categoryId);
     setEditTeamId(d.model.teamId || "");
     setExpandedId(modelId);
@@ -103,6 +113,7 @@ export default function Models({ language }: ModelsProps) {
     setExpandedId(null);
     setDetail(null);
     setEditName("");
+    setEditDescription("");
     setEditCategoryId("");
     setEditTeamId("");
     setIsCreating(true);
@@ -116,6 +127,7 @@ export default function Models({ language }: ModelsProps) {
         method: "POST",
         body: JSON.stringify({
           name: editName.trim(),
+          description: editDescription.trim() || undefined,
           categoryId: editCategoryId,
           teamId: editTeamId.trim() || undefined
         })
@@ -137,6 +149,7 @@ export default function Models({ language }: ModelsProps) {
         method: "PUT",
         body: JSON.stringify({
           name: editName.trim(),
+          description: editDescription.trim() || undefined,
           categoryId: editCategoryId,
           teamId: editTeamId.trim() || undefined
         })
@@ -254,6 +267,15 @@ export default function Models({ language }: ModelsProps) {
               {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
             </Typography>
             <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" />
+            <TextField
+              label={t(language, "modelsDescriptionPlaceholder")}
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              fullWidth
+              size="small"
+              multiline
+              minRows={2}
+            />
             <FormControl fullWidth size="small">
               <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
               <Select value={editCategoryId} label={t(language, "modelsCategoryPlaceholder")} onChange={(e) => setEditCategoryId(e.target.value)}>
@@ -334,6 +356,7 @@ export default function Models({ language }: ModelsProps) {
               <TableRow>
                 {imagesEnabled && <TableCell sx={{ fontWeight: 700, width: 60 }} />}
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCodeColumn")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
                 <TableCell align="right" sx={{ width: 100 }} />
               </TableRow>
@@ -354,6 +377,7 @@ export default function Models({ language }: ModelsProps) {
                       </TableCell>
                     )}
                     <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
+                    <TableCell>{model.code || "-"}</TableCell>
                     <TableCell><Chip size="small" label={getCategoryName(model.categoryId)} /></TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
@@ -363,7 +387,7 @@ export default function Models({ language }: ModelsProps) {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={imagesEnabled ? 4 : 3} sx={{ p: 0 }}>
+                    <TableCell colSpan={imagesEnabled ? 5 : 4} sx={{ p: 0 }}>
                       <Collapse in={expandedId === model.id} unmountOnExit>
                         <Divider />
                         {editPanel}
@@ -374,7 +398,7 @@ export default function Models({ language }: ModelsProps) {
               ))}
               {models.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={imagesEnabled ? 4 : 3} align="center">
+                  <TableCell colSpan={imagesEnabled ? 5 : 4} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>{t(language, "modelsSelectHint")}</Typography>
                   </TableCell>
                 </TableRow>

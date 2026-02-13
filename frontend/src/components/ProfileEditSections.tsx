@@ -5,7 +5,6 @@ import PhoneIcon from "@mui/icons-material/Phone";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import { MuiTelInput, matchIsValidTel } from "mui-tel-input";
 import { Language, t } from "../lib/i18n";
-import LocationPicker from "../lib/LocationPicker";
 
 export type EditableProfile = {
   email?: string;
@@ -14,7 +13,6 @@ export type EditableProfile = {
   lastName?: string | null;
   phone?: string | null;
   city?: string | null;
-  address?: string | null;
   emergencyContact?: string | null;
   emergencyContactName?: string | null;
 };
@@ -132,13 +130,16 @@ export default function ProfileEditSections({
             <LocationOnIcon color="primary" />
             <Typography variant="h6">{t(language, "profileAddressSection")}</Typography>
           </Stack>
-          <LocationPicker
-            city={value.city ?? ""}
-            address={value.address ?? ""}
-            onCityChange={(city) => onChange({ ...value, city })}
-            onAddressChange={(address) => onChange({ ...value, address })}
-            language={language}
-          />
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label={t(language, "profileCity")}
+                value={value.city ?? ""}
+                onChange={(e) => onChange({ ...value, city: e.target.value })}
+                fullWidth
+              />
+            </Grid>
+          </Grid>
         </CardContent>
       </Card>
     </Stack>

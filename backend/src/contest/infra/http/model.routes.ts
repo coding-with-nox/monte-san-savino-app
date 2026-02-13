@@ -2,7 +2,72 @@ import { Elysia, t } from "elysia";
 import { and, eq, ilike } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { modelsTable, modelImagesTable } from "../persistence/schema";
+import { categoriesTable, eventsTable, modelsTable, modelImagesTable, settingsTable } from "../persistence/schema";
+
+function normalizePrefix(value?: string | null): string {
+  const cleaned = (value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, "")
+    .slice(0, 12);
+  return cleaned || "MSS";
+}
+
+function buildEventToken(eventName: string, eventId: string): string {
+  const initials = eventName
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 4);
+  if (initials) return initials;
+  return eventId.replace(/-/g, "").slice(0, 4).toUpperCase();
+}
+
+async function generateModelCode(tenantDb: any, categoryId: string): Promise<string> {
+  const [eventRow] = await tenantDb
+    .select({
+      eventId: categoriesTable.eventId,
+      eventName: eventsTable.name
+    })
+    .from(categoriesTable)
+    .innerJoin(eventsTable, eq(eventsTable.id, categoriesTable.eventId))
+    .where(eq(categoriesTable.id, categoryId as any))
+    .limit(1);
+
+  if (!eventRow) {
+    throw new Error("Category not found");
+  }
+
+  const [prefixRow] = await tenantDb
+    .select({ value: settingsTable.value })
+    .from(settingsTable)
+    .where(eq(settingsTable.key, "printCodePrefix" as any))
+    .limit(1);
+
+  const prefix = normalizePrefix(prefixRow?.value);
+  const eventToken = buildEventToken(eventRow.eventName, eventRow.eventId);
+  const existingRows = await tenantDb
+    .select({ id: modelsTable.id })
+    .from(modelsTable)
+    .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+    .where(eq(categoriesTable.eventId, eventRow.eventId as any));
+
+  let sequence = existingRows.length + 1;
+  while (true) {
+    const candidate = `${prefix}-${eventToken}-${String(sequence).padStart(4, "0")}`;
+    const [taken] = await tenantDb
+      .select({ id: modelsTable.id })
+      .from(modelsTable)
+      .where(eq(modelsTable.code, candidate as any))
+      .limit(1);
+    if (!taken) return candidate;
+    sequence += 1;
+  }
+}
 
 export const modelRoutes = new Elysia({ prefix: "/models" })
   .use(tenantMiddleware)
@@ -21,20 +86,24 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
   })
   .post("/", async ({ tenantDb, user, body }) => {
     const modelId = crypto.randomUUID();
+    const code = await generateModelCode(tenantDb, body.categoryId);
     await tenantDb.insert(modelsTable).values({
       id: modelId,
       userId: user!.id as any,
       categoryId: body.categoryId,
       teamId: body.teamId ?? null,
       name: body.name,
+      description: body.description ?? null,
+      code,
       imageUrl: body.imageUrl ?? null
     });
-    return { id: modelId };
+    return { id: modelId, code };
   }, {
     body: t.Object({
       name: t.String(),
       categoryId: t.String(),
       teamId: t.Optional(t.String()),
+      description: t.Optional(t.String()),
       imageUrl: t.Optional(t.String())
     }),
     detail: {
@@ -79,6 +148,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       name: t.Optional(t.String()),
       categoryId: t.Optional(t.String()),
       teamId: t.Optional(t.String()),
+      description: t.Optional(t.String()),
       imageUrl: t.Optional(t.String())
     }),
     detail: {

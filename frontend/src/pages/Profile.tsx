@@ -26,7 +26,6 @@ type Profile = {
   lastName?: string | null;
   phone?: string | null;
   city?: string | null;
-  address?: string | null;
   emergencyContact?: string | null;
   emergencyContactName?: string | null;
 };
@@ -158,10 +157,6 @@ export default function Profile({ language }: ProfileProps) {
                 <Grid item xs={12} sm={6}>
                   <Typography variant="caption" color="text.secondary">{t(language, "profileCity")}</Typography>
                   <Typography variant="body1">{fieldValue(profile.city)}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="caption" color="text.secondary">{t(language, "profileAddress")}</Typography>
-                  <Typography variant="body1">{fieldValue(profile.address)}</Typography>
                 </Grid>
               </Grid>
             </CardContent>

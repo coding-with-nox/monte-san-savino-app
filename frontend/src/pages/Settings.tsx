@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Button,
   Container,
   Paper,
   Stack,
@@ -10,6 +11,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography
 } from "@mui/material";
 import { api } from "../lib/api";
@@ -22,11 +24,14 @@ interface SettingsProps {
 
 export default function Settings({ language }: SettingsProps) {
   const [settings, setSettings] = useState<Record<string, string>>({});
+  const [prefixDraft, setPrefixDraft] = useState("");
+  const [savingPrefix, setSavingPrefix] = useState(false);
   const [message, setMessage] = useState("");
 
   async function load() {
     const res = await api<Record<string, string>>("/settings");
     setSettings(res);
+    setPrefixDraft(res.printCodePrefix ?? "MSS");
   }
 
   async function toggle(key: string) {
@@ -45,13 +50,31 @@ export default function Settings({ language }: SettingsProps) {
     }
   }
 
+  async function savePrefix() {
+    const next = prefixDraft.trim().toUpperCase();
+    if (!next) {
+      setMessage("Il prefisso non puo essere vuoto.");
+      return;
+    }
+    const prev = { ...settings };
+    setSavingPrefix(true);
+    setSettings({ ...settings, printCodePrefix: next });
+    try {
+      await api("/admin/settings", {
+        method: "PUT",
+        body: JSON.stringify({ printCodePrefix: next })
+      });
+    } catch (err: any) {
+      setMessage(err.message || "Error");
+      setSettings(prev);
+    } finally {
+      setSavingPrefix(false);
+    }
+  }
+
   useEffect(() => {
     load().catch((err) => setMessage(err.message));
   }, []);
-
-  const settingRows = [
-    { key: "modelImages", labelKey: "settingsModelImages" as const }
-  ];
 
   return (
     <Container maxWidth="md">
@@ -63,23 +86,37 @@ export default function Settings({ language }: SettingsProps) {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "settingsSettingColumn")}</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 100 }}>{t(language, "settingsValueColumn")}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 300 }}>{t(language, "settingsValueColumn")}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {settingRows.map((row) => (
-                <TableRow key={row.key}>
-                  <TableCell><Typography>{t(language, row.labelKey)}</Typography></TableCell>
-                  <TableCell align="right">
-                    <ActiveSwitch
-                      checked={settings[row.key] === "true"}
-                      onChange={() => toggle(row.key)}
-                      activeLabel={t(language, "adminUserActive")}
-                      inactiveLabel={t(language, "adminUserInactive")}
+              <TableRow>
+                <TableCell><Typography>{t(language, "settingsModelImages")}</Typography></TableCell>
+                <TableCell align="right">
+                  <ActiveSwitch
+                    checked={settings.modelImages === "true"}
+                    onChange={() => toggle("modelImages")}
+                    activeLabel={t(language, "adminUserActive")}
+                    inactiveLabel={t(language, "adminUserInactive")}
+                  />
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><Typography>{t(language, "settingsPrintCodePrefix")}</Typography></TableCell>
+                <TableCell align="right">
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <TextField
+                      size="small"
+                      value={prefixDraft}
+                      onChange={(event) => setPrefixDraft(event.target.value)}
+                      sx={{ minWidth: 180 }}
                     />
-                  </TableCell>
-                </TableRow>
-              ))}
+                    <Button variant="contained" onClick={savePrefix} disabled={savingPrefix || !prefixDraft.trim()}>
+                      {savingPrefix ? "..." : t(language, "profileSaveButton")}
+                    </Button>
+                  </Stack>
+                </TableCell>
+              </TableRow>
             </TableBody>
           </Table>
         </TableContainer>

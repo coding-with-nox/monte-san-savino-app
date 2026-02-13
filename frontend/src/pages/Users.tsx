@@ -31,6 +31,8 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import LockResetIcon from "@mui/icons-material/LockReset";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import TableChartIcon from "@mui/icons-material/TableChart";
 import { matchIsValidTel } from "mui-tel-input";
 import { api, ApiError } from "../lib/api";
 import { Language, t } from "../lib/i18n";
@@ -38,6 +40,7 @@ import ActiveSwitch from "../lib/ActiveSwitch";
 import ProfileEditSections from "../components/ProfileEditSections";
 
 type User = { id: string; email: string; role: string; isActive: boolean };
+type Event = { id: string; name: string; status: string };
 
 type UserProfile = {
   id: string;
@@ -48,7 +51,6 @@ type UserProfile = {
   lastName?: string | null;
   phone?: string | null;
   city?: string | null;
-  address?: string | null;
   emergencyContact?: string | null;
   emergencyContactName?: string | null;
 };
@@ -59,8 +61,24 @@ interface UsersProps {
 
 const roles = ["user", "staff", "judge", "manager", "admin"];
 
+function downloadTextFile(content: string, filename: string, contentType = "text/csv;charset=utf-8") {
+  const blob = new Blob([content], { type: contentType });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export default function Users({ language }: UsersProps) {
   const [users, setUsers] = useState<User[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [exportEventId, setExportEventId] = useState("");
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [message, setMessage] = useState("");
 
   // Create dialog
@@ -82,8 +100,13 @@ export default function Users({ language }: UsersProps) {
     setUsers(await api<User[]>("/admin/users"));
   }
 
+  async function loadEvents() {
+    setEvents(await api<Event[]>("/events"));
+  }
+
   useEffect(() => {
     load().catch((err) => setMessage(err.message));
+    loadEvents().catch((err) => setMessage(err.message));
   }, []);
 
   // --- Create dialog ---
@@ -127,7 +150,6 @@ export default function Users({ language }: UsersProps) {
       lastName: profile.lastName,
       phone: profile.phone,
       city: profile.city,
-      address: profile.address,
       emergencyContact: profile.emergencyContact,
       emergencyContactName: profile.emergencyContactName
     });
@@ -171,9 +193,9 @@ export default function Users({ language }: UsersProps) {
     const res = await api<{ temporaryPassword: string; emailSent: boolean }>(`/admin/users/${editProfile.id}/reset-password`, { method: "POST" });
     let msg = `${t(language, "adminTempPassword")}: ${res.temporaryPassword}`;
     if (res.emailSent) {
-      msg += ` — ${t(language, "adminEmailSent")}`;
+      msg += ` - ${t(language, "adminEmailSent")}`;
     } else {
-      msg += ` — ${t(language, "adminEmailNotSent")}`;
+      msg += ` - ${t(language, "adminEmailNotSent")}`;
     }
     setMessage(msg);
   }
@@ -198,14 +220,80 @@ export default function Users({ language }: UsersProps) {
     setMessage(t(language, "adminProfileSaved"));
   }
 
+  async function exportUsersExcel() {
+    if (!exportEventId) {
+      setMessage(t(language, "enrollmentsEventSelect"));
+      return;
+    }
+    setExportingExcel(true);
+    try {
+      const csv = await api<string>(`/exports/users/by-event/excel?eventId=${encodeURIComponent(exportEventId)}`);
+      downloadTextFile(csv, `users-by-event-${exportEventId}.csv`);
+    } catch (err: any) {
+      setMessage(err.message || "Export failed");
+    } finally {
+      setExportingExcel(false);
+    }
+  }
+
+  async function exportUsersPdf() {
+    if (!exportEventId) {
+      setMessage(t(language, "enrollmentsEventSelect"));
+      return;
+    }
+    setExportingPdf(true);
+    try {
+      const html = await api<string>(`/exports/users/by-event/pdf?eventId=${encodeURIComponent(exportEventId)}`);
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      setMessage(err.message || "Export failed");
+    } finally {
+      setExportingPdf(false);
+    }
+  }
+
   return (
     <Container maxWidth="lg">
       <Stack spacing={2}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
           <Typography variant="h4">{t(language, "usersTitle")}</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-            {t(language, "usersCreateButton")}
-          </Button>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel>{t(language, "enrollmentsEventSelect")}</InputLabel>
+              <Select
+                value={exportEventId}
+                label={t(language, "enrollmentsEventSelect")}
+                onChange={(e) => setExportEventId(e.target.value)}
+              >
+                <MenuItem value="">-</MenuItem>
+                {events.map((event) => (
+                  <MenuItem key={event.id} value={event.id}>{event.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              variant="outlined"
+              startIcon={<TableChartIcon />}
+              onClick={exportUsersExcel}
+              disabled={exportingExcel || !exportEventId}
+            >
+              {exportingExcel ? "..." : "Excel"}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<PictureAsPdfIcon />}
+              onClick={exportUsersPdf}
+              disabled={exportingPdf || !exportEventId}
+            >
+              {exportingPdf ? "..." : "PDF"}
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+              {t(language, "usersCreateButton")}
+            </Button>
+          </Stack>
         </Stack>
         {message && <Alert severity="info" onClose={() => setMessage("")}>{message}</Alert>}
         <TableContainer component={Paper} variant="outlined">
@@ -306,7 +394,7 @@ export default function Users({ language }: UsersProps) {
   >
         {editProfile && (
           <>
-            <DialogTitle>{editProfile.email} — {t(language, "usersEditTitle")}</DialogTitle>
+            <DialogTitle>{editProfile.email} - {t(language, "usersEditTitle")}</DialogTitle>
             <DialogContent>
               <Stack spacing={2} sx={{ mt: 1 }}>
                 {/* Role, status, reset password */}
@@ -334,37 +422,33 @@ export default function Users({ language }: UsersProps) {
 
                 <Divider />
 
-                {/* Profile fields — view mode */}
+                {/* Profile fields - view mode */}
                 {!editingFields && (
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileFirstName")}</Typography>
-                      <Typography>{editProfile.firstName || "—"}</Typography>
+                      <Typography>{editProfile.firstName || "-"}</Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileLastName")}</Typography>
-                      <Typography>{editProfile.lastName || "—"}</Typography>
+                      <Typography>{editProfile.lastName || "-"}</Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profilePhone")}</Typography>
-                      <Typography>{editProfile.phone || "—"}</Typography>
+                      <Typography>{editProfile.phone || "-"}</Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileEmergencyContact")}</Typography>
-                      <Typography>{editProfile.emergencyContact || "—"}</Typography>
+                      <Typography>{editProfile.emergencyContact || "-"}</Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileCity")}</Typography>
-                      <Typography>{editProfile.city || "—"}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="caption" color="text.secondary">{t(language, "profileAddress")}</Typography>
-                      <Typography>{editProfile.address || "—"}</Typography>
+                      <Typography>{editProfile.city || "-"}</Typography>
                     </Grid>
                   </Grid>
                 )}
 
-                {/* Profile fields — edit mode */}
+                {/* Profile fields - edit mode */}
                 {editingFields && (
                   <ProfileEditSections
                     language={language}
@@ -391,7 +475,6 @@ export default function Users({ language }: UsersProps) {
                       lastName: editProfile.lastName,
                       phone: editProfile.phone,
                       city: editProfile.city,
-                      address: editProfile.address,
                       emergencyContact: editProfile.emergencyContact,
                       emergencyContactName: editProfile.emergencyContactName
                     });

@@ -53,4 +53,25 @@ export const judgeAdminRoutes = new Elysia({ prefix: "/admin/judges" })
       tags: ["Admin"],
       security: [{ bearerAuth: [] }]
     }
+  })
+  .patch("/assignments/:assignmentId", async ({ tenantDb, params, body }) => {
+    const categoryId = body.categoryId?.trim() ? body.categoryId.trim() : null;
+    await tenantDb.update(judgeAssignmentsTable).set({
+      eventId: body.eventId,
+      judgeId: body.judgeId,
+      categoryId
+    }).where(eq(judgeAssignmentsTable.id, params.assignmentId as any));
+    return { updated: true };
+  }, {
+    params: t.Object({ assignmentId: t.String() }),
+    body: t.Object({
+      eventId: t.String({ format: "uuid" }),
+      judgeId: t.String({ format: "uuid" }),
+      categoryId: t.Optional(t.String({ format: "uuid" }))
+    }),
+    detail: {
+      summary: "Modifica assegnazione giudice",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }]
+    }
   });

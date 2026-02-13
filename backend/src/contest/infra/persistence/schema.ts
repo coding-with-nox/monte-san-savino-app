@@ -17,7 +17,7 @@ export const teamMembersTable = pgTable("team_members", {
 export const eventsTable = pgTable("events", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
-  status: text("status").notNull(),
+  status: text("status").default("accepted").notNull(),
   startDate: text("start_date"),
   endDate: text("end_date")
 });
@@ -47,8 +47,12 @@ export const modelsTable = pgTable("models", {
   teamId: uuid("team_id"),
   categoryId: uuid("category_id").notNull(),
   name: text("name").notNull(),
+  description: text("description"),
+  code: text("code"),
   imageUrl: text("image_url")
-});
+}, (t) => ({
+  uniqCode: uniqueIndex("ux_models_code").on(t.code)
+}));
 
 export const modelImagesTable = pgTable("model_images", {
   id: uuid("id").primaryKey(),

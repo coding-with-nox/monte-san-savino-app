@@ -14,7 +14,6 @@ import {
   Grid,
   IconButton,
   InputLabel,
-  Link,
   List,
   ListItem,
   ListItemText,
@@ -26,12 +25,11 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import { api, ApiError, API_BASE } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
 type Event = { id: string; name: string; status: string };
 type Category = { id: string; eventId: string; name: string; status: string };
-type Enrollment = { id: string; eventId: string; status: string; userId: string };
 type User = { id: string; email: string; role: string; isActive: boolean };
 type Sponsor = { id: string; eventId: string; name: string; tier: string };
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
@@ -45,7 +43,6 @@ interface AdminProps {
 export default function Admin({ language }: AdminProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [modRequests, setModRequests] = useState<ModificationRequest[]>([]);
@@ -63,11 +60,13 @@ export default function Admin({ language }: AdminProps) {
   const [categoryEditDialog, setCategoryEditDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryEditName, setCategoryEditName] = useState("");
+  const [judgeEditDialog, setJudgeEditDialog] = useState(false);
+  const [editingJudgeAssignment, setEditingJudgeAssignment] = useState<JudgeAssignmentEntry | null>(null);
+  const [judgeEditForm, setJudgeEditForm] = useState({ eventId: "", judgeId: "", categoryId: "" });
 
   async function load() {
     setEvents(await api<Event[]>("/events"));
     setCategories(await api<Category[]>("/categories"));
-    setEnrollments(await api<Enrollment[]>("/admin/enrollments"));
     setUsers(await api<User[]>("/admin/users"));
     setSponsors(await api<Sponsor[]>("/sponsors"));
     setModRequests(await api<ModificationRequest[]>("/admin/modification-requests"));
@@ -122,11 +121,6 @@ export default function Admin({ language }: AdminProps) {
     await load();
   }
 
-  async function updateEnrollment(id: string, status: string) {
-    await api(`/admin/enrollments/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
-    await load();
-  }
-
   async function assignJudge() {
     const body: Record<string, string> = { eventId: judgeAssignment.eventId, judgeId: judgeAssignment.judgeId };
     if (judgeAssignment.categoryId.trim()) body.categoryId = judgeAssignment.categoryId.trim();
@@ -138,6 +132,34 @@ export default function Admin({ language }: AdminProps) {
 
   async function deleteJudgeAssignment(id: string) {
     await api(`/admin/judges/assignments/${id}`, { method: "DELETE" });
+    await load();
+  }
+
+  function openJudgeEdit(assignment: JudgeAssignmentEntry) {
+    setEditingJudgeAssignment(assignment);
+    setJudgeEditForm({
+      eventId: assignment.eventId,
+      judgeId: assignment.judgeId,
+      categoryId: assignment.categoryId ?? ""
+    });
+    setJudgeEditDialog(true);
+  }
+
+  async function saveJudgeEdit() {
+    if (!editingJudgeAssignment) return;
+    const body: Record<string, string> = {
+      eventId: judgeEditForm.eventId,
+      judgeId: judgeEditForm.judgeId
+    };
+    if (judgeEditForm.categoryId.trim()) {
+      body.categoryId = judgeEditForm.categoryId.trim();
+    }
+    await api(`/admin/judges/assignments/${editingJudgeAssignment.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body)
+    });
+    setJudgeEditDialog(false);
+    setEditingJudgeAssignment(null);
     await load();
   }
 
@@ -190,7 +212,6 @@ export default function Admin({ language }: AdminProps) {
     load().catch((err) => setMessage(err.message));
   }, []);
 
-  const enrollmentStatuses = ["pending", "approved", "rejected", "paid"];
   const eventStatuses = ["draft", "active", "closed"];
   const getEventName = (eid: string) => {
     const ev = events.find((e) => e.id === eid);
@@ -339,52 +360,6 @@ export default function Admin({ language }: AdminProps) {
             </Card>
           </Grid>
 
-          {/* Enrollments */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "adminEnrollmentsTitle")}
-                </Typography>
-                <Stack spacing={2}>
-                  {enrollments.map((enrollment) => (
-                    <Stack key={enrollment.id} spacing={1}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography variant="subtitle2">
-                          {getEventName(enrollment.eventId)}
-                        </Typography>
-                        <Chip
-                          label={enrollment.status}
-                          size="small"
-                          color={
-                            enrollment.status === "approved" ? "success"
-                              : enrollment.status === "pending" ? "warning"
-                              : enrollment.status === "paid" ? "info"
-                              : enrollment.status === "rejected" ? "error"
-                              : "default"
-                          }
-                        />
-                      </Stack>
-                      <Grid container spacing={1}>
-                        {enrollmentStatuses.map((status) => (
-                          <Grid item key={status}>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              onClick={() => updateEnrollment(enrollment.id, status)}
-                            >
-                              {status}
-                            </Button>
-                          </Grid>
-                        ))}
-                      </Grid>
-                    </Stack>
-                  ))}
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-
           {/* Judge Assignments (with optional category) */}
           <Grid item xs={12}>
             <Card>
@@ -460,8 +435,11 @@ export default function Admin({ language }: AdminProps) {
                         <ListItem key={ja.id} disableGutters>
                           <ListItemText
                             primary={getUserEmail(ja.judgeId)}
-                            secondary={`${getEventName(ja.eventId)} — ${getCategoryName(ja.categoryId)}`}
+                            secondary={`${getEventName(ja.eventId)} - ${getCategoryName(ja.categoryId)}`}
                           />
+                          <IconButton size="small" onClick={() => openJudgeEdit(ja)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
                           <IconButton size="small" color="error" onClick={() => deleteJudgeAssignment(ja.id)}>
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -526,7 +504,7 @@ export default function Admin({ language }: AdminProps) {
                 <List dense sx={{ mt: 2 }}>
                   {sponsors.map((s) => (
                     <ListItem key={s.id} disableGutters>
-                      <ListItemText primary={s.name} secondary={`${s.tier} — ${getEventName(s.eventId)}`} />
+                      <ListItemText primary={s.name} secondary={`${s.tier} - ${getEventName(s.eventId)}`} />
                       <IconButton size="small" color="error" onClick={() => deleteSponsor(s.id)}>
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -596,7 +574,7 @@ export default function Admin({ language }: AdminProps) {
                         <ListItem key={m.id} disableGutters>
                           <ListItemText
                             primary={m.title}
-                            secondary={`${getEventName(m.eventId)} — Model: ${m.modelId.slice(0, 8)}`}
+                            secondary={`${getEventName(m.eventId)} - Model: ${m.modelId.slice(0, 8)}`}
                           />
                           <IconButton size="small" color="error" onClick={() => deleteMention(m.id)}>
                             <DeleteIcon fontSize="small" />
@@ -621,7 +599,7 @@ export default function Admin({ language }: AdminProps) {
                   {modRequests.map((req) => (
                     <Stack key={req.id} spacing={1}>
                       <Typography variant="body2">
-                        Model: {req.modelId.slice(0, 8)} — {req.reason}
+                        Model: {req.modelId.slice(0, 8)} - {req.reason}
                       </Typography>
                       <Stack direction="row" spacing={1}>
                         <Chip
@@ -647,24 +625,6 @@ export default function Admin({ language }: AdminProps) {
             </Card>
           </Grid>
 
-          {/* Export */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "adminExportTitle")}
-                </Typography>
-                <Stack spacing={1}>
-                  <Link href={`${API_BASE}/exports/enrollments`} target="_blank" rel="noreferrer">
-                    {t(language, "adminExportEnrollments")}
-                  </Link>
-                  <Link href={`${API_BASE}/exports/models`} target="_blank" rel="noreferrer">
-                    {t(language, "adminExportModels")}
-                  </Link>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
         </Grid>
       </Stack>
 
@@ -683,6 +643,69 @@ export default function Admin({ language }: AdminProps) {
         <DialogActions>
           <Button onClick={saveCategoryEdit} variant="contained">{t(language, "profileSaveButton")}</Button>
           <Button onClick={() => setCategoryEditDialog(false)}>{t(language, "profileCancelButton")}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={judgeEditDialog} onClose={() => setJudgeEditDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{t(language, "adminJudgeAssignTitle")}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                <Select
+                  value={judgeEditForm.eventId}
+                  label={t(language, "adminJudgeEventPlaceholder")}
+                  onChange={(e) => setJudgeEditForm({ ...judgeEditForm, eventId: e.target.value, categoryId: "" })}
+                >
+                  {events.map((ev) => (
+                    <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>{t(language, "adminJudgeIdPlaceholder")}</InputLabel>
+                <Select
+                  value={judgeEditForm.judgeId}
+                  label={t(language, "adminJudgeIdPlaceholder")}
+                  onChange={(e) => setJudgeEditForm({ ...judgeEditForm, judgeId: e.target.value })}
+                >
+                  {users.filter((u) => u.role === "judge" || u.role === "manager" || u.role === "admin").map((u) => (
+                    <MenuItem key={u.id} value={u.id}>{u.email}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>{t(language, "adminJudgeCategoryPlaceholder")}</InputLabel>
+                <Select
+                  value={judgeEditForm.categoryId}
+                  label={t(language, "adminJudgeCategoryPlaceholder")}
+                  onChange={(e) => setJudgeEditForm({ ...judgeEditForm, categoryId: e.target.value })}
+                >
+                  <MenuItem value="">{t(language, "adminJudgeAllCategories")}</MenuItem>
+                  {categories
+                    .filter((c) => !judgeEditForm.eventId || c.eventId === judgeEditForm.eventId)
+                    .map((c) => (
+                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={saveJudgeEdit}
+            variant="contained"
+            disabled={!judgeEditForm.eventId || !judgeEditForm.judgeId}
+          >
+            {t(language, "profileSaveButton")}
+          </Button>
+          <Button onClick={() => setJudgeEditDialog(false)}>{t(language, "profileCancelButton")}</Button>
         </DialogActions>
       </Dialog>
     </Container>
