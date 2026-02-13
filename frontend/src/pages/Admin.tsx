@@ -209,7 +209,7 @@ export default function Admin({ language }: AdminProps) {
   };
 
   return (
-    <Container maxWidth="xl">
+    <Container maxWidth="lg">
       <Stack spacing={3}>
         <Typography variant="h4">{t(language, "adminTitle")}</Typography>
         {message && <Alert severity="info" onClose={() => setMessage("")}>{message}</Alert>}
@@ -222,7 +222,7 @@ export default function Admin({ language }: AdminProps) {
                   {t(language, "adminEventsTitle")}
                 </Typography>
                 <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={4}>
                     <TextField
                       label={t(language, "adminEventNamePlaceholder")}
                       value={eventForm.name}
@@ -230,7 +230,7 @@ export default function Admin({ language }: AdminProps) {
                       fullWidth
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={4}>
                     <FormControl fullWidth>
                       <InputLabel>{t(language, "adminEventStatusPlaceholder")}</InputLabel>
                       <Select
@@ -244,7 +244,7 @@ export default function Admin({ language }: AdminProps) {
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={4}>
                     <Button variant="contained" onClick={createEvent} fullWidth>
                       {t(language, "adminEventCreateButton")}
                     </Button>
@@ -280,7 +280,7 @@ export default function Admin({ language }: AdminProps) {
                   {t(language, "adminCategoriesTitle")}
                 </Typography>
                 <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={4}>
                     <FormControl fullWidth>
                       <InputLabel>{t(language, "adminCategoryEventPlaceholder")}</InputLabel>
                       <Select
@@ -294,7 +294,7 @@ export default function Admin({ language }: AdminProps) {
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={4}>
                     <TextField
                       label={t(language, "adminCategoryNamePlaceholder")}
                       value={categoryForm.name}
@@ -302,7 +302,7 @@ export default function Admin({ language }: AdminProps) {
                       fullWidth
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={4}>
                     <Button variant="contained" onClick={createCategory} fullWidth disabled={!categoryForm.eventId || !categoryForm.name}>
                       {t(language, "adminCategoryCreateButton")}
                     </Button>
