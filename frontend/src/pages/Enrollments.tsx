@@ -27,6 +27,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import DownloadIcon from "@mui/icons-material/Download";
 import { api } from "../lib/api";
 import { getRole, roleAtLeast } from "../lib/auth";
+import { downloadAuthenticatedFile } from "../lib/download";
 import { Language, t } from "../lib/i18n";
 
 type Enrollment = {
@@ -45,18 +46,6 @@ type Category = { id: string; eventId: string; name: string; status: string };
 
 interface EnrollmentsProps {
   language: Language;
-}
-
-function downloadTextFile(content: string, filename: string, contentType = "application/vnd.ms-excel;charset=utf-8") {
-  const blob = new Blob([content], { type: contentType });
-  const url = window.URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.URL.revokeObjectURL(url);
 }
 
 export default function Enrollments({ language }: EnrollmentsProps) {
@@ -157,8 +146,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   async function exportMyEnrollments() {
     setExportingMine(true);
     try {
-      const excel = await api<string>("/exports/my-enrollments");
-      downloadTextFile(excel, "my-enrollments.xls");
+      await downloadAuthenticatedFile("/exports/my-enrollments", "my-enrollments.xlsx");
     } catch (err: any) {
       setMessage(err.message || "Export failed");
     } finally {
@@ -173,8 +161,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
     }
     setExportingAdmin(true);
     try {
-      const excel = await api<string>(`/exports/enrollments?eventId=${encodeURIComponent(adminEventId)}`);
-      downloadTextFile(excel, `enrollments-${adminEventId}.xls`);
+      await downloadAuthenticatedFile(`/exports/enrollments?eventId=${encodeURIComponent(adminEventId)}`, `enrollments-${adminEventId}.xlsx`);
     } catch (err: any) {
       setMessage(err.message || "Export failed");
     } finally {

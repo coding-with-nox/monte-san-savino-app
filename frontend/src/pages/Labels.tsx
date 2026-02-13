@@ -14,24 +14,13 @@ import {
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import { api } from "../lib/api";
+import { downloadAuthenticatedFile } from "../lib/download";
 import { Language, t } from "../lib/i18n";
 
 type Event = { id: string; name: string; status: string };
 
 interface LabelsProps {
   language: Language;
-}
-
-function downloadExcel(content: string, filename: string) {
-  const blob = new Blob([content], { type: "application/vnd.ms-excel;charset=utf-8" });
-  const url = window.URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.URL.revokeObjectURL(url);
 }
 
 export default function Labels({ language }: LabelsProps) {
@@ -52,8 +41,7 @@ export default function Labels({ language }: LabelsProps) {
     }
     setExportingExcel(true);
     try {
-      const excel = await api<string>(`/exports/labels/excel?eventId=${encodeURIComponent(eventId)}`);
-      downloadExcel(excel, `labels-${eventId}.xls`);
+      await downloadAuthenticatedFile(`/exports/labels/excel?eventId=${encodeURIComponent(eventId)}`, `labels-${eventId}.xlsx`);
     } catch (err: any) {
       setMessage(err.message || "Export failed");
     } finally {

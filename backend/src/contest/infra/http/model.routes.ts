@@ -42,7 +42,7 @@ async function generateModelCode(tenantDb: any): Promise<string> {
 
   let sequence = maxSeq + 1;
   while (true) {
-    const candidate = `${prefix}-${String(sequence).padStart(6, "0")}`;
+    const candidate = `${prefix}-${String(sequence).padStart(5, "0")}`;
     const [taken] = await tenantDb
       .select({ id: modelsTable.id })
       .from(modelsTable)

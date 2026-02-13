@@ -7,7 +7,10 @@ const DEFAULTS: Record<string, string> = {
   modelImages: "true",
   printCodePrefix: "MSS",
   exportIncludeModelCode: "true",
-  exportIncludeModelDescription: "true"
+  exportIncludeModelDescription: "true",
+  exportIncludeParticipantEmail: "true",
+  excelSheetName: "Export",
+  excelFilePrefix: "contest-export"
 };
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })

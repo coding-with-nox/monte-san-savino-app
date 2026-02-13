@@ -35,6 +35,7 @@ import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import { matchIsValidTel } from "mui-tel-input";
 import { api, ApiError } from "../lib/api";
+import { downloadAuthenticatedFile } from "../lib/download";
 import { Language, t } from "../lib/i18n";
 import ActiveSwitch from "../lib/ActiveSwitch";
 import ProfileEditSections from "../components/ProfileEditSections";
@@ -60,18 +61,6 @@ interface UsersProps {
 }
 
 const roles = ["user", "staff", "judge", "manager", "admin"];
-
-function downloadTextFile(content: string, filename: string, contentType = "application/vnd.ms-excel;charset=utf-8") {
-  const blob = new Blob([content], { type: contentType });
-  const url = window.URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.URL.revokeObjectURL(url);
-}
 
 export default function Users({ language }: UsersProps) {
   const [users, setUsers] = useState<User[]>([]);
@@ -227,8 +216,7 @@ export default function Users({ language }: UsersProps) {
     }
     setExportingExcel(true);
     try {
-      const excel = await api<string>(`/exports/users/by-event/excel?eventId=${encodeURIComponent(exportEventId)}`);
-      downloadTextFile(excel, `users-by-event-${exportEventId}.xls`);
+      await downloadAuthenticatedFile(`/exports/users/by-event/excel?eventId=${encodeURIComponent(exportEventId)}`, `users-by-event-${exportEventId}.xlsx`);
     } catch (err: any) {
       setMessage(err.message || "Export failed");
     } finally {
