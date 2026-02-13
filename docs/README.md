@@ -8,6 +8,12 @@ La procedura completa di deploy in stage e' disponibile qui:
 
 - `docs/stage-deploy-gcp.md`
 
+## Deploy Stage (VM singola)
+
+La procedura completa di deploy stage su una singola VM e' disponibile qui:
+
+- `docs/stage-deploy-single-vm.md`
+
 ### Quickstart
 
 1. Autenticati su GCP e seleziona il progetto.
