@@ -1,56 +1,19 @@
 import { Elysia, t } from "elysia";
-import { and, eq, ilike } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { modelsTable, modelImagesTable, settingsTable } from "../persistence/schema";
+import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
+import { modelsTable, modelImagesTable } from "../persistence/schema";
 
-function normalizePrefix(value?: string | null): string {
-  const cleaned = (value ?? "")
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9-]/g, "")
-    .slice(0, 12);
-  return cleaned || "MSS";
-}
-
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-async function generateModelCode(tenantDb: any): Promise<string> {
-  const [prefixRow] = await tenantDb
-    .select({ value: settingsTable.value })
-    .from(settingsTable)
-    .where(eq(settingsTable.key, "printCodePrefix" as any))
-    .limit(1);
-
-  const prefix = normalizePrefix(prefixRow?.value);
-  const existingRows = await tenantDb
+async function generateModelCode(tenantDb: any): Promise<number> {
+  const [maxRow] = await tenantDb
     .select({ code: modelsTable.code })
     .from(modelsTable)
-    .where(ilike(modelsTable.code, `${prefix}-%`));
+    .where(isNotNull(modelsTable.code))
+    .orderBy(desc(modelsTable.code))
+    .limit(1);
 
-  const codePattern = new RegExp(`^${escapeRegex(prefix)}-(\\d+)$`);
-  let maxSeq = 0;
-  for (const row of existingRows as Array<{ code?: string | null }>) {
-    const match = row.code ? codePattern.exec(row.code) : null;
-    if (!match) continue;
-    const parsed = Number(match[1]);
-    if (!Number.isFinite(parsed)) continue;
-    if (parsed > maxSeq) maxSeq = parsed;
-  }
-
-  let sequence = maxSeq + 1;
-  while (true) {
-    const candidate = `${prefix}-${String(sequence).padStart(5, "0")}`;
-    const [taken] = await tenantDb
-      .select({ id: modelsTable.id })
-      .from(modelsTable)
-      .where(eq(modelsTable.code, candidate as any))
-      .limit(1);
-    if (!taken) return candidate;
-    sequence += 1;
-  }
+  return Number(maxRow?.code ?? 0) + 1;
 }
 
 function isCodeConflict(err: unknown): boolean {
@@ -65,7 +28,12 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     const search = query?.search ? String(query.search) : null;
     const clauses = [eq(modelsTable.userId, user!.id as any)];
     if (search) clauses.push(ilike(modelsTable.name, `%${search}%`));
-    return await tenantDb.select().from(modelsTable).where(and(...clauses));
+    const codeFormat = await loadModelCodeFormatSettings(tenantDb);
+    const rows = await tenantDb.select().from(modelsTable).where(and(...clauses));
+    return rows.map((row: any) => ({
+      ...row,
+      code: formatModelCode(row.code, codeFormat) || null
+    }));
   }, {
     detail: {
       summary: "Lista modelli",
@@ -76,6 +44,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
   .post("/", async ({ tenantDb, user, body }) => {
     const modelId = crypto.randomUUID();
     let lastError: unknown = null;
+    const codeFormat = await loadModelCodeFormatSettings(tenantDb);
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const code = await generateModelCode(tenantDb);
@@ -90,7 +59,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
           code,
           imageUrl: body.imageUrl ?? null
         });
-        return { id: modelId, code };
+        return { id: modelId, code: formatModelCode(code, codeFormat) };
       } catch (err) {
         if (!isCodeConflict(err)) throw err;
         lastError = err;
@@ -121,8 +90,15 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       set.status = 404;
       return { error: "Not found" };
     }
+    const codeFormat = await loadModelCodeFormatSettings(tenantDb);
     const images = await tenantDb.select().from(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
-    return { model: rows[0], images };
+    return {
+      model: {
+        ...rows[0],
+        code: formatModelCode((rows[0] as any).code, codeFormat) || null
+      },
+      images
+    };
   }, {
     params: t.Object({ modelId: t.String() }),
     detail: {

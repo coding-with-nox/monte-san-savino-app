@@ -48,7 +48,7 @@ export const modelsTable = pgTable("models", {
   categoryId: uuid("category_id").notNull(),
   name: text("name").notNull(),
   description: text("description"),
-  code: text("code"),
+  code: integer("code"),
   imageUrl: text("image_url")
 }, (t) => ({
   uniqCode: uniqueIndex("ux_models_code").on(t.code)

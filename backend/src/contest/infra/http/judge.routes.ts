@@ -7,6 +7,7 @@ import { VoteModel } from "../../application/VoteModel";
 import { categoriesTable, eventsTable, judgeAssignmentsTable, modelsTable, modelImagesTable, registrationsTable, votesTable } from "../persistence/schema";
 import { usersTable, userProfilesTable } from "../../../identity/infra/persistence/schema";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
+import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 
 export const judgeRoutes = new Elysia({ prefix: "/judge" })
   .use(tenantMiddleware)
@@ -121,7 +122,17 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
   .get("/models/:modelId", async ({ tenantDb, params }) => {
     const rows = await tenantDb.select().from(modelsTable).where(eq(modelsTable.id, params.modelId as any));
     const images = await tenantDb.select().from(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
-    return { model: rows[0] ?? null, images };
+    if (!rows.length) {
+      return { model: null, images };
+    }
+    const codeFormat = await loadModelCodeFormatSettings(tenantDb);
+    return {
+      model: {
+        ...(rows[0] as any),
+        code: formatModelCode((rows[0] as any).code, codeFormat) || null
+      },
+      images
+    };
   }, {
     params: t.Object({ modelId: t.String() }),
     detail: {

@@ -3,16 +3,22 @@ import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, modelsTable } from "../persistence/schema";
+import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 
 export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
   .get("/", async ({ tenantDb, query }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
+    const codeFormat = await loadModelCodeFormatSettings(tenantDb);
     if (!eventId) {
-      return await tenantDb.select().from(modelsTable);
+      const rows = await tenantDb.select().from(modelsTable);
+      return rows.map((row: any) => ({
+        ...row,
+        code: formatModelCode(row.code, codeFormat) || null
+      }));
     }
-    return await tenantDb
+    const rows = await tenantDb
       .select({
         id: modelsTable.id,
         userId: modelsTable.userId,
@@ -26,6 +32,10 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
       .where(eq(categoriesTable.eventId, eventId as any));
+    return rows.map((row: any) => ({
+      ...row,
+      code: formatModelCode(row.code, codeFormat) || null
+    }));
   }, {
     detail: {
       summary: "Lista modelli (admin)",
@@ -34,7 +44,12 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
     }
   })
   .put("/:modelId", async ({ tenantDb, params, body }) => {
-    await tenantDb.update(modelsTable).set(body).where(eq(modelsTable.id, params.modelId as any));
+    const updates: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+    if (typeof updates.code === "string") {
+      const trailingDigits = updates.code.match(/(\d+)\s*$/);
+      updates.code = trailingDigits ? Number.parseInt(trailingDigits[1], 10) : null;
+    }
+    await tenantDb.update(modelsTable).set(updates as any).where(eq(modelsTable.id, params.modelId as any));
     return { updated: true };
   }, {
     params: t.Object({ modelId: t.String() }),
@@ -43,7 +58,7 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
       categoryId: t.Optional(t.String()),
       teamId: t.Optional(t.String()),
       description: t.Optional(t.String()),
-      code: t.Optional(t.String()),
+      code: t.Optional(t.Union([t.Number(), t.String()])),
       imageUrl: t.Optional(t.String())
     }),
     detail: {

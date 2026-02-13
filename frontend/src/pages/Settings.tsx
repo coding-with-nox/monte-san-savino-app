@@ -35,12 +35,14 @@ export default function Settings({ language }: SettingsProps) {
   const [tab, setTab] = useState<SettingsTab>("general");
 
   const [prefixDraft, setPrefixDraft] = useState("");
+  const [digitsDraft, setDigitsDraft] = useState("5");
   const [sheetNameDraft, setSheetNameDraft] = useState("");
   const [filePrefixDraft, setFilePrefixDraft] = useState("");
   const [themeModeDraft, setThemeModeDraft] = useState<"light" | "dark">("light");
   const [themePresetDraft, setThemePresetDraft] = useState<"violet" | "ocean" | "forest">("violet");
 
   const [savingPrefix, setSavingPrefix] = useState(false);
+  const [savingDigits, setSavingDigits] = useState(false);
   const [savingExcelLayout, setSavingExcelLayout] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
   const [message, setMessage] = useState("");
@@ -50,6 +52,7 @@ export default function Settings({ language }: SettingsProps) {
     setSettings(res);
 
     setPrefixDraft(res.printCodePrefix ?? "MSS");
+    setDigitsDraft(res.printCodeDigits ?? "5");
     setSheetNameDraft(res.excelSheetName ?? "Export");
     setFilePrefixDraft(res.excelFilePrefix ?? "contest-export");
     setThemeModeDraft(res.appTheme === "dark" ? "dark" : "light");
@@ -93,6 +96,29 @@ export default function Settings({ language }: SettingsProps) {
       setSettings(prev);
     } finally {
       setSavingPrefix(false);
+    }
+  }
+
+  async function saveDigits() {
+    const parsed = Number.parseInt(digitsDraft.trim(), 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
+      setMessage(t(language, "settingsPrintCodeDigitsError"));
+      return;
+    }
+    const next = String(parsed);
+    const prev = { ...settings };
+    setSavingDigits(true);
+    setSettings({ ...settings, printCodeDigits: next });
+    try {
+      await api("/admin/settings", {
+        method: "PUT",
+        body: JSON.stringify({ printCodeDigits: next })
+      });
+    } catch (err: any) {
+      setMessage(err.message || "Error");
+      setSettings(prev);
+    } finally {
+      setSavingDigits(false);
     }
   }
 
@@ -196,6 +222,24 @@ export default function Settings({ language }: SettingsProps) {
                       />
                       <Button variant="contained" onClick={savePrefix} disabled={savingPrefix || !prefixDraft.trim()}>
                         {savingPrefix ? "..." : t(language, "profileSaveButton")}
+                      </Button>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell><Typography>{t(language, "settingsPrintCodeDigits")}</Typography></TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={digitsDraft}
+                        onChange={(event) => setDigitsDraft(event.target.value)}
+                        inputProps={{ min: 1, max: 10 }}
+                        sx={{ width: 120 }}
+                      />
+                      <Button variant="contained" onClick={saveDigits} disabled={savingDigits || !digitsDraft.trim()}>
+                        {savingDigits ? "..." : t(language, "profileSaveButton")}
                       </Button>
                     </Stack>
                   </TableCell>

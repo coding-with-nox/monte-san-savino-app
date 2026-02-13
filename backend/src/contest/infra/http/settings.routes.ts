@@ -6,6 +6,7 @@ import { settingsTable } from "../persistence/schema";
 const DEFAULTS: Record<string, string> = {
   modelImages: "true",
   printCodePrefix: "MSS",
+  printCodeDigits: "5",
   appTheme: "light",
   themePreset: "violet",
   exportIncludeModelCode: "true",
