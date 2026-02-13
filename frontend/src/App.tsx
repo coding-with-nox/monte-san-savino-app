@@ -42,6 +42,7 @@ import StaffCheckin from "./pages/StaffCheckin";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Labels from "./pages/Labels";
+import { api } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
 
@@ -59,6 +60,12 @@ export default function App() {
     if (typeof window === "undefined") return "light";
     return (window.localStorage.getItem("theme") as "light" | "dark") || "light";
   });
+  const [themePreset, setThemePreset] = useState<"violet" | "ocean" | "forest">(() => {
+    if (typeof window === "undefined") return "violet";
+    const stored = window.localStorage.getItem("themePreset");
+    if (stored === "ocean" || stored === "forest") return stored;
+    return "violet";
+  });
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === "undefined") return "it";
     return (window.localStorage.getItem("language") as Language) || "it";
@@ -71,8 +78,43 @@ export default function App() {
   }, [themeMode]);
 
   useEffect(() => {
+    window.localStorage.setItem("themePreset", themePreset);
+  }, [themePreset]);
+
+  useEffect(() => {
     window.localStorage.setItem("language", language);
   }, [language]);
+
+  useEffect(() => {
+    if (!getToken()) return;
+
+    const applyThemeFromStorage = () => {
+      const storedMode = window.localStorage.getItem("theme");
+      const storedPreset = window.localStorage.getItem("themePreset");
+      if (storedMode === "light" || storedMode === "dark") setThemeMode(storedMode);
+      if (storedPreset === "violet" || storedPreset === "ocean" || storedPreset === "forest") {
+        setThemePreset(storedPreset);
+      }
+    };
+
+    api<Record<string, string>>("/settings")
+      .then((settings) => {
+        if (settings.appTheme === "light" || settings.appTheme === "dark") {
+          setThemeMode(settings.appTheme);
+          window.localStorage.setItem("theme", settings.appTheme);
+        }
+        if (settings.themePreset === "violet" || settings.themePreset === "ocean" || settings.themePreset === "forest") {
+          setThemePreset(settings.themePreset);
+          window.localStorage.setItem("themePreset", settings.themePreset);
+        }
+      })
+      .catch(() => {
+        applyThemeFromStorage();
+      });
+
+    window.addEventListener("theme-settings-updated", applyThemeFromStorage);
+    return () => window.removeEventListener("theme-settings-updated", applyThemeFromStorage);
+  }, []);
 
   const labels = {
     themeToggle: t(language, "themeToggle"),
@@ -83,17 +125,23 @@ export default function App() {
     languageEn: t(language, "languageEn")
   };
 
+  const presetPrimary: Record<"violet" | "ocean" | "forest", { light: string; dark: string }> = {
+    violet: { light: "#6750a4", dark: "#d0bcff" },
+    ocean: { light: "#006d77", dark: "#83c5be" },
+    forest: { light: "#2d6a4f", dark: "#95d5b2" }
+  };
+
   const muiTheme = useMemo(() => createTheme({
     palette: {
       mode: themeMode,
       primary: {
-        main: themeMode === "light" ? "#6750a4" : "#d0bcff"
+        main: themeMode === "light" ? presetPrimary[themePreset].light : presetPrimary[themePreset].dark
       }
     },
     typography: {
       fontFamily: "\"Roboto\", \"Segoe UI\", system-ui, sans-serif"
     }
-  }), [themeMode]);
+  }), [themeMode, themePreset]);
 
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
 
