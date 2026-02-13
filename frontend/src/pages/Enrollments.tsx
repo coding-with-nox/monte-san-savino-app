@@ -47,7 +47,7 @@ interface EnrollmentsProps {
   language: Language;
 }
 
-function downloadTextFile(content: string, filename: string, contentType = "text/csv;charset=utf-8") {
+function downloadTextFile(content: string, filename: string, contentType = "application/vnd.ms-excel;charset=utf-8") {
   const blob = new Blob([content], { type: contentType });
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -157,8 +157,8 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   async function exportMyEnrollments() {
     setExportingMine(true);
     try {
-      const csv = await api<string>("/exports/my-enrollments");
-      downloadTextFile(csv, "my-enrollments.csv");
+      const excel = await api<string>("/exports/my-enrollments");
+      downloadTextFile(excel, "my-enrollments.xls");
     } catch (err: any) {
       setMessage(err.message || "Export failed");
     } finally {
@@ -173,8 +173,8 @@ export default function Enrollments({ language }: EnrollmentsProps) {
     }
     setExportingAdmin(true);
     try {
-      const csv = await api<string>(`/exports/enrollments?eventId=${encodeURIComponent(adminEventId)}`);
-      downloadTextFile(csv, `enrollments-${adminEventId}.csv`);
+      const excel = await api<string>(`/exports/enrollments?eventId=${encodeURIComponent(adminEventId)}`);
+      downloadTextFile(excel, `enrollments-${adminEventId}.xls`);
     } catch (err: any) {
       setMessage(err.message || "Export failed");
     } finally {

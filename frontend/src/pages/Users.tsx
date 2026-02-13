@@ -61,7 +61,7 @@ interface UsersProps {
 
 const roles = ["user", "staff", "judge", "manager", "admin"];
 
-function downloadTextFile(content: string, filename: string, contentType = "text/csv;charset=utf-8") {
+function downloadTextFile(content: string, filename: string, contentType = "application/vnd.ms-excel;charset=utf-8") {
   const blob = new Blob([content], { type: contentType });
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -227,8 +227,8 @@ export default function Users({ language }: UsersProps) {
     }
     setExportingExcel(true);
     try {
-      const csv = await api<string>(`/exports/users/by-event/excel?eventId=${encodeURIComponent(exportEventId)}`);
-      downloadTextFile(csv, `users-by-event-${exportEventId}.csv`);
+      const excel = await api<string>(`/exports/users/by-event/excel?eventId=${encodeURIComponent(exportEventId)}`);
+      downloadTextFile(excel, `users-by-event-${exportEventId}.xls`);
     } catch (err: any) {
       setMessage(err.message || "Export failed");
     } finally {

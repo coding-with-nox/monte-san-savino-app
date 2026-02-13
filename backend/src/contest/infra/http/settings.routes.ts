@@ -5,7 +5,9 @@ import { settingsTable } from "../persistence/schema";
 
 const DEFAULTS: Record<string, string> = {
   modelImages: "true",
-  printCodePrefix: "MSS"
+  printCodePrefix: "MSS",
+  exportIncludeModelCode: "true",
+  exportIncludeModelDescription: "true"
 };
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })

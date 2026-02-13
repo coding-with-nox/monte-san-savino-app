@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import { and, eq, ilike } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { categoriesTable, eventsTable, modelsTable, modelImagesTable, settingsTable } from "../persistence/schema";
+import { modelsTable, modelImagesTable, settingsTable } from "../persistence/schema";
 
 function normalizePrefix(value?: string | null): string {
   const cleaned = (value ?? "")
@@ -13,35 +13,11 @@ function normalizePrefix(value?: string | null): string {
   return cleaned || "MSS";
 }
 
-function buildEventToken(eventName: string, eventId: string): string {
-  const initials = eventName
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 4);
-  if (initials) return initials;
-  return eventId.replace(/-/g, "").slice(0, 4).toUpperCase();
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-async function generateModelCode(tenantDb: any, categoryId: string): Promise<string> {
-  const [eventRow] = await tenantDb
-    .select({
-      eventId: categoriesTable.eventId,
-      eventName: eventsTable.name
-    })
-    .from(categoriesTable)
-    .innerJoin(eventsTable, eq(eventsTable.id, categoriesTable.eventId))
-    .where(eq(categoriesTable.id, categoryId as any))
-    .limit(1);
-
-  if (!eventRow) {
-    throw new Error("Category not found");
-  }
-
+async function generateModelCode(tenantDb: any): Promise<string> {
   const [prefixRow] = await tenantDb
     .select({ value: settingsTable.value })
     .from(settingsTable)
@@ -49,16 +25,24 @@ async function generateModelCode(tenantDb: any, categoryId: string): Promise<str
     .limit(1);
 
   const prefix = normalizePrefix(prefixRow?.value);
-  const eventToken = buildEventToken(eventRow.eventName, eventRow.eventId);
   const existingRows = await tenantDb
-    .select({ id: modelsTable.id })
+    .select({ code: modelsTable.code })
     .from(modelsTable)
-    .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-    .where(eq(categoriesTable.eventId, eventRow.eventId as any));
+    .where(ilike(modelsTable.code, `${prefix}-%`));
 
-  let sequence = existingRows.length + 1;
+  const codePattern = new RegExp(`^${escapeRegex(prefix)}-(\\d+)$`);
+  let maxSeq = 0;
+  for (const row of existingRows as Array<{ code?: string | null }>) {
+    const match = row.code ? codePattern.exec(row.code) : null;
+    if (!match) continue;
+    const parsed = Number(match[1]);
+    if (!Number.isFinite(parsed)) continue;
+    if (parsed > maxSeq) maxSeq = parsed;
+  }
+
+  let sequence = maxSeq + 1;
   while (true) {
-    const candidate = `${prefix}-${eventToken}-${String(sequence).padStart(4, "0")}`;
+    const candidate = `${prefix}-${String(sequence).padStart(6, "0")}`;
     const [taken] = await tenantDb
       .select({ id: modelsTable.id })
       .from(modelsTable)
@@ -67,6 +51,11 @@ async function generateModelCode(tenantDb: any, categoryId: string): Promise<str
     if (!taken) return candidate;
     sequence += 1;
   }
+}
+
+function isCodeConflict(err: unknown): boolean {
+  const msg = String((err as any)?.message ?? "");
+  return msg.includes("ux_models_code") || msg.includes("models_code_key");
 }
 
 export const modelRoutes = new Elysia({ prefix: "/models" })
@@ -86,18 +75,29 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
   })
   .post("/", async ({ tenantDb, user, body }) => {
     const modelId = crypto.randomUUID();
-    const code = await generateModelCode(tenantDb, body.categoryId);
-    await tenantDb.insert(modelsTable).values({
-      id: modelId,
-      userId: user!.id as any,
-      categoryId: body.categoryId,
-      teamId: body.teamId ?? null,
-      name: body.name,
-      description: body.description ?? null,
-      code,
-      imageUrl: body.imageUrl ?? null
-    });
-    return { id: modelId, code };
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const code = await generateModelCode(tenantDb);
+      try {
+        await tenantDb.insert(modelsTable).values({
+          id: modelId,
+          userId: user!.id as any,
+          categoryId: body.categoryId,
+          teamId: body.teamId ?? null,
+          name: body.name,
+          description: body.description ?? null,
+          code,
+          imageUrl: body.imageUrl ?? null
+        });
+        return { id: modelId, code };
+      } catch (err) {
+        if (!isCodeConflict(err)) throw err;
+        lastError = err;
+      }
+    }
+
+    throw lastError ?? new Error("Unable to generate model code");
   }, {
     body: t.Object({
       name: t.String(),

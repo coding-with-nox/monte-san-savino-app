@@ -117,6 +117,28 @@ export default function Settings({ language }: SettingsProps) {
                   </Stack>
                 </TableCell>
               </TableRow>
+              <TableRow>
+                <TableCell><Typography>{t(language, "settingsExportIncludeCode")}</Typography></TableCell>
+                <TableCell align="right">
+                  <ActiveSwitch
+                    checked={settings.exportIncludeModelCode !== "false"}
+                    onChange={() => toggle("exportIncludeModelCode")}
+                    activeLabel={t(language, "adminUserActive")}
+                    inactiveLabel={t(language, "adminUserInactive")}
+                  />
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><Typography>{t(language, "settingsExportIncludeDescription")}</Typography></TableCell>
+                <TableCell align="right">
+                  <ActiveSwitch
+                    checked={settings.exportIncludeModelDescription !== "false"}
+                    onChange={() => toggle("exportIncludeModelDescription")}
+                    activeLabel={t(language, "adminUserActive")}
+                    inactiveLabel={t(language, "adminUserInactive")}
+                  />
+                </TableCell>
+              </TableRow>
             </TableBody>
           </Table>
         </TableContainer>
