@@ -4,6 +4,7 @@ import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable } from "../persistence/schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
+import { formatModelCode, normalizeModelCodeDigits, normalizeModelCodePrefix } from "./model-code";
 
 type ExportSettings = {
   includeModelCode: boolean;
@@ -11,6 +12,8 @@ type ExportSettings = {
   includeParticipantEmail: boolean;
   excelSheetName: string;
   excelFilePrefix: string;
+  modelCodePrefix: string;
+  modelCodeDigits: number;
 };
 
 type ZipEntry = {
@@ -273,7 +276,9 @@ async function loadExportSettings(tenantDb: any): Promise<ExportSettings> {
     includeModelDescription: boolFromSetting(map.get("exportIncludeModelDescription"), true),
     includeParticipantEmail: boolFromSetting(map.get("exportIncludeParticipantEmail"), true),
     excelSheetName: normalizePlainText(map.get("excelSheetName"), "Export", 31),
-    excelFilePrefix: normalizeFilePart(map.get("excelFilePrefix"), "contest-export")
+    excelFilePrefix: normalizeFilePart(map.get("excelFilePrefix"), "contest-export"),
+    modelCodePrefix: normalizeModelCodePrefix(map.get("printCodePrefix")),
+    modelCodeDigits: normalizeModelCodeDigits(map.get("printCodeDigits"))
   };
 }
 
@@ -296,7 +301,14 @@ function buildSheetName(settings: ExportSettings, suffix: string) {
   return sanitizeSheetName(`${settings.excelSheetName}-${suffix}`);
 }
 
-async function getLabelRows(tenantDb: any, eventId: string) {
+function formatModelCodeForExport(settings: ExportSettings, code: number | null | undefined) {
+  return formatModelCode(code, {
+    prefix: settings.modelCodePrefix,
+    digits: settings.modelCodeDigits
+  });
+}
+
+async function getLabelRows(tenantDb: any, eventId: string, exportSettings: ExportSettings) {
   const rows = await tenantDb
     .select({
       userEmail: usersTable.email,
@@ -316,7 +328,7 @@ async function getLabelRows(tenantDb: any, eventId: string) {
     utente: fullName(row.firstName, row.lastName, row.userEmail) || row.userEmail || "",
     categoria: row.categoryName ?? "",
     nomeModello: row.modelName ?? "",
-    codice: row.modelCode ?? ""
+    codice: formatModelCodeForExport(exportSettings, row.modelCode)
   }));
 }
 
@@ -365,7 +377,7 @@ const managerExportRoutes = new Elysia()
         base.email = row.email ?? "";
       }
       if (exportSettings.includeModelCode) {
-        base.codice = row.modelCode ?? "";
+        base.codice = formatModelCodeForExport(exportSettings, row.modelCode);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.modelDescription ?? "";
@@ -398,7 +410,7 @@ const managerExportRoutes = new Elysia()
         nome: row.name
       };
       if (exportSettings.includeModelCode) {
-        base.codice = row.code ?? "";
+        base.codice = formatModelCodeForExport(exportSettings, row.code);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.description ?? "";
@@ -452,8 +464,9 @@ const managerExportRoutes = new Elysia()
     for (const model of models as any[]) {
       const list = modelsByUser.get(model.userId) ?? [];
       const parts = [model.modelName];
-      if (exportSettings.includeModelCode && model.modelCode) {
-        parts.push(`(${model.modelCode})`);
+      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode);
+      if (exportSettings.includeModelCode && formattedCode) {
+        parts.push(`(${formattedCode})`);
       }
       if (exportSettings.includeModelDescription && model.modelDescription) {
         parts.push(`- ${model.modelDescription}`);
@@ -490,6 +503,7 @@ const managerExportRoutes = new Elysia()
       set.status = 400;
       return { error: "eventId is required" };
     }
+    const exportSettings = await loadExportSettings(tenantDb);
 
     const [event] = await tenantDb
       .select({ id: eventsTable.id, name: eventsTable.name })
@@ -523,7 +537,8 @@ const managerExportRoutes = new Elysia()
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
       const list = modelsByUser.get(model.userId) ?? [];
-      list.push(`${model.modelName}${model.modelCode ? ` (${model.modelCode})` : ""} - ${model.categoryName}`);
+      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode);
+      list.push(`${model.modelName}${formattedCode ? ` (${formattedCode})` : ""} - ${model.categoryName}`);
       modelsByUser.set(model.userId, list);
     }
 
@@ -589,7 +604,7 @@ const managerExportRoutes = new Elysia()
     }
 
     const exportSettings = await loadExportSettings(tenantDb);
-    const rows = await getLabelRows(tenantDb, eventId);
+    const rows = await getLabelRows(tenantDb, eventId, exportSettings);
     setXlsxHeaders(set, buildFileName(exportSettings, "labels", eventId));
     return toXlsx(buildSheetName(exportSettings, "Labels"), rows);
   }, {
@@ -613,7 +628,8 @@ const managerExportRoutes = new Elysia()
       .where(eq(eventsTable.id, eventId as any))
       .limit(1);
 
-    const rows = await getLabelRows(tenantDb, eventId);
+    const exportSettings = await loadExportSettings(tenantDb);
+    const rows = await getLabelRows(tenantDb, eventId, exportSettings);
     const bodyRows = rows
       .map((row) => `<tr><td>${row.utente}</td><td>${row.categoria}</td><td>${row.nomeModello}</td><td>${row.codice}</td></tr>`)
       .join("");
@@ -696,7 +712,7 @@ const userExportRoutes = new Elysia()
         checkIn: row.checkedIn ? "true" : "false"
       };
       if (exportSettings.includeModelCode) {
-        base.codice = row.modelCode ?? "";
+        base.codice = formatModelCodeForExport(exportSettings, row.modelCode);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.modelDescription ?? "";
