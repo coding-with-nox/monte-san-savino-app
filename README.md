@@ -34,6 +34,7 @@ npm run dev
 ```
 
 Docs:
+- `docs/README.md`
 - `docs/user-manual.md`
 - `docs/user-manual.pdf`
 - `docs/stage-deploy-gcp.md`
