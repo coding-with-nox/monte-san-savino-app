@@ -37,6 +37,7 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import ImageIcon from "@mui/icons-material/Image";
+import HideImageIcon from "@mui/icons-material/HideImage";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 
@@ -258,10 +259,13 @@ export default function Models({ language }: ModelsProps) {
     return cat ? cat.name : catId;
   };
 
+  const showMediaPanel = !isCreating && Boolean(detail);
+  const tableColumnCount = 5;
+
   const editPanel = (
     <Box sx={{ p: 2 }}>
       <Grid container spacing={2} alignItems="flex-start">
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={showMediaPanel ? 7 : 12}>
           <Stack spacing={1.5}>
             <Typography variant="subtitle2">
               {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
@@ -288,45 +292,76 @@ export default function Models({ language }: ModelsProps) {
             </Button>
           </Stack>
         </Grid>
-        {!isCreating && detail && imagesEnabled && (
-          <Grid item xs={12} md={6}>
-            <Stack spacing={1.5}>
-              <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <AttachFileIcon fontSize="small" />
-                {t(language, "modelsImagesSection")}
-              </Typography>
-              {detail.images.length > 0 && (
-                <List dense disablePadding>
-                  {detail.images.map((img) => (
-                    <ListItem key={img.id} disableGutters secondaryAction={
-                      <IconButton size="small" color="error" onClick={() => deleteImage(img.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    }>
-                      <ListItemText
-                        primary={img.url.split("/").pop() || img.url}
-                        primaryTypographyProps={{ variant: "body2", noWrap: true }}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-              {detail.images.length === 0 && (
-                <Typography variant="body2" color="text.secondary">{t(language, "modelsNoImages")}</Typography>
-              )}
-              <Divider />
-              <Stack direction="row" spacing={1}>
-                <input type="file" accept="image/*" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileChange} />
-                <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} style={{ display: "none" }} onChange={handleFileChange} />
-                <Button variant="outlined" size="small" startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                  {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
-                </Button>
-                <Button variant="outlined" size="small" startIcon={<PhotoCameraIcon />} onClick={() => cameraInputRef.current?.click()} disabled={uploading}>
-                  {t(language, "modelsCameraButton")}
-                </Button>
+        {showMediaPanel && (
+          <Grid item xs={12} md={5}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 1.5,
+                borderStyle: "dashed",
+                borderColor: "divider",
+                bgcolor: "background.default"
+              }}
+            >
+              <Stack spacing={1.5}>
+                <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <AttachFileIcon fontSize="small" />
+                  {t(language, "modelsImagesSection")}
+                </Typography>
+
+                {!imagesEnabled && (
+                  <Alert severity="info" variant="outlined">
+                    {t(language, "modelsImagesDisabledHint")}
+                  </Alert>
+                )}
+
+                {imagesEnabled && (
+                  <>
+                    {detail?.images.length ? (
+                      <List dense disablePadding>
+                        {detail.images.map((img) => (
+                          <ListItem key={img.id} disableGutters secondaryAction={
+                            <IconButton size="small" color="error" onClick={() => deleteImage(img.id)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          }>
+                            <ListItemText
+                              primary={img.url.split("/").pop() || img.url}
+                              primaryTypographyProps={{ variant: "body2", noWrap: true }}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    ) : (
+                      <Box
+                        sx={{
+                          p: 2,
+                          border: "1px dashed",
+                          borderColor: "divider",
+                          borderRadius: 1.5,
+                          textAlign: "center"
+                        }}
+                      >
+                        <ImageIcon sx={{ mb: 0.5, color: "text.secondary" }} />
+                        <Typography variant="body2" color="text.secondary">{t(language, "modelsNoImages")}</Typography>
+                      </Box>
+                    )}
+                    <Divider />
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      <input type="file" accept="image/*" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileChange} />
+                      <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} style={{ display: "none" }} onChange={handleFileChange} />
+                      <Button variant="outlined" size="small" startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                        {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
+                      </Button>
+                      <Button variant="outlined" size="small" startIcon={<PhotoCameraIcon />} onClick={() => cameraInputRef.current?.click()} disabled={uploading}>
+                        {t(language, "modelsCameraButton")}
+                      </Button>
+                    </Stack>
+                    {attachName && <Typography variant="caption" color="text.secondary">{attachName}</Typography>}
+                  </>
+                )}
               </Stack>
-              {attachName && <Typography variant="caption" color="text.secondary">{attachName}</Typography>}
-            </Stack>
+            </Paper>
           </Grid>
         )}
       </Grid>
@@ -340,6 +375,11 @@ export default function Models({ language }: ModelsProps) {
           <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
           <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>{t(language, "modelsCreateButton")}</Button>
         </Stack>
+        {!imagesEnabled && (
+          <Alert severity="info" variant="outlined">
+            {t(language, "modelsImagesDisabledHint")}
+          </Alert>
+        )}
         {message && <Alert severity="error" onClose={() => setMessage("")}>{message}</Alert>}
         <Collapse in={isCreating}>
           <Paper variant="outlined" sx={{ mb: 1 }}>
@@ -354,7 +394,7 @@ export default function Models({ language }: ModelsProps) {
           <Table>
             <TableHead>
               <TableRow>
-                {imagesEnabled && <TableCell sx={{ fontWeight: 700, width: 60 }} />}
+                <TableCell sx={{ fontWeight: 700, width: 72 }}>{t(language, "modelsPreviewColumn")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCodeColumn")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
@@ -364,20 +404,44 @@ export default function Models({ language }: ModelsProps) {
             <TableBody>
               {models.map((model) => (
                 <React.Fragment key={model.id}>
-                  <TableRow hover sx={{ cursor: "pointer", "& > td": { borderBottom: expandedId === model.id ? "none" : undefined } }} onClick={() => openModel(model.id)} selected={expandedId === model.id}>
-                    {imagesEnabled && (
-                      <TableCell sx={{ width: 60, p: 1 }}>
-                        {model.imageUrl ? (
-                          <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
-                        ) : (
-                          <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: "action.hover" }}>
+                  <TableRow
+                    hover
+                    sx={{
+                      cursor: "pointer",
+                      "& > td": { borderBottom: expandedId === model.id ? "none" : undefined }
+                    }}
+                    onClick={() => openModel(model.id)}
+                    selected={expandedId === model.id}
+                  >
+                    <TableCell sx={{ width: 72, p: 1 }}>
+                      {model.imageUrl ? (
+                        <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
+                      ) : (
+                        <Avatar
+                          variant="rounded"
+                          sx={{
+                            width: 40,
+                            height: 40,
+                            bgcolor: imagesEnabled ? "action.hover" : "action.disabledBackground"
+                          }}
+                        >
+                          {imagesEnabled ? (
                             <ImageIcon fontSize="small" color="disabled" />
-                          </Avatar>
-                        )}
-                      </TableCell>
-                    )}
+                          ) : (
+                            <HideImageIcon fontSize="small" color="disabled" />
+                          )}
+                        </Avatar>
+                      )}
+                    </TableCell>
                     <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
-                    <TableCell>{model.code || "-"}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={model.code || "-"}
+                        sx={{ "& .MuiChip-label": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }}
+                      />
+                    </TableCell>
                     <TableCell><Chip size="small" label={getCategoryName(model.categoryId)} /></TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
@@ -387,7 +451,7 @@ export default function Models({ language }: ModelsProps) {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={imagesEnabled ? 5 : 4} sx={{ p: 0 }}>
+                    <TableCell colSpan={tableColumnCount} sx={{ p: 0 }}>
                       <Collapse in={expandedId === model.id} unmountOnExit>
                         <Divider />
                         {editPanel}
@@ -398,7 +462,7 @@ export default function Models({ language }: ModelsProps) {
               ))}
               {models.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={imagesEnabled ? 5 : 4} align="center">
+                  <TableCell colSpan={tableColumnCount} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>{t(language, "modelsSelectHint")}</Typography>
                   </TableCell>
                 </TableRow>
