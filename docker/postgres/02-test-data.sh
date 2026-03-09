@@ -201,9 +201,9 @@ ON CONFLICT (id) DO NOTHING;
 -- ===========================================================================
 INSERT INTO team_roles (id, name)
 VALUES
-  ('rrrrrrrr-0000-0000-0000-000000000001', 'Capogruppo'),
-  ('rrrrrrrr-0000-0000-0000-000000000002', 'Vice'),
-  ('rrrrrrrr-0000-0000-0000-000000000003', 'Membro')
+  ('b1b1b1b1-0000-0000-0000-000000000001', 'Capogruppo'),
+  ('b1b1b1b1-0000-0000-0000-000000000002', 'Vice'),
+  ('b1b1b1b1-0000-0000-0000-000000000003', 'Membro')
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
@@ -211,22 +211,22 @@ ON CONFLICT (id) DO NOTHING;
 -- ===========================================================================
 INSERT INTO teams (id, name, owner_id)
 VALUES
-  ('tttttttt-0000-0000-0000-000000000001', 'Aquile Blu',    'aaaaaaaa-0000-0000-0000-000000000006'),
-  ('tttttttt-0000-0000-0000-000000000002', 'Dragoni Verdi', 'aaaaaaaa-0000-0000-0000-000000000007')
+  ('d1d1d1d1-0000-0000-0000-000000000001', 'Aquile Blu',    'aaaaaaaa-0000-0000-0000-000000000006'),
+  ('d1d1d1d1-0000-0000-0000-000000000002', 'Dragoni Verdi', 'aaaaaaaa-0000-0000-0000-000000000007')
 ON CONFLICT (id) DO NOTHING;
 
 -- Membri team Aquile Blu: user1 (capogruppo) + user2 (vice)
 INSERT INTO team_members (team_id, user_id, role)
 VALUES
-  ('tttttttt-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Capogruppo'),
-  ('tttttttt-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000007', 'Vice')
+  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Capogruppo'),
+  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000007', 'Vice')
 ON CONFLICT (team_id, user_id) DO NOTHING;
 
 -- Membri team Dragoni Verdi: user2 (capogruppo) + user3 (membro)
 INSERT INTO team_members (team_id, user_id, role)
 VALUES
-  ('tttttttt-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000007', 'Capogruppo'),
-  ('tttttttt-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000008', 'Membro')
+  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000007', 'Capogruppo'),
+  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000008', 'Membro')
 ON CONFLICT (team_id, user_id) DO NOTHING;
 
 -- ===========================================================================
@@ -236,52 +236,52 @@ ON CONFLICT (team_id, user_id) DO NOTHING;
 INSERT INTO models (id, user_id, team_id, category_id, name, description, code, image_url)
 VALUES
   -- user1 — solo — Aerei 1:72 (evento 2026 aperto)
-  ('mmmmmmmm-0000-0000-0000-000000000001',
+  ('a2a2a2a2-0000-0000-0000-000000000001',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
    'cccccccc-1111-0000-0000-000000000001',
    'Spitfire Mk.IX', 'Replica 1:72 con decal originali', 1, NULL),
 
   -- user1 — solo — Navi (evento 2026 aperto)
-  ('mmmmmmmm-0000-0000-0000-000000000002',
+  ('a2a2a2a2-0000-0000-0000-000000000002',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
    'cccccccc-1111-0000-0000-000000000002',
    'HMS Victory 1:350', 'Modello del veliero famoso', 2, NULL),
 
   -- user2 — team Aquile Blu — Aerei 1:72 (evento 2026 aperto)
-  ('mmmmmmmm-0000-0000-0000-000000000003',
+  ('a2a2a2a2-0000-0000-0000-000000000003',
    'aaaaaaaa-0000-0000-0000-000000000007',
-   'tttttttt-0000-0000-0000-000000000001',
+   'd1d1d1d1-0000-0000-0000-000000000001',
    'cccccccc-1111-0000-0000-000000000001',
    'B-17 Flying Fortress', 'Bombariere USA WWII in team', 3, NULL),
 
   -- user2 — solo — Armature (categoria CHIUSA, evento 2026)
-  ('mmmmmmmm-0000-0000-0000-000000000004',
+  ('a2a2a2a2-0000-0000-0000-000000000004',
    'aaaaaaaa-0000-0000-0000-000000000007', NULL,
    'cccccccc-1111-0000-0000-000000000003',
    'Cavaliere Medievale', 'Armatura 1:6 dipinta a mano', 4, NULL),
 
   -- user3 — solo — Fantasy (evento 2025 chiuso)
-  ('mmmmmmmm-0000-0000-0000-000000000005',
+  ('a2a2a2a2-0000-0000-0000-000000000005',
    'aaaaaaaa-0000-0000-0000-000000000008', NULL,
    'cccccccc-2222-0000-0000-000000000001',
    'Drago Antico', 'Figura fantasy con base diorama', 5, NULL),
 
   -- user3 — solo — Sci-Fi (evento 2025 chiuso)
-  ('mmmmmmmm-0000-0000-0000-000000000006',
+  ('a2a2a2a2-0000-0000-0000-000000000006',
    'aaaaaaaa-0000-0000-0000-000000000008', NULL,
    'cccccccc-2222-0000-0000-000000000002',
    'Space Marine', 'Warhammer 40k custom paintjob', 6, NULL),
 
   -- user1 — solo — Figurini (evento 2027 futuro)
-  ('mmmmmmmm-0000-0000-0000-000000000007',
+  ('a2a2a2a2-0000-0000-0000-000000000007',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
    'cccccccc-3333-0000-0000-000000000001',
    'Guerriero Romano', 'Centurione 1:12', 7, NULL),
 
   -- user2 — team Dragoni Verdi — Veicoli (evento 2026 aperto)
-  ('mmmmmmmm-0000-0000-0000-000000000008',
+  ('a2a2a2a2-0000-0000-0000-000000000008',
    'aaaaaaaa-0000-0000-0000-000000000007',
-   'tttttttt-0000-0000-0000-000000000002',
+   'd1d1d1d1-0000-0000-0000-000000000002',
    'cccccccc-1111-0000-0000-000000000004',
    'Tiger I Ausf. E', 'Carro armato tedesco WWII', 8, NULL)
 ON CONFLICT (id) DO NOTHING;
@@ -293,80 +293,80 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO registrations (id, user_id, event_id, model_id, category_id, status, checked_in)
 VALUES
   -- user1 — MSS 2026 — Spitfire — check-in effettuato
-  ('reg00001-0000-0000-0000-000000000001',
+  ('a4a00001-0000-0000-0000-000000000001',
    'aaaaaaaa-0000-0000-0000-000000000006',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'mmmmmmmm-0000-0000-0000-000000000001',
+   'a2a2a2a2-0000-0000-0000-000000000001',
    'cccccccc-1111-0000-0000-000000000001',
    'accepted', true),
 
   -- user1 — MSS 2026 — HMS Victory — non ancora check-in
-  ('reg00001-0000-0000-0000-000000000002',
+  ('a4a00001-0000-0000-0000-000000000002',
    'aaaaaaaa-0000-0000-0000-000000000006',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'mmmmmmmm-0000-0000-0000-000000000002',
+   'a2a2a2a2-0000-0000-0000-000000000002',
    'cccccccc-1111-0000-0000-000000000002',
    'accepted', false),
 
   -- user2 — MSS 2026 — B-17 (team) — check-in effettuato
-  ('reg00001-0000-0000-0000-000000000003',
+  ('a4a00001-0000-0000-0000-000000000003',
    'aaaaaaaa-0000-0000-0000-000000000007',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'mmmmmmmm-0000-0000-0000-000000000003',
+   'a2a2a2a2-0000-0000-0000-000000000003',
    'cccccccc-1111-0000-0000-000000000001',
    'accepted', true),
 
   -- user2 — MSS 2026 — Cavaliere Medievale (categoria chiusa) — non check-in
-  ('reg00001-0000-0000-0000-000000000004',
+  ('a4a00001-0000-0000-0000-000000000004',
    'aaaaaaaa-0000-0000-0000-000000000007',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'mmmmmmmm-0000-0000-0000-000000000004',
+   'a2a2a2a2-0000-0000-0000-000000000004',
    'cccccccc-1111-0000-0000-000000000003',
    'accepted', false),
 
   -- user2 — MSS 2026 — Tiger I (team Dragoni) — non check-in
-  ('reg00001-0000-0000-0000-000000000005',
+  ('a4a00001-0000-0000-0000-000000000005',
    'aaaaaaaa-0000-0000-0000-000000000007',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'mmmmmmmm-0000-0000-0000-000000000008',
+   'a2a2a2a2-0000-0000-0000-000000000008',
    'cccccccc-1111-0000-0000-000000000004',
    'accepted', false),
 
   -- user5 — MSS 2026 — senza modello (iscrizione generica)
-  ('reg00001-0000-0000-0000-000000000006',
+  ('a4a00001-0000-0000-0000-000000000006',
    'aaaaaaaa-0000-0000-0000-000000000010',
    'eeeeeeee-0000-0000-0000-000000000001',
    NULL, NULL,
    'accepted', false),
 
   -- user3 — MSS 2025 — Drago Antico — check-in effettuato
-  ('reg00001-0000-0000-0000-000000000007',
+  ('a4a00001-0000-0000-0000-000000000007',
    'aaaaaaaa-0000-0000-0000-000000000008',
    'eeeeeeee-0000-0000-0000-000000000002',
-   'mmmmmmmm-0000-0000-0000-000000000005',
+   'a2a2a2a2-0000-0000-0000-000000000005',
    'cccccccc-2222-0000-0000-000000000001',
    'accepted', true),
 
   -- user3 — MSS 2025 — Space Marine — check-in effettuato
-  ('reg00001-0000-0000-0000-000000000008',
+  ('a4a00001-0000-0000-0000-000000000008',
    'aaaaaaaa-0000-0000-0000-000000000008',
    'eeeeeeee-0000-0000-0000-000000000002',
-   'mmmmmmmm-0000-0000-0000-000000000006',
+   'a2a2a2a2-0000-0000-0000-000000000006',
    'cccccccc-2222-0000-0000-000000000002',
    'accepted', true),
 
   -- user1 — MSS 2025 — senza modello (partecipante spettatore)
-  ('reg00001-0000-0000-0000-000000000009',
+  ('a4a00001-0000-0000-0000-000000000009',
    'aaaaaaaa-0000-0000-0000-000000000006',
    'eeeeeeee-0000-0000-0000-000000000002',
    NULL, NULL,
    'accepted', true),
 
   -- user1 — MSS 2027 — Guerriero Romano (evento futuro)
-  ('reg00001-0000-0000-0000-000000000010',
+  ('a4a00001-0000-0000-0000-000000000010',
    'aaaaaaaa-0000-0000-0000-000000000006',
    'eeeeeeee-0000-0000-0000-000000000003',
-   'mmmmmmmm-0000-0000-0000-000000000007',
+   'a2a2a2a2-0000-0000-0000-000000000007',
    'cccccccc-3333-0000-0000-000000000001',
    'accepted', false)
 ON CONFLICT (id) DO NOTHING;
@@ -377,17 +377,17 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO judge_assignments (id, event_id, judge_id, category_id)
 VALUES
   -- judge1 → MSS 2026 (tutte le categorie)
-  ('jajajaja-0000-0000-0000-000000000001',
+  ('a1a1a1a1-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
    'aaaaaaaa-0000-0000-0000-000000000003', NULL),
 
   -- judge2 → MSS 2026 (tutte le categorie)
-  ('jajajaja-0000-0000-0000-000000000002',
+  ('a1a1a1a1-0000-0000-0000-000000000002',
    'eeeeeeee-0000-0000-0000-000000000001',
    'aaaaaaaa-0000-0000-0000-000000000004', NULL),
 
   -- judge1 → MSS 2025 (tutte le categorie, evento passato)
-  ('jajajaja-0000-0000-0000-000000000003',
+  ('a1a1a1a1-0000-0000-0000-000000000003',
    'eeeeeeee-0000-0000-0000-000000000002',
    'aaaaaaaa-0000-0000-0000-000000000003', NULL)
 ON CONFLICT (event_id, judge_id) DO NOTHING;
@@ -399,69 +399,69 @@ ON CONFLICT (event_id, judge_id) DO NOTHING;
 INSERT INTO votes (id, judge_id, model_id, rank, created_at)
 VALUES
   -- judge1 su Spitfire: prima rank=2, poi aggiornato a rank=3
-  ('vvvvvvvv-0000-0000-0000-000000000001',
+  ('e1e1e1e1-0000-0000-0000-000000000001',
    'aaaaaaaa-0000-0000-0000-000000000003',
-   'mmmmmmmm-0000-0000-0000-000000000001',
+   'a2a2a2a2-0000-0000-0000-000000000001',
    2, NOW() - INTERVAL '2 hours'),
 
-  ('vvvvvvvv-0000-0000-0000-000000000002',
+  ('e1e1e1e1-0000-0000-0000-000000000002',
    'aaaaaaaa-0000-0000-0000-000000000003',
-   'mmmmmmmm-0000-0000-0000-000000000001',
+   'a2a2a2a2-0000-0000-0000-000000000001',
    3, NOW() - INTERVAL '1 hour'),
 
   -- judge1 su HMS Victory: rank=1
-  ('vvvvvvvv-0000-0000-0000-000000000003',
+  ('e1e1e1e1-0000-0000-0000-000000000003',
    'aaaaaaaa-0000-0000-0000-000000000003',
-   'mmmmmmmm-0000-0000-0000-000000000002',
+   'a2a2a2a2-0000-0000-0000-000000000002',
    1, NOW() - INTERVAL '90 minutes'),
 
   -- judge1 su B-17: rank=3
-  ('vvvvvvvv-0000-0000-0000-000000000004',
+  ('e1e1e1e1-0000-0000-0000-000000000004',
    'aaaaaaaa-0000-0000-0000-000000000003',
-   'mmmmmmmm-0000-0000-0000-000000000003',
+   'a2a2a2a2-0000-0000-0000-000000000003',
    3, NOW() - INTERVAL '80 minutes'),
 
   -- judge1 su Cavaliere Medievale: rank=0 (non meritevole)
-  ('vvvvvvvv-0000-0000-0000-000000000005',
+  ('e1e1e1e1-0000-0000-0000-000000000005',
    'aaaaaaaa-0000-0000-0000-000000000003',
-   'mmmmmmmm-0000-0000-0000-000000000004',
+   'a2a2a2a2-0000-0000-0000-000000000004',
    0, NOW() - INTERVAL '70 minutes'),
 
   -- judge1 su Tiger I: nessun voto (modello non ancora valutato)
 
   -- judge2 su Spitfire: rank=3
-  ('vvvvvvvv-0000-0000-0000-000000000006',
+  ('e1e1e1e1-0000-0000-0000-000000000006',
    'aaaaaaaa-0000-0000-0000-000000000004',
-   'mmmmmmmm-0000-0000-0000-000000000001',
+   'a2a2a2a2-0000-0000-0000-000000000001',
    3, NOW() - INTERVAL '60 minutes'),
 
   -- judge2 su B-17: prima rank=2, poi rank=3 → storico
-  ('vvvvvvvv-0000-0000-0000-000000000007',
+  ('e1e1e1e1-0000-0000-0000-000000000007',
    'aaaaaaaa-0000-0000-0000-000000000004',
-   'mmmmmmmm-0000-0000-0000-000000000003',
+   'a2a2a2a2-0000-0000-0000-000000000003',
    2, NOW() - INTERVAL '50 minutes'),
 
-  ('vvvvvvvv-0000-0000-0000-000000000008',
+  ('e1e1e1e1-0000-0000-0000-000000000008',
    'aaaaaaaa-0000-0000-0000-000000000004',
-   'mmmmmmmm-0000-0000-0000-000000000003',
+   'a2a2a2a2-0000-0000-0000-000000000003',
    3, NOW() - INTERVAL '40 minutes'),
 
   -- judge2 su HMS Victory: rank=2
-  ('vvvvvvvv-0000-0000-0000-000000000009',
+  ('e1e1e1e1-0000-0000-0000-000000000009',
    'aaaaaaaa-0000-0000-0000-000000000004',
-   'mmmmmmmm-0000-0000-0000-000000000002',
+   'a2a2a2a2-0000-0000-0000-000000000002',
    2, NOW() - INTERVAL '30 minutes'),
 
   -- judge1 su Drago Antico (MSS 2025): rank=3
-  ('vvvvvvvv-0000-0000-0000-000000000010',
+  ('e1e1e1e1-0000-0000-0000-000000000010',
    'aaaaaaaa-0000-0000-0000-000000000003',
-   'mmmmmmmm-0000-0000-0000-000000000005',
+   'a2a2a2a2-0000-0000-0000-000000000005',
    3, NOW() - INTERVAL '365 days'),
 
   -- judge1 su Space Marine (MSS 2025): rank=2
-  ('vvvvvvvv-0000-0000-0000-000000000011',
+  ('e1e1e1e1-0000-0000-0000-000000000011',
    'aaaaaaaa-0000-0000-0000-000000000003',
-   'mmmmmmmm-0000-0000-0000-000000000006',
+   'a2a2a2a2-0000-0000-0000-000000000006',
    2, NOW() - INTERVAL '364 days')
 ON CONFLICT (id) DO NOTHING;
 
@@ -472,8 +472,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO modification_requests (id, model_id, judge_id, reason, status, suggested_category_id, created_at)
 VALUES
   -- judge1 chiede cambio categoria per B-17: da Aerei a Veicoli — PENDING
-  ('mmmrqrq0-0000-0000-0000-000000000001',
-   'mmmmmmmm-0000-0000-0000-000000000003',
+  ('a3a3a3a0-0000-0000-0000-000000000001',
+   'a2a2a2a2-0000-0000-0000-000000000003',
    'aaaaaaaa-0000-0000-0000-000000000003',
    'Il modello sembra più adatto alla categoria Veicoli militari.',
    'pending',
@@ -481,8 +481,8 @@ VALUES
    NOW() - INTERVAL '3 hours'),
 
   -- judge2 chiede revisione Spitfire senza categoria suggerita — RESOLVED
-  ('mmmrqrq0-0000-0000-0000-000000000002',
-   'mmmmmmmm-0000-0000-0000-000000000001',
+  ('a3a3a3a0-0000-0000-0000-000000000002',
+   'a2a2a2a2-0000-0000-0000-000000000001',
    'aaaaaaaa-0000-0000-0000-000000000004',
    'Verifica scala: potrebbe essere 1:48 anziché 1:72.',
    'resolved',
@@ -490,8 +490,8 @@ VALUES
    NOW() - INTERVAL '5 hours'),
 
   -- judge1 chiede cambio Cavaliere Medievale: da Armature a nessuna categ — REJECTED
-  ('mmmrqrq0-0000-0000-0000-000000000003',
-   'mmmmmmmm-0000-0000-0000-000000000004',
+  ('a3a3a3a0-0000-0000-0000-000000000003',
+   'a2a2a2a2-0000-0000-0000-000000000004',
    'aaaaaaaa-0000-0000-0000-000000000003',
    'Non chiaro se figura o armatura completa.',
    'rejected',
@@ -505,27 +505,27 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO special_mentions (id, event_id, model_id, title, description, awarded_by, created_at)
 VALUES
   -- MSS 2026: Miglior Team award
-  ('smsmsmsm-0000-0000-0000-000000000001',
+  ('c1c1c1c1-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'mmmmmmmm-0000-0000-0000-000000000003',
+   'a2a2a2a2-0000-0000-0000-000000000003',
    'Miglior Modello in Team',
    'Eccellente lavoro di squadra nella costruzione e pittura.',
    'aaaaaaaa-0000-0000-0000-000000000002',
    NOW()),
 
   -- MSS 2025: Miglior assoluto storico
-  ('smsmsmsm-0000-0000-0000-000000000002',
+  ('c1c1c1c1-0000-0000-0000-000000000002',
    'eeeeeeee-0000-0000-0000-000000000002',
-   'mmmmmmmm-0000-0000-0000-000000000005',
+   'a2a2a2a2-0000-0000-0000-000000000005',
    'Miglior Modello in Assoluto',
    'Giudizio unanime della giuria.',
    'aaaaaaaa-0000-0000-0000-000000000002',
    NOW() - INTERVAL '365 days'),
 
   -- MSS 2025: Menzione pittura
-  ('smsmsmsm-0000-0000-0000-000000000003',
+  ('c1c1c1c1-0000-0000-0000-000000000003',
    'eeeeeeee-0000-0000-0000-000000000002',
-   'mmmmmmmm-0000-0000-0000-000000000006',
+   'a2a2a2a2-0000-0000-0000-000000000006',
    'Miglior Pittura',
    'Tecnica NMM eccezionale.',
    'aaaaaaaa-0000-0000-0000-000000000002',
@@ -537,19 +537,19 @@ ON CONFLICT (id) DO NOTHING;
 -- ===========================================================================
 INSERT INTO sponsors (id, event_id, name, logo_url, website_url, description, tier)
 VALUES
-  ('spspspsp-0000-0000-0000-000000000001',
+  ('c2c2c2c2-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
    'Revell Italia', NULL, 'https://www.revell.com', 'Sponsor tecnico principale', 'gold'),
 
-  ('spspspsp-0000-0000-0000-000000000002',
+  ('c2c2c2c2-0000-0000-0000-000000000002',
    'eeeeeeee-0000-0000-0000-000000000001',
    'Tamiya Italia', NULL, 'https://www.tamiya.com', 'Sponsor colori e accessori', 'silver'),
 
-  ('spspspsp-0000-0000-0000-000000000003',
+  ('c2c2c2c2-0000-0000-0000-000000000003',
    'eeeeeeee-0000-0000-0000-000000000001',
    'AeroModel Club', NULL, NULL, 'Club locale di modellismo', 'bronze'),
 
-  ('spspspsp-0000-0000-0000-000000000004',
+  ('c2c2c2c2-0000-0000-0000-000000000004',
    'eeeeeeee-0000-0000-0000-000000000002',
    'Scale Shop Firenze', NULL, NULL, 'Sponsor edizione 2025', 'gold')
 ON CONFLICT (id) DO NOTHING;
