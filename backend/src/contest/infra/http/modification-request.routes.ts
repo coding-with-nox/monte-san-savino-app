@@ -20,6 +20,7 @@ export const judgeModificationRoutes = new Elysia({ prefix: "/judge/modification
       security: [{ bearerAuth: [] }]
     }
   })
+  // Task 03: renamed to category-change request, supports suggestedCategoryId
   .post("/", async ({ tenantDb, user, body }) => {
     const id = crypto.randomUUID();
     await tenantDb.insert(modificationRequestsTable).values({
@@ -27,17 +28,19 @@ export const judgeModificationRoutes = new Elysia({ prefix: "/judge/modification
       modelId: body.modelId,
       judgeId: user!.id,
       reason: body.reason,
+      suggestedCategoryId: body.suggestedCategoryId ?? null,
       status: "pending"
     });
     return { id };
   }, {
     body: t.Object({
       modelId: t.String(),
-      reason: t.String()
+      reason: t.String(),
+      suggestedCategoryId: t.Optional(t.String())
     }),
     detail: {
-      summary: "Richiedi modifica modello",
-      description: "Il giudice può richiedere modifiche a un modello prima della valutazione.",
+      summary: "Richiedi cambio categoria",
+      description: "Il giudice può richiedere il cambio di categoria per un modello.",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     }

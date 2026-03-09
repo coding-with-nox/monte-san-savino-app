@@ -34,6 +34,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import CloseIcon from "@mui/icons-material/Close";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
+import PrintIcon from "@mui/icons-material/Print";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import ImageIcon from "@mui/icons-material/Image";
@@ -77,6 +78,18 @@ export default function Models({ language }: ModelsProps) {
 
   async function load() {
     setModels(await api<Model[]>("/models"));
+  }
+
+  // Task 06: stampa scheda utente
+  async function printScheda() {
+    try {
+      const html = await api<string>("/exports/model-card/pdf");
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err: any) {
+      setMessage(err.message || "Error");
+    }
   }
 
   async function loadCategories() {
@@ -373,7 +386,13 @@ export default function Models({ language }: ModelsProps) {
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>{t(language, "modelsCreateButton")}</Button>
+          <Stack direction="row" spacing={1}>
+            {/* Task 06: stampa scheda */}
+            <Button variant="outlined" startIcon={<PrintIcon />} onClick={printScheda}>
+              {t(language, "modelsPrintCard")}
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>{t(language, "modelsCreateButton")}</Button>
+          </Stack>
         </Stack>
         {!imagesEnabled && (
           <Alert severity="info" variant="outlined">

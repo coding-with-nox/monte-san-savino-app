@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable } from "../persistence/schema";
+import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable, teamsTable, teamMembersTable } from "../persistence/schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
 import { formatModelCode, normalizeModelCodeDigits, normalizeModelCodePrefix } from "./model-code";
 
@@ -14,6 +14,7 @@ type ExportSettings = {
   excelFilePrefix: string;
   modelCodePrefix: string;
   modelCodeDigits: number;
+  modelUserDigits: number;
 };
 
 type ZipEntry = {
@@ -278,7 +279,8 @@ async function loadExportSettings(tenantDb: any): Promise<ExportSettings> {
     excelSheetName: normalizePlainText(map.get("excelSheetName"), "Export", 31),
     excelFilePrefix: normalizeFilePart(map.get("excelFilePrefix"), "contest-export"),
     modelCodePrefix: normalizeModelCodePrefix(map.get("printCodePrefix")),
-    modelCodeDigits: normalizeModelCodeDigits(map.get("printCodeDigits"))
+    modelCodeDigits: normalizeModelCodeDigits(map.get("printCodeDigits")),
+    modelUserDigits: 4
   };
 }
 
@@ -301,10 +303,11 @@ function buildSheetName(settings: ExportSettings, suffix: string) {
   return sanitizeSheetName(`${settings.excelSheetName}-${suffix}`);
 }
 
-function formatModelCodeForExport(settings: ExportSettings, code: number | null | undefined) {
-  return formatModelCode(code, {
+function formatModelCodeForExport(settings: ExportSettings, code: number | null | undefined, userSeqId?: number | null) {
+  return formatModelCode(code, userSeqId ?? null, {
     prefix: settings.modelCodePrefix,
-    digits: settings.modelCodeDigits
+    digits: settings.modelCodeDigits,
+    userDigits: settings.modelUserDigits
   });
 }
 
@@ -312,6 +315,7 @@ async function getLabelRows(tenantDb: any, eventId: string, exportSettings: Expo
   const rows = await tenantDb
     .select({
       userEmail: usersTable.email,
+      userSeqId: usersTable.seqId,
       firstName: userProfilesTable.firstName,
       lastName: userProfilesTable.lastName,
       categoryName: categoriesTable.name,
@@ -328,7 +332,7 @@ async function getLabelRows(tenantDb: any, eventId: string, exportSettings: Expo
     utente: fullName(row.firstName, row.lastName, row.userEmail) || row.userEmail || "",
     categoria: row.categoryName ?? "",
     nomeModello: row.modelName ?? "",
-    codice: formatModelCodeForExport(exportSettings, row.modelCode)
+    codice: formatModelCodeForExport(exportSettings, row.modelCode, row.userSeqId)
   }));
 }
 
@@ -344,6 +348,7 @@ const managerExportRoutes = new Elysia()
         eventName: eventsTable.name,
         userId: registrationsTable.userId,
         email: usersTable.email,
+        userSeqId: usersTable.seqId,
         participant: userProfilesTable.firstName,
         participantLastName: userProfilesTable.lastName,
         modelName: modelsTable.name,
@@ -377,7 +382,7 @@ const managerExportRoutes = new Elysia()
         base.email = row.email ?? "";
       }
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.modelCode);
+        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.userSeqId);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.modelDescription ?? "";
@@ -398,9 +403,23 @@ const managerExportRoutes = new Elysia()
     const categoryId = query?.categoryId ? String(query.categoryId) : null;
     const exportSettings = await loadExportSettings(tenantDb);
 
+    const baseQuery = tenantDb
+      .select({
+        id: modelsTable.id,
+        userId: modelsTable.userId,
+        teamId: modelsTable.teamId,
+        categoryId: modelsTable.categoryId,
+        name: modelsTable.name,
+        description: modelsTable.description,
+        code: modelsTable.code,
+        imageUrl: modelsTable.imageUrl,
+        userSeqId: usersTable.seqId
+      })
+      .from(modelsTable)
+      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId));
     const rows = categoryId
-      ? await tenantDb.select().from(modelsTable).where(eq(modelsTable.categoryId, categoryId as any))
-      : await tenantDb.select().from(modelsTable);
+      ? await baseQuery.where(eq(modelsTable.categoryId, categoryId as any))
+      : await baseQuery;
 
     const excelRows = rows.map((row: any) => {
       const base: Record<string, string> = {
@@ -410,7 +429,7 @@ const managerExportRoutes = new Elysia()
         nome: row.name
       };
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.code);
+        base.codice = formatModelCodeForExport(exportSettings, row.code, row.userSeqId);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.description ?? "";
@@ -436,10 +455,12 @@ const managerExportRoutes = new Elysia()
 
     const exportSettings = await loadExportSettings(tenantDb);
 
-    const users = await tenantDb
+    // Task 04: deduplicate users (multiple registrations post Task-02 fix)
+    const allUserRows = await tenantDb
       .select({
         userId: registrationsTable.userId,
         email: usersTable.email,
+        userSeqId: usersTable.seqId,
         firstName: userProfilesTable.firstName,
         lastName: userProfilesTable.lastName
       })
@@ -447,10 +468,17 @@ const managerExportRoutes = new Elysia()
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
       .leftJoin(userProfilesTable, eq(userProfilesTable.userId, registrationsTable.userId))
       .where(eq(registrationsTable.eventId, eventId as any));
+    const seenUserIds = new Set<string>();
+    const users = (allUserRows as any[]).filter((u) => {
+      if (seenUserIds.has(u.userId)) return false;
+      seenUserIds.add(u.userId);
+      return true;
+    });
 
     const models = await tenantDb
       .select({
         userId: modelsTable.userId,
+        userSeqId: usersTable.seqId,
         modelName: modelsTable.name,
         modelCode: modelsTable.code,
         modelDescription: modelsTable.description,
@@ -458,13 +486,14 @@ const managerExportRoutes = new Elysia()
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
       .where(eq(categoriesTable.eventId, eventId as any));
 
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
       const list = modelsByUser.get(model.userId) ?? [];
       const parts = [model.modelName];
-      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode);
+      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.userSeqId);
       if (exportSettings.includeModelCode && formattedCode) {
         parts.push(`(${formattedCode})`);
       }
@@ -511,7 +540,8 @@ const managerExportRoutes = new Elysia()
       .where(eq(eventsTable.id, eventId as any))
       .limit(1);
 
-    const users = await tenantDb
+    // Task 04: deduplicate users
+    const allUserRowsPdf = await tenantDb
       .select({
         userId: registrationsTable.userId,
         email: usersTable.email,
@@ -522,22 +552,30 @@ const managerExportRoutes = new Elysia()
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
       .leftJoin(userProfilesTable, eq(userProfilesTable.userId, registrationsTable.userId))
       .where(eq(registrationsTable.eventId, eventId as any));
+    const seenUserIdsPdf = new Set<string>();
+    const users = (allUserRowsPdf as any[]).filter((u) => {
+      if (seenUserIdsPdf.has(u.userId)) return false;
+      seenUserIdsPdf.add(u.userId);
+      return true;
+    });
 
     const models = await tenantDb
       .select({
         userId: modelsTable.userId,
+        userSeqId: usersTable.seqId,
         modelName: modelsTable.name,
         modelCode: modelsTable.code,
         categoryName: categoriesTable.name
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
       .where(eq(categoriesTable.eventId, eventId as any));
 
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
       const list = modelsByUser.get(model.userId) ?? [];
-      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode);
+      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.userSeqId);
       list.push(`${model.modelName}${formattedCode ? ` (${formattedCode})` : ""} - ${model.categoryName}`);
       modelsByUser.set(model.userId, list);
     }
@@ -592,6 +630,22 @@ const managerExportRoutes = new Elysia()
     query: t.Object({ eventId: t.String() }),
     detail: {
       summary: "Export utenti per evento (stampa PDF)",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/labels/data", async ({ tenantDb, query, set }) => {
+    const eventId = query?.eventId ? String(query.eventId) : "";
+    if (!eventId) {
+      set.status = 400;
+      return { error: "eventId is required" };
+    }
+    const exportSettings = await loadExportSettings(tenantDb);
+    return await getLabelRows(tenantDb, eventId, exportSettings);
+  }, {
+    query: t.Object({ eventId: t.String() }),
+    detail: {
+      summary: "Dati etichette JSON (DYMO/stampa diretta)",
       tags: ["Exports"],
       security: [{ bearerAuth: [] }]
     }
@@ -695,12 +749,14 @@ const userExportRoutes = new Elysia()
         modelCode: modelsTable.code,
         modelDescription: modelsTable.description,
         categoryName: categoriesTable.name,
-        checkedIn: registrationsTable.checkedIn
+        checkedIn: registrationsTable.checkedIn,
+        userSeqId: usersTable.seqId
       })
       .from(registrationsTable)
       .leftJoin(eventsTable, eq(eventsTable.id, registrationsTable.eventId))
       .leftJoin(modelsTable, eq(modelsTable.id, registrationsTable.modelId))
       .leftJoin(categoriesTable, eq(categoriesTable.id, registrationsTable.categoryId))
+      .leftJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
       .where(eq(registrationsTable.userId, user!.id as any));
 
     const excelRows = (rows as any[]).map((row) => {
@@ -712,7 +768,7 @@ const userExportRoutes = new Elysia()
         checkIn: row.checkedIn ? "true" : "false"
       };
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.modelCode);
+        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.userSeqId);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.modelDescription ?? "";
@@ -725,6 +781,146 @@ const userExportRoutes = new Elysia()
   }, {
     detail: {
       summary: "Export mie iscrizioni Excel (XLSX)",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  // Task 06+07: stampa scheda utente con modelli e info team
+  .get("/model-card/pdf", async ({ tenantDb, user, query, set }) => {
+    const eventId = query?.eventId ? String(query.eventId) : null;
+    const exportSettings = await loadExportSettings(tenantDb);
+
+    const [profile] = await tenantDb
+      .select({
+        seqId: usersTable.seqId,
+        email: usersTable.email,
+        firstName: userProfilesTable.firstName,
+        lastName: userProfilesTable.lastName,
+        city: userProfilesTable.city
+      })
+      .from(usersTable)
+      .leftJoin(userProfilesTable, eq(userProfilesTable.userId, usersTable.id))
+      .where(eq(usersTable.id, user!.id as any))
+      .limit(1);
+
+    if (!profile) {
+      set.status = 404;
+      return { error: "User not found" };
+    }
+
+    // Count teams
+    const teamCount = await tenantDb
+      .select({ id: teamsTable.id })
+      .from(teamMembersTable)
+      .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
+      .where(eq(teamMembersTable.userId, user!.id as any));
+
+    // Load models (optionally filtered by event)
+    const modelsQuery = tenantDb
+      .select({
+        id: modelsTable.id,
+        name: modelsTable.name,
+        code: modelsTable.code,
+        teamId: modelsTable.teamId,
+        categoryId: modelsTable.categoryId,
+        categoryName: categoriesTable.name,
+        eventId: categoriesTable.eventId
+      })
+      .from(modelsTable)
+      .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+      .where(eq(modelsTable.userId, user!.id as any));
+    const allModels = eventId
+      ? (await modelsQuery).filter((m: any) => m.eventId === eventId)
+      : await modelsQuery;
+
+    const userSeqId = profile.seqId;
+    const paddedUserId = String(userSeqId).padStart(exportSettings.modelUserDigits, "0");
+
+    // Build model rows HTML, including team members if model is in a team
+    const modelRowsHtml = await Promise.all((allModels as any[]).map(async (model) => {
+      const code = formatModelCodeForExport(exportSettings, model.code, userSeqId);
+      const isTeam = model.teamId ? 1 : 0;
+      let teamInfo = "";
+      if (model.teamId) {
+        // Task 07: fetch team members
+        const members = await tenantDb
+          .select({
+            firstName: userProfilesTable.firstName,
+            lastName: userProfilesTable.lastName,
+            email: usersTable.email,
+            role: teamMembersTable.role
+          })
+          .from(teamMembersTable)
+          .leftJoin(usersTable, eq(usersTable.id, teamMembersTable.userId))
+          .leftJoin(userProfilesTable, eq(userProfilesTable.userId, teamMembersTable.userId))
+          .where(eq(teamMembersTable.teamId, model.teamId as any));
+        const memberNames = (members as any[])
+          .map((m) => `${fullName(m.firstName, m.lastName, m.email)}${m.role ? ` (${m.role})` : ""}`)
+          .join(", ");
+        teamInfo = `<br/><small>Team: ${memberNames}</small>`;
+      }
+      return `<tr>
+        <td>${code || model.id.slice(0, 8)}</td>
+        <td>${model.name}${teamInfo}</td>
+        <td>${isTeam}</td>
+        <td>${model.categoryName ?? ""}</td>
+      </tr>`;
+    }));
+
+    const title = "Monte San Savino";
+    set.headers["content-type"] = "text/html; charset=utf-8";
+    set.headers["content-disposition"] = `inline; filename="model-card-${paddedUserId}.html"`;
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>${title}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    h1 { text-align: center; margin-bottom: 16px; }
+    .section { margin-bottom: 16px; }
+    .section h2 { font-size: 14pt; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-bottom: 8px; }
+    .section p { margin: 2px 0; font-size: 11pt; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; font-size: 10pt; }
+    th { background: #f2f2f2; font-weight: bold; }
+    @media print { @page { size: A4 portrait; margin: 12mm; } }
+  </style>
+</head>
+<body>
+  <h1>${title}</h1>
+  <div class="section">
+    <h2>User Details</h2>
+    <p><strong>User ID:</strong> ${paddedUserId}</p>
+    <p><strong>First name:</strong> ${profile.firstName ?? ""}</p>
+    <p><strong>Last name:</strong> ${profile.lastName ?? ""}</p>
+    <p><strong>Country:</strong> ${profile.city ?? ""}</p>
+    <p><strong>E-mail address:</strong> ${profile.email}</p>
+    <p><strong>Total Teams:</strong> ${teamCount.length}</p>
+    <p><strong>Model Total:</strong> ${allModels.length}</p>
+  </div>
+  <div class="section">
+    <table>
+      <thead>
+        <tr>
+          <th>Model ID</th>
+          <th>Model Title</th>
+          <th>Is Team</th>
+          <th>Class Title</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${modelRowsHtml.join("") || "<tr><td colspan=\"4\">Nessun modello</td></tr>"}
+      </tbody>
+    </table>
+  </div>
+  <script>window.onload = () => window.print();</script>
+</body>
+</html>`;
+  }, {
+    detail: {
+      summary: "Stampa scheda utente con modelli (PDF)",
       tags: ["Exports"],
       security: [{ bearerAuth: [] }]
     }

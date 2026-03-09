@@ -26,6 +26,8 @@ import { specialMentionRoutes } from "../contest/infra/http/special-mention.rout
 import { judgeModificationRoutes, adminModificationRoutes } from "../contest/infra/http/modification-request.routes";
 import { publicCategoryRoutes } from "../contest/infra/http/public-categories.routes";
 import { settingsRoutes, adminSettingsRoutes } from "../contest/infra/http/settings.routes";
+import { teamRolesRoutes, teamRolesPublicRoutes } from "../contest/infra/http/team-roles.routes";
+import { eventCampaignsRoutes } from "../contest/infra/http/event-campaigns.routes";
 
 export function buildApp() {
   const rawCorsOrigin = process.env.CORS_ORIGIN ?? "";
@@ -123,5 +125,8 @@ export function buildApp() {
     .use(adminModificationRoutes)
     .use(publicCategoryRoutes)
     .use(settingsRoutes)
-    .use(adminSettingsRoutes);
+    .use(adminSettingsRoutes)
+    .use(teamRolesRoutes)
+    .use(teamRolesPublicRoutes)
+    .use(eventCampaignsRoutes);
 }

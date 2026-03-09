@@ -62,10 +62,12 @@ export default function Judge({ language }: JudgeProps) {
   const [historyVotes, setHistoryVotes] = useState<VoteHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Modification request popover
+  // Modification request popover (Task 03: renamed to category-change request)
   const [modAnchor, setModAnchor] = useState<HTMLElement | null>(null);
   const [modModelId, setModModelId] = useState("");
   const [modReason, setModReason] = useState("");
+  const [modSuggestedCategoryId, setModSuggestedCategoryId] = useState("");
+  const [modCategories, setModCategories] = useState<{ id: string; name: string }[]>([]);
 
   async function loadEvents() {
     const res = await api<JudgeEvent[]>("/judge/events");
@@ -136,18 +138,31 @@ export default function Judge({ language }: JudgeProps) {
     await loadHistory(modelId);
   }
 
-  // --- Modification request ---
-  function openModPopover(el: HTMLElement, modelId: string) {
+  // --- Category-change request (Task 03) ---
+  async function openModPopover(el: HTMLElement, modelId: string) {
     setModModelId(modelId);
     setModReason("");
+    setModSuggestedCategoryId("");
     setModAnchor(el);
+    if (eventId) {
+      try {
+        const cats = await api<{ id: string; name: string }[]>(`/judge/categories?eventId=${encodeURIComponent(eventId)}`);
+        setModCategories(cats);
+      } catch {
+        setModCategories([]);
+      }
+    }
   }
 
   async function submitModRequest() {
     try {
       await api("/judge/modification-requests", {
         method: "POST",
-        body: JSON.stringify({ modelId: modModelId, reason: modReason })
+        body: JSON.stringify({
+          modelId: modModelId,
+          reason: modReason,
+          suggestedCategoryId: modSuggestedCategoryId || undefined
+        })
       });
       showMessage(t(language, "judgeModRequestSent"));
     } catch (err: any) {
@@ -237,7 +252,7 @@ export default function Judge({ language }: JudgeProps) {
                       <IconButton
                         size="small"
                         color="warning"
-                        title={t(language, "judgeModRequestTitle")}
+                        title={t(language, "judgeCategoryChangeTitle")}
                         onClick={(e) => openModPopover(e.currentTarget, model.id)}
                       >
                         <EditNoteIcon fontSize="small" />
@@ -315,7 +330,7 @@ export default function Judge({ language }: JudgeProps) {
         </Stack>
       </Popover>
 
-      {/* Modification Request Popover */}
+      {/* Category-Change Request Popover (Task 03) */}
       <Popover
         open={Boolean(modAnchor)}
         anchorEl={modAnchor}
@@ -323,8 +338,21 @@ export default function Judge({ language }: JudgeProps) {
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
       >
-        <Stack spacing={1.5} sx={{ p: 2, minWidth: 280 }}>
-          <Typography variant="subtitle2">{t(language, "judgeModRequestTitle")}</Typography>
+        <Stack spacing={1.5} sx={{ p: 2, minWidth: 300 }}>
+          <Typography variant="subtitle2">{t(language, "judgeCategoryChangeTitle")}</Typography>
+          <FormControl size="small" fullWidth>
+            <InputLabel>{t(language, "judgeSuggestedCategory")}</InputLabel>
+            <Select
+              value={modSuggestedCategoryId}
+              label={t(language, "judgeSuggestedCategory")}
+              onChange={(e) => setModSuggestedCategoryId(e.target.value)}
+            >
+              <MenuItem value="">{t(language, "judgeNoCategory")}</MenuItem>
+              {modCategories.map((cat) => (
+                <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
             size="small"
             label={t(language, "judgeModRequestReason")}

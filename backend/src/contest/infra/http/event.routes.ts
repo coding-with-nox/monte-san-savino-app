@@ -83,10 +83,22 @@ export const enrollmentRoutes = new Elysia({ prefix: "/events" })
   .use(tenantMiddleware)
   .use(requireRole("user"))
   .post("/:eventId/enroll", async ({ tenantDb, user, params, body, set }) => {
+    // Task 02: allow one enrollment per user+event+model (multiple models allowed)
+    const modelId = body.modelId ?? null;
+    const whereClause = modelId
+      ? and(
+          eq(registrationsTable.userId, user!.id as any),
+          eq(registrationsTable.eventId, params.eventId as any),
+          eq(registrationsTable.modelId, modelId as any)
+        )
+      : and(
+          eq(registrationsTable.userId, user!.id as any),
+          eq(registrationsTable.eventId, params.eventId as any)
+        );
     const existing = await tenantDb
       .select()
       .from(registrationsTable)
-      .where(and(eq(registrationsTable.userId, user!.id as any), eq(registrationsTable.eventId, params.eventId as any)));
+      .where(whereClause);
     if (existing.length) {
       set.status = 400;
       return { error: "Already enrolled" };
@@ -96,7 +108,7 @@ export const enrollmentRoutes = new Elysia({ prefix: "/events" })
       id,
       userId: user!.id as any,
       eventId: params.eventId,
-      modelId: body.modelId ?? null,
+      modelId,
       categoryId: body.categoryId ?? null,
       status: "accepted",
       checkedIn: false

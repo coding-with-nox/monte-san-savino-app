@@ -3,12 +3,14 @@ import { settingsTable } from "../persistence/schema";
 
 const DEFAULT_PREFIX = "MSS";
 const DEFAULT_DIGITS = 5;
+const DEFAULT_USER_DIGITS = 4;
 const MIN_DIGITS = 1;
 const MAX_DIGITS = 10;
 
 export type ModelCodeFormat = {
   prefix: string;
   digits: number;
+  userDigits: number;
 };
 
 export function normalizeModelCodePrefix(value?: string | null): string {
@@ -28,11 +30,24 @@ export function normalizeModelCodeDigits(value?: string | null): number {
   return Math.min(MAX_DIGITS, Math.max(MIN_DIGITS, parsed));
 }
 
-export function formatModelCode(code: number | null | undefined, format: ModelCodeFormat): string {
+// Task 01: format includes user sequential ID → MSS-0392-00821
+export function formatModelCode(
+  code: number | null | undefined,
+  userSeqId: number | null | undefined,
+  format: ModelCodeFormat
+): string {
   if (code === null || code === undefined) return "";
   const numeric = Number(code);
   if (!Number.isFinite(numeric)) return "";
   const normalized = Math.max(0, Math.trunc(numeric));
+
+  if (userSeqId !== null && userSeqId !== undefined) {
+    const userNum = Math.max(0, Math.trunc(Number(userSeqId)));
+    const paddedUser = String(userNum).padStart(format.userDigits, "0");
+    const paddedCode = String(normalized).padStart(format.digits, "0");
+    return `${format.prefix}-${paddedUser}-${paddedCode}`;
+  }
+
   return `${format.prefix}-${String(normalized).padStart(format.digits, "0")}`;
 }
 
@@ -51,6 +66,7 @@ export async function loadModelCodeFormatSettings(tenantDb: any): Promise<ModelC
 
   return {
     prefix: normalizeModelCodePrefix(prefixRow?.value),
-    digits: normalizeModelCodeDigits(digitsRow?.value)
+    digits: normalizeModelCodeDigits(digitsRow?.value),
+    userDigits: DEFAULT_USER_DIGITS
   };
 }

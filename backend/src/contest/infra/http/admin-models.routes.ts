@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, modelsTable } from "../persistence/schema";
+import { usersTable } from "../../../identity/infra/persistence/schema";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 
 export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
@@ -12,10 +13,23 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
     const eventId = query?.eventId ? String(query.eventId) : null;
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
     if (!eventId) {
-      const rows = await tenantDb.select().from(modelsTable);
+      const rows = await tenantDb
+        .select({
+          id: modelsTable.id,
+          userId: modelsTable.userId,
+          teamId: modelsTable.teamId,
+          categoryId: modelsTable.categoryId,
+          name: modelsTable.name,
+          description: modelsTable.description,
+          code: modelsTable.code,
+          imageUrl: modelsTable.imageUrl,
+          userSeqId: usersTable.seqId
+        })
+        .from(modelsTable)
+        .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId));
       return rows.map((row: any) => ({
         ...row,
-        code: formatModelCode(row.code, codeFormat) || null
+        code: formatModelCode(row.code, row.userSeqId, codeFormat) || null
       }));
     }
     const rows = await tenantDb
@@ -27,14 +41,16 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
         name: modelsTable.name,
         description: modelsTable.description,
         code: modelsTable.code,
-        imageUrl: modelsTable.imageUrl
+        imageUrl: modelsTable.imageUrl,
+        userSeqId: usersTable.seqId
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
       .where(eq(categoriesTable.eventId, eventId as any));
     return rows.map((row: any) => ({
       ...row,
-      code: formatModelCode(row.code, codeFormat) || null
+      code: formatModelCode(row.code, row.userSeqId, codeFormat) || null
     }));
   }, {
     detail: {

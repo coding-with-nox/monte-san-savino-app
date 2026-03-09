@@ -7,12 +7,16 @@ import {
   Collapse,
   Container,
   Divider,
+  FormControl,
   Grid,
   IconButton,
+  InputLabel,
   List,
   ListItem,
   ListItemText,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -54,6 +58,9 @@ export default function Teams({ language }: TeamsProps) {
   const [message, setMessage] = useState("");
   const [editName, setEditName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
+  // Task 09: role selector for adding members
+  const [memberRole, setMemberRole] = useState("");
+  const [teamRoles, setTeamRoles] = useState<{ id: string; name: string }[]>([]);
 
   async function load() {
     setTeams(await api<Team[]>("/teams"));
@@ -110,8 +117,12 @@ export default function Teams({ language }: TeamsProps) {
     if (!detail?.team) return;
     setSaving(true);
     try {
-      await api(`/teams/${detail.team.id}/members`, { method: "POST", body: JSON.stringify({ email: memberEmail.trim() }) });
+      await api(`/teams/${detail.team.id}/members`, {
+        method: "POST",
+        body: JSON.stringify({ email: memberEmail.trim(), role: memberRole || "member" })
+      });
       setMemberEmail("");
+      setMemberRole("");
       const d = await api<TeamDetail>(`/teams/${detail.team.id}`);
       setDetail(d);
     } catch (err: any) {
@@ -131,6 +142,7 @@ export default function Teams({ language }: TeamsProps) {
 
   useEffect(() => {
     load().catch((err) => setMessage(err.message));
+    api<{ id: string; name: string }[]>("/team-roles").then(setTeamRoles).catch(() => {});
   }, []);
 
   const editPanel = (
@@ -182,15 +194,29 @@ export default function Teams({ language }: TeamsProps) {
                 <Typography variant="body2" color="text.secondary">—</Typography>
               )}
               <Divider />
-              <Stack direction="row" spacing={1}>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
                 <TextField
                   label={t(language, "teamsMemberPlaceholder")}
                   value={memberEmail}
                   onChange={(e) => setMemberEmail(e.target.value)}
                   size="small"
                   type="email"
-                  fullWidth
+                  sx={{ flex: 1, minWidth: 160 }}
                 />
+                {/* Task 09: role selector */}
+                <FormControl size="small" sx={{ minWidth: 130 }}>
+                  <InputLabel>{t(language, "teamsRolePlaceholder")}</InputLabel>
+                  <Select
+                    value={memberRole}
+                    label={t(language, "teamsRolePlaceholder")}
+                    onChange={(e) => setMemberRole(e.target.value)}
+                  >
+                    <MenuItem value="">member</MenuItem>
+                    {teamRoles.map((r) => (
+                      <MenuItem key={r.id} value={r.name}>{r.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 <Button
                   variant="outlined"
                   onClick={addMember}

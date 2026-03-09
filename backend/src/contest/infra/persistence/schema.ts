@@ -14,6 +14,12 @@ export const teamMembersTable = pgTable("team_members", {
   uniq: uniqueIndex("ux_team_user").on(t.teamId, t.userId)
 }));
 
+// Task 08: predefined team roles
+export const teamRolesTable = pgTable("team_roles", {
+  id: uuid("id").primaryKey(),
+  name: text("name").notNull()
+});
+
 export const eventsTable = pgTable("events", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
@@ -29,6 +35,17 @@ export const categoriesTable = pgTable("categories", {
   status: text("status").default("open").notNull() // open | closed
 });
 
+// Task 10: event campaigns with enrollment open/close dates
+export const eventCampaignsTable = pgTable("event_campaigns", {
+  id: uuid("id").primaryKey(),
+  eventId: uuid("event_id").notNull(),
+  name: text("name").notNull(),
+  enrollmentOpenDate: text("enrollment_open_date"),
+  enrollmentCloseDate: text("enrollment_close_date")
+});
+
+// Task 02: allow multiple enrollments per user per event (one per model)
+// Unique constraints are now partial indexes in DB; Drizzle doesn't enforce them here
 export const registrationsTable = pgTable("registrations", {
   id: uuid("id").primaryKey(),
   userId: uuid("user_id").notNull(),
@@ -37,9 +54,7 @@ export const registrationsTable = pgTable("registrations", {
   categoryId: uuid("category_id"),
   status: text("status").notNull(),
   checkedIn: boolean("checked_in").default(false).notNull()
-}, (t) => ({
-  uniq: uniqueIndex("ux_reg_user_event").on(t.userId, t.eventId)
-}));
+});
 
 export const modelsTable = pgTable("models", {
   id: uuid("id").primaryKey(),
@@ -109,11 +124,13 @@ export const specialMentionsTable = pgTable("special_mentions", {
   createdAt: timestamp("created_at").defaultNow()
 });
 
+// Task 03: added suggestedCategoryId for category-change requests
 export const modificationRequestsTable = pgTable("modification_requests", {
   id: uuid("id").primaryKey(),
   modelId: uuid("model_id").notNull(),
   judgeId: uuid("judge_id").notNull(),
   reason: text("reason").notNull(),
+  suggestedCategoryId: uuid("suggested_category_id"),
   status: text("status").default("pending").notNull(), // pending | resolved | rejected
   createdAt: timestamp("created_at").defaultNow()
 });

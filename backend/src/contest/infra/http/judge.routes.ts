@@ -120,7 +120,21 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     }
   })
   .get("/models/:modelId", async ({ tenantDb, params }) => {
-    const rows = await tenantDb.select().from(modelsTable).where(eq(modelsTable.id, params.modelId as any));
+    const rows = await tenantDb
+      .select({
+        id: modelsTable.id,
+        userId: modelsTable.userId,
+        teamId: modelsTable.teamId,
+        categoryId: modelsTable.categoryId,
+        name: modelsTable.name,
+        description: modelsTable.description,
+        code: modelsTable.code,
+        imageUrl: modelsTable.imageUrl,
+        userSeqId: usersTable.seqId
+      })
+      .from(modelsTable)
+      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
+      .where(eq(modelsTable.id, params.modelId as any));
     const images = await tenantDb.select().from(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
     if (!rows.length) {
       return { model: null, images };
@@ -129,7 +143,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     return {
       model: {
         ...(rows[0] as any),
-        code: formatModelCode((rows[0] as any).code, codeFormat) || null
+        code: formatModelCode((rows[0] as any).code, (rows[0] as any).userSeqId, codeFormat) || null
       },
       images
     };
@@ -161,6 +175,21 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     params: t.Object({ userId: t.String() }),
     detail: {
       summary: "Dettaglio concorrente",
+      tags: ["Judging"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  // Task 03: expose categories for the category-change request form
+  .get("/categories", async ({ tenantDb, query }) => {
+    const eventId = query?.eventId ? String(query.eventId) : null;
+    if (!eventId) return [];
+    return await tenantDb
+      .select({ id: categoriesTable.id, name: categoriesTable.name })
+      .from(categoriesTable)
+      .where(eq(categoriesTable.eventId, eventId as any));
+  }, {
+    detail: {
+      summary: "Categorie per evento (giudice)",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     }

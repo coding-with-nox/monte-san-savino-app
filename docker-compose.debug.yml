@@ -1,0 +1,165 @@
+# ---------------------------------------------------------------------------
+# docker-compose.debug.yml
+#
+# Ambiente di sviluppo/debug con hot-reload e ispettore Bun.
+#
+# Avvio:
+#   docker compose -f docker-compose.debug.yml up --build
+#
+# Differenze rispetto a docker-compose.yml:
+#   • backend  : sorgenti montati, hot-reload (bun --hot), ispettore su :9229
+#   • frontend : Vite dev server (:5173) con proxy → backend:3000
+#   • db-init  : esegue 02-test-data.sh SOLO se la tabella users è vuota
+#   • adminer  : GUI leggera per PostgreSQL su :8888
+#   • minio    : console MinIO su :9001 (invariata)
+# ---------------------------------------------------------------------------
+services:
+
+  # -------------------------------------------------------------------------
+  # PostgreSQL (identico alla prod, porta esposta per accesso diretto)
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_debug:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # -------------------------------------------------------------------------
+  # MinIO (object storage — console su :9001)
+  # -------------------------------------------------------------------------
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - miniodata_debug:/data
+
+  # -------------------------------------------------------------------------
+  # db-init: schema + seed condizionale
+  #   01-init-tenant.sh  → crea tabelle (idempotente)
+  #   02-test-data.sh    → inserisce dati di test SOLO se users è vuota
+  # -------------------------------------------------------------------------
+  db-init:
+    image: postgres:16
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
+      PGHOST: postgres
+      PGPORT: 5432
+    volumes:
+      - ./docker/postgres/01-init-tenant.sh:/scripts/01-init-tenant.sh:ro
+      - ./docker/postgres/02-test-data.sh:/scripts/02-test-data.sh:ro
+    command: >
+      bash -c "
+        until pg_isready -h postgres -p 5432 -U $${POSTGRES_USER}; do sleep 1; done &&
+        /scripts/01-init-tenant.sh &&
+        export PGPASSWORD=$${POSTGRES_PASSWORD} &&
+        HAS_USERS=$$(psql -h postgres -U $${POSTGRES_USER} -d $${TENANT_DB_NAME} -tAc 'SELECT COUNT(*) FROM users;' 2>/dev/null || echo 0) &&
+        HAS_USERS=$$(echo $${HAS_USERS} | tr -d '[:space:]') &&
+        if [ \"$${HAS_USERS}\" = \"0\" ] || [ -z \"$${HAS_USERS}\" ]; then
+          echo '>>> Tabella users vuota: eseguo seed di test...' && /scripts/02-test-data.sh;
+        else
+          echo \">>> DB già popolato ($${HAS_USERS} utenti): skip seed.\";
+        fi
+      "
+    restart: "no"
+
+  # -------------------------------------------------------------------------
+  # Backend — hot-reload + inspector Bun
+  #   Porta 3000 : API
+  #   Porta 9229 : Bun inspector (chrome://inspect o VS Code "Attach")
+  # -------------------------------------------------------------------------
+  backend:
+    image: oven/bun:1.1.29
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: ${JWT_SECRET:-debug-secret-change-me}
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DB: ${TENANT_DB_NAME:-tenant_db_1}
+      PG_USER: ${POSTGRES_USER:-postgres}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - ./backend:/app
+      # node_modules separato per evitare conflitti host/container
+      - backend_modules:/app/node_modules
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    command: >
+      sh -c "bun install &&
+             bun --hot --inspect=0.0.0.0:9229 src/bootstrap/server.ts"
+
+  # -------------------------------------------------------------------------
+  # Frontend — Vite dev server con HMR
+  #   Porta 5173 : app React
+  #   Il proxy /api → backend:3000 è configurato via VITE_PROXY_TARGET
+  # -------------------------------------------------------------------------
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    depends_on:
+      - backend
+    environment:
+      # Sovrascrive il target del proxy Vite (vite.config.ts lo legge da process.env)
+      VITE_PROXY_TARGET: http://backend:3000
+    volumes:
+      - ./frontend:/app
+      - frontend_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    command: >
+      sh -c "npm install &&
+             npx vite --host 0.0.0.0 --port 5173"
+
+  # -------------------------------------------------------------------------
+  # Adminer — GUI leggera per ispezione PostgreSQL
+  #   http://localhost:8888
+  #   Sistema: PostgreSQL | Server: postgres | Utente/Password dal .env
+  # -------------------------------------------------------------------------
+  adminer:
+    image: adminer:4
+    depends_on:
+      - postgres
+    ports:
+      - "8888:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+
+volumes:
+  pgdata_debug:
+  miniodata_debug:
+  backend_modules:
+  frontend_modules:

@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS users (
   is_active boolean NOT NULL DEFAULT true
 );
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS seq_id SERIAL;
+
 CREATE TABLE IF NOT EXISTS user_profiles (
   user_id uuid PRIMARY KEY,
   first_name text,
@@ -88,8 +90,19 @@ ALTER TABLE registrations ADD COLUMN IF NOT EXISTS model_id uuid;
 ALTER TABLE registrations ADD COLUMN IF NOT EXISTS category_id uuid;
 ALTER TABLE registrations ALTER COLUMN status SET DEFAULT 'accepted';
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_reg_user_event
-  ON registrations (user_id, event_id);
+-- Task 02: allow multiple enrollments per user per event (one per model)
+-- Drop old single-enrollment constraint if present
+DROP INDEX IF EXISTS ux_reg_user_event;
+
+-- One enrollment per user+event when no model selected
+CREATE UNIQUE INDEX IF NOT EXISTS ux_reg_user_event_nomodel
+  ON registrations (user_id, event_id)
+  WHERE model_id IS NULL;
+
+-- One enrollment per user+event+model
+CREATE UNIQUE INDEX IF NOT EXISTS ux_reg_user_event_model
+  ON registrations (user_id, event_id, model_id)
+  WHERE model_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS ix_registrations_event
   ON registrations (event_id);
@@ -271,6 +284,9 @@ CREATE TABLE IF NOT EXISTS modification_requests (
   created_at timestamp DEFAULT now()
 );
 
+-- Task 03: suggested category for category-change requests
+ALTER TABLE modification_requests ADD COLUMN IF NOT EXISTS suggested_category_id uuid;
+
 CREATE INDEX IF NOT EXISTS ix_mod_requests_model
   ON modification_requests (model_id);
 
@@ -282,4 +298,25 @@ CREATE TABLE IF NOT EXISTS settings (
   value text NOT NULL,
   updated_at timestamp DEFAULT now()
 );
+
+-- Task 08: predefined team roles
+CREATE TABLE IF NOT EXISTS team_roles (
+  id uuid PRIMARY KEY,
+  name text NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_team_roles_name
+  ON team_roles (name);
+
+-- Task 10: event campaigns with enrollment open/close dates
+CREATE TABLE IF NOT EXISTS event_campaigns (
+  id uuid PRIMARY KEY,
+  event_id uuid NOT NULL,
+  name text NOT NULL,
+  enrollment_open_date text,
+  enrollment_close_date text
+);
+
+CREATE INDEX IF NOT EXISTS ix_event_campaigns_event
+  ON event_campaigns (event_id);
 SQL

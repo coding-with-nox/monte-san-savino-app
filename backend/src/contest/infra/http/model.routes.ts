@@ -4,6 +4,16 @@ import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { modelsTable, modelImagesTable } from "../persistence/schema";
+import { usersTable } from "../../../identity/infra/persistence/schema";
+
+async function getUserSeqId(tenantDb: any, userId: string): Promise<number | null> {
+  const [row] = await tenantDb
+    .select({ seqId: usersTable.seqId })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId as any))
+    .limit(1);
+  return row?.seqId ?? null;
+}
 
 async function generateModelCode(tenantDb: any): Promise<number> {
   const [maxRow] = await tenantDb
@@ -29,10 +39,11 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     const clauses = [eq(modelsTable.userId, user!.id as any)];
     if (search) clauses.push(ilike(modelsTable.name, `%${search}%`));
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
+    const userSeqId = await getUserSeqId(tenantDb, user!.id);
     const rows = await tenantDb.select().from(modelsTable).where(and(...clauses));
     return rows.map((row: any) => ({
       ...row,
-      code: formatModelCode(row.code, codeFormat) || null
+      code: formatModelCode(row.code, userSeqId, codeFormat) || null
     }));
   }, {
     detail: {
@@ -59,7 +70,8 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
           code,
           imageUrl: body.imageUrl ?? null
         });
-        return { id: modelId, code: formatModelCode(code, codeFormat) };
+        const userSeqIdForCode = await getUserSeqId(tenantDb, user!.id);
+        return { id: modelId, code: formatModelCode(code, userSeqIdForCode, codeFormat) };
       } catch (err) {
         if (!isCodeConflict(err)) throw err;
         lastError = err;
@@ -91,11 +103,12 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       return { error: "Not found" };
     }
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
+    const userSeqId = await getUserSeqId(tenantDb, user!.id);
     const images = await tenantDb.select().from(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
     return {
       model: {
         ...rows[0],
-        code: formatModelCode((rows[0] as any).code, codeFormat) || null
+        code: formatModelCode((rows[0] as any).code, userSeqId, codeFormat) || null
       },
       images
     };

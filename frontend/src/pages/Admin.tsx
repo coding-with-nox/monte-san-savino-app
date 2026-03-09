@@ -35,6 +35,8 @@ type Sponsor = { id: string; eventId: string; name: string; tier: string };
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
 type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null };
+type TeamRole = { id: string; name: string };
+type EventCampaign = { id: string; eventId: string; name: string; enrollmentOpenDate?: string | null; enrollmentCloseDate?: string | null };
 
 interface AdminProps {
   language: Language;
@@ -55,6 +57,12 @@ export default function Admin({ language }: AdminProps) {
   const [sponsorForm, setSponsorForm] = useState({ eventId: "", name: "", tier: "bronze" });
   const [mentionForm, setMentionForm] = useState({ eventId: "", modelId: "", title: "" });
   const [message, setMessage] = useState("");
+  // Task 08: team roles
+  const [teamRoles, setTeamRoles] = useState<TeamRole[]>([]);
+  const [teamRoleForm, setTeamRoleForm] = useState("");
+  // Task 10: event campaigns
+  const [eventCampaigns, setEventCampaigns] = useState<EventCampaign[]>([]);
+  const [campaignForm, setCampaignForm] = useState({ eventId: "", name: "", enrollmentOpenDate: "", enrollmentCloseDate: "" });
 
   // Category edit dialog state
   const [categoryEditDialog, setCategoryEditDialog] = useState(false);
@@ -72,6 +80,8 @@ export default function Admin({ language }: AdminProps) {
     setModRequests(await api<ModificationRequest[]>("/admin/modification-requests"));
     setJudgeAssignments(await api<JudgeAssignmentEntry[]>("/admin/judges/assignments"));
     setSpecialMentions(await api<SpecialMention[]>("/awards/mentions"));
+    setTeamRoles(await api<TeamRole[]>("/admin/team-roles"));
+    setEventCampaigns(await api<EventCampaign[]>("/admin/event-campaigns"));
   }
 
   async function createEvent() {
@@ -205,6 +215,40 @@ export default function Admin({ language }: AdminProps) {
 
   async function updateModRequestStatus(id: string, status: string) {
     await api(`/admin/modification-requests/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+    await load();
+  }
+
+  // Task 08: team roles CRUD
+  async function createTeamRole() {
+    if (!teamRoleForm.trim()) return;
+    await api("/admin/team-roles", { method: "POST", body: JSON.stringify({ name: teamRoleForm.trim() }) });
+    setTeamRoleForm("");
+    await load();
+  }
+
+  async function deleteTeamRole(id: string) {
+    await api(`/admin/team-roles/${id}`, { method: "DELETE" });
+    await load();
+  }
+
+  // Task 10: event campaigns CRUD
+  async function createCampaign() {
+    if (!campaignForm.eventId || !campaignForm.name.trim()) return;
+    await api("/admin/event-campaigns", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: campaignForm.eventId,
+        name: campaignForm.name.trim(),
+        enrollmentOpenDate: campaignForm.enrollmentOpenDate || undefined,
+        enrollmentCloseDate: campaignForm.enrollmentCloseDate || undefined
+      })
+    });
+    setCampaignForm({ eventId: "", name: "", enrollmentOpenDate: "", enrollmentCloseDate: "" });
+    await load();
+  }
+
+  async function deleteCampaign(id: string) {
+    await api(`/admin/event-campaigns/${id}`, { method: "DELETE" });
     await load();
   }
 
@@ -621,6 +665,117 @@ export default function Admin({ language }: AdminProps) {
                     </Stack>
                   ))}
                 </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Task 08: Team Roles */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>{t(language, "adminTeamRolesTitle")}</Typography>
+                <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                  <TextField
+                    label={t(language, "adminTeamRoleNamePlaceholder")}
+                    value={teamRoleForm}
+                    onChange={(e) => setTeamRoleForm(e.target.value)}
+                    size="small"
+                    fullWidth
+                  />
+                  <Button variant="contained" onClick={createTeamRole} disabled={!teamRoleForm.trim()}>
+                    {t(language, "adminCreateButton")}
+                  </Button>
+                </Stack>
+                <List dense>
+                  {teamRoles.map((role) => (
+                    <ListItem key={role.id} disableGutters secondaryAction={
+                      <IconButton size="small" color="error" onClick={() => deleteTeamRole(role.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    }>
+                      <ListItemText primary={role.name} />
+                    </ListItem>
+                  ))}
+                  {teamRoles.length === 0 && (
+                    <ListItem><ListItemText secondary={t(language, "adminNoData")} /></ListItem>
+                  )}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Task 10: Event Campaigns */}
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>{t(language, "adminEventCampaignsTitle")}</Typography>
+                <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                  <Grid item xs={12} md={3}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                      <Select
+                        value={campaignForm.eventId}
+                        label={t(language, "adminJudgeEventPlaceholder")}
+                        onChange={(e) => setCampaignForm({ ...campaignForm, eventId: e.target.value })}
+                      >
+                        {events.map((ev) => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      label={t(language, "adminCampaignNamePlaceholder")}
+                      value={campaignForm.name}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
+                      size="small"
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={2}>
+                    <TextField
+                      label={t(language, "adminCampaignOpenDate")}
+                      value={campaignForm.enrollmentOpenDate}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, enrollmentOpenDate: e.target.value })}
+                      size="small"
+                      type="date"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={2}>
+                    <TextField
+                      label={t(language, "adminCampaignCloseDate")}
+                      value={campaignForm.enrollmentCloseDate}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, enrollmentCloseDate: e.target.value })}
+                      size="small"
+                      type="date"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={2}>
+                    <Button variant="contained" onClick={createCampaign} disabled={!campaignForm.eventId || !campaignForm.name.trim()} fullWidth>
+                      {t(language, "adminCreateButton")}
+                    </Button>
+                  </Grid>
+                </Grid>
+                <List dense>
+                  {eventCampaigns.map((c) => (
+                    <ListItem key={c.id} disableGutters secondaryAction={
+                      <IconButton size="small" color="error" onClick={() => deleteCampaign(c.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    }>
+                      <ListItemText
+                        primary={`${c.name} — ${getEventName(c.eventId)}`}
+                        secondary={`${c.enrollmentOpenDate ?? "—"} → ${c.enrollmentCloseDate ?? "—"}`}
+                      />
+                    </ListItem>
+                  ))}
+                  {eventCampaigns.length === 0 && (
+                    <ListItem><ListItemText secondary={t(language, "adminNoData")} /></ListItem>
+                  )}
+                </List>
               </CardContent>
             </Card>
           </Grid>

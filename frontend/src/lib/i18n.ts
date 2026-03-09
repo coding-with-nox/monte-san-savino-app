@@ -219,7 +219,23 @@ export const translations = {
     adminEmailSent: "Email inviata",
     adminEmailNotSent: "Email non inviata",
     mapLoading: "Caricamento indirizzo...",
-    mapClickHint: "Clicca sulla mappa per selezionare una posizione"
+    mapClickHint: "Clicca sulla mappa per selezionare una posizione",
+    judgeCategoryChangeTitle: "Richiedi cambio categoria",
+    judgeSuggestedCategory: "Categoria suggerita",
+    judgeNoCategory: "Nessuna categoria",
+    teamsRolePlaceholder: "Ruolo membro",
+    adminTeamRolesTitle: "Ruoli Team",
+    adminTeamRoleNamePlaceholder: "Nome ruolo",
+    adminCreateButton: "Crea",
+    adminNoData: "Nessun dato.",
+    adminEventCampaignsTitle: "Campagne Evento",
+    adminCampaignNamePlaceholder: "Nome campagna",
+    adminCampaignOpenDate: "Data apertura iscrizioni",
+    adminCampaignCloseDate: "Data chiusura iscrizioni",
+    modelsPrintCard: "Stampa scheda",
+    labelsDymoPrint: "Stampa DYMO",
+    labelsDymoNoPrinter: "Nessuna stampante DYMO trovata. Assicurarsi che DYMO Connect sia installato e una stampante sia collegata.",
+    labelsDymoPrinted: "Etichette inviate alla stampante DYMO."
   },
   en: {
     loginEyebrow: "Welcome back",
@@ -439,7 +455,23 @@ export const translations = {
     adminEmailSent: "Email sent",
     adminEmailNotSent: "Email not sent",
     mapLoading: "Loading address...",
-    mapClickHint: "Click on the map to select a location"
+    mapClickHint: "Click on the map to select a location",
+    judgeCategoryChangeTitle: "Request category change",
+    judgeSuggestedCategory: "Suggested category",
+    judgeNoCategory: "No category",
+    teamsRolePlaceholder: "Member role",
+    adminTeamRolesTitle: "Team Roles",
+    adminTeamRoleNamePlaceholder: "Role name",
+    adminCreateButton: "Create",
+    adminNoData: "No data.",
+    adminEventCampaignsTitle: "Event Campaigns",
+    adminCampaignNamePlaceholder: "Campaign name",
+    adminCampaignOpenDate: "Enrollment open date",
+    adminCampaignCloseDate: "Enrollment close date",
+    modelsPrintCard: "Print card",
+    labelsDymoPrint: "Print DYMO",
+    labelsDymoNoPrinter: "No DYMO printer found. Make sure DYMO Connect is installed and a printer is connected.",
+    labelsDymoPrinted: "Labels sent to DYMO printer."
   }
 } as const;
 
