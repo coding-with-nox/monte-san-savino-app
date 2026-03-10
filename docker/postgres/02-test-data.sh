@@ -29,6 +29,32 @@ PGPORT="${PGPORT:-5432}"
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
 
+FORCE_OVERWRITE="${FORCE_OVERWRITE:-false}"
+
+if [ "$FORCE_OVERWRITE" = "true" ]; then
+  echo "⚠  FORCE_OVERWRITE=true — truncate di tutte le tabelle di test..."
+  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$TENANT_DB_NAME" <<'TRUNCATE_SQL'
+TRUNCATE TABLE
+  settings,
+  special_mentions,
+  sponsors,
+  modification_requests,
+  votes,
+  judge_assignments,
+  registrations,
+  models,
+  team_members,
+  teams,
+  team_roles,
+  categories,
+  event_campaigns,
+  events,
+  user_profiles,
+  users
+CASCADE;
+TRUNCATE_SQL
+fi
+
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$TENANT_DB_NAME" <<'SQL'
 
 -- ===========================================================================
@@ -572,6 +598,168 @@ VALUES
   ('theme_preset',                'violet', NOW())
 ON CONFLICT (key) DO UPDATE
   SET value = EXCLUDED.value, updated_at = NOW();
+
+-- ===========================================================================
+-- TEAM ADMIN
+-- ===========================================================================
+INSERT INTO teams (id, name, owner_id)
+VALUES
+  ('d2d2d2d2-0000-0000-0000-000000000001', 'Falchi Rossi',    'aaaaaaaa-0000-0000-0000-000000000001'),
+  ('d2d2d2d2-0000-0000-0000-000000000002', 'Leoni d''Argento', 'aaaaaaaa-0000-0000-0000-000000000001')
+ON CONFLICT (id) DO NOTHING;
+
+-- Falchi Rossi: admin (Capogruppo), user1 (Vice), user2 (Membro)
+INSERT INTO team_members (team_id, user_id, role)
+VALUES
+  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'Capogruppo'),
+  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Vice'),
+  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000007', 'Membro')
+ON CONFLICT (team_id, user_id) DO NOTHING;
+
+-- Leoni d'Argento: admin (Capogruppo), user3 (Vice)
+INSERT INTO team_members (team_id, user_id, role)
+VALUES
+  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'Capogruppo'),
+  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000008', 'Vice')
+ON CONFLICT (team_id, user_id) DO NOTHING;
+
+-- ===========================================================================
+-- 15 MODELLI ADMIN
+-- code 9–23, distribuiti su eventi e categorie esistenti
+-- ===========================================================================
+INSERT INTO models (id, user_id, team_id, category_id, name, description, code, image_url)
+VALUES
+  -- Solo — MSS 2026
+  ('a2a2a2a2-0001-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-1111-0000-0000-000000000001', 'Messerschmitt Bf 109', 'Caccia tedesco WWII 1:72', 9, NULL),
+
+  ('a2a2a2a2-0001-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-1111-0000-0000-000000000002', 'USS Enterprise CV-6', 'Portaerei USA 1:700', 10, NULL),
+
+  ('a2a2a2a2-0001-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-1111-0000-0000-000000000003', 'Samurai Takeda', 'Armatura full-plate periodo Sengoku', 11, NULL),
+
+  ('a2a2a2a2-0001-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-1111-0000-0000-000000000004', 'M4 Sherman', 'Carro medio USA WWII 1:35', 12, NULL),
+
+  -- Team Falchi Rossi — MSS 2026
+  ('a2a2a2a2-0001-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'd2d2d2d2-0000-0000-0000-000000000001',
+   'cccccccc-1111-0000-0000-000000000001', 'P-51 Mustang', 'Caccia USA WWII in team', 13, NULL),
+
+  ('a2a2a2a2-0001-0000-0000-000000000006', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'd2d2d2d2-0000-0000-0000-000000000001',
+   'cccccccc-1111-0000-0000-000000000004', 'Panzer IV Ausf. H', 'Carro tedesco WWII in team', 14, NULL),
+
+  -- Solo — MSS 2025
+  ('a2a2a2a2-0001-0000-0000-000000000007', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-2222-0000-0000-000000000001', 'Lich King', 'Figura fantasy non-morta', 15, NULL),
+
+  ('a2a2a2a2-0001-0000-0000-000000000008', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-2222-0000-0000-000000000002', 'Tau Commander', 'Warhammer 40k xenos', 16, NULL),
+
+  -- Solo — MSS 2027
+  ('a2a2a2a2-0001-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-3333-0000-0000-000000000001', 'Legionario Romano', 'Fanteria pesante I sec.', 17, NULL),
+
+  -- Team Leoni d'Argento — MSS 2026
+  ('a2a2a2a2-0001-0000-0000-000000000010', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'd2d2d2d2-0000-0000-0000-000000000002',
+   'cccccccc-1111-0000-0000-000000000002', 'Yamato 1:350', 'Corazzata giapponese WWII', 18, NULL),
+
+  ('a2a2a2a2-0001-0000-0000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'd2d2d2d2-0000-0000-0000-000000000002',
+   'cccccccc-1111-0000-0000-000000000003', 'Cavaliere Templare', 'Armatura medievale in team', 19, NULL),
+
+  -- Solo — MSS 2026 (ulteriori)
+  ('a2a2a2a2-0001-0000-0000-000000000012', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-1111-0000-0000-000000000001', 'Zero A6M2', 'Caccia navale giapponese 1:72', 20, NULL),
+
+  ('a2a2a2a2-0001-0000-0000-000000000013', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-1111-0000-0000-000000000004', 'Leopard 2A6', 'MBT tedesco moderno 1:35', 21, NULL),
+
+  -- Solo — MSS 2025 (ulteriori)
+  ('a2a2a2a2-0001-0000-0000-000000000014', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-2222-0000-0000-000000000001', 'Goblin Shaman', 'Figura fantasy con effetti magici', 22, NULL),
+
+  -- Solo — MSS 2027 (ulteriore)
+  ('a2a2a2a2-0001-0000-0000-000000000015', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+   'cccccccc-3333-0000-0000-000000000001', 'Gladiatore Reziario', 'Figura 1:12 con rete e tridente', 23, NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- ===========================================================================
+-- ISCRIZIONI ADMIN (15 — una per modello)
+-- ===========================================================================
+INSERT INTO registrations (id, user_id, event_id, model_id, category_id, status, checked_in)
+VALUES
+  -- MSS 2026 — solo
+  ('a4a00002-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000001', 'cccccccc-1111-0000-0000-000000000001', 'accepted', true),
+
+  ('a4a00002-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000002', 'cccccccc-1111-0000-0000-000000000002', 'accepted', true),
+
+  ('a4a00002-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000003', 'cccccccc-1111-0000-0000-000000000003', 'accepted', false),
+
+  ('a4a00002-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000004', 'cccccccc-1111-0000-0000-000000000004', 'accepted', true),
+
+  -- MSS 2026 — team Falchi Rossi
+  ('a4a00002-0000-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000005', 'cccccccc-1111-0000-0000-000000000001', 'accepted', true),
+
+  ('a4a00002-0000-0000-0000-000000000006', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000006', 'cccccccc-1111-0000-0000-000000000004', 'accepted', false),
+
+  -- MSS 2025 — solo
+  ('a4a00002-0000-0000-0000-000000000007', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000002',
+   'a2a2a2a2-0001-0000-0000-000000000007', 'cccccccc-2222-0000-0000-000000000001', 'accepted', true),
+
+  ('a4a00002-0000-0000-0000-000000000008', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000002',
+   'a2a2a2a2-0001-0000-0000-000000000008', 'cccccccc-2222-0000-0000-000000000002', 'accepted', true),
+
+  -- MSS 2027 — solo
+  ('a4a00002-0000-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000003',
+   'a2a2a2a2-0001-0000-0000-000000000009', 'cccccccc-3333-0000-0000-000000000001', 'accepted', false),
+
+  -- MSS 2026 — team Leoni d'Argento
+  ('a4a00002-0000-0000-0000-000000000010', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000010', 'cccccccc-1111-0000-0000-000000000002', 'accepted', false),
+
+  ('a4a00002-0000-0000-0000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000011', 'cccccccc-1111-0000-0000-000000000003', 'accepted', false),
+
+  -- MSS 2026 — solo (ulteriori)
+  ('a4a00002-0000-0000-0000-000000000012', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000012', 'cccccccc-1111-0000-0000-000000000001', 'accepted', true),
+
+  ('a4a00002-0000-0000-0000-000000000013', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0001-0000-0000-000000000013', 'cccccccc-1111-0000-0000-000000000004', 'accepted', false),
+
+  -- MSS 2025 — solo (ulteriori)
+  ('a4a00002-0000-0000-0000-000000000014', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000002',
+   'a2a2a2a2-0001-0000-0000-000000000014', 'cccccccc-2222-0000-0000-000000000001', 'accepted', true),
+
+  -- MSS 2027 — solo (ulteriore)
+  ('a4a00002-0000-0000-0000-000000000015', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000003',
+   'a2a2a2a2-0001-0000-0000-000000000015', 'cccccccc-3333-0000-0000-000000000001', 'accepted', false)
+ON CONFLICT (id) DO NOTHING;
 
 SQL
 
