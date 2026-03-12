@@ -41,8 +41,11 @@ export default function Settings({ language }: SettingsProps) {
   const [themeModeDraft, setThemeModeDraft] = useState<"light" | "dark">("light");
   const [themePresetDraft, setThemePresetDraft] = useState<"violet" | "ocean" | "forest">("violet");
 
+  const [maxModelsDraft, setMaxModelsDraft] = useState("5");
+
   const [savingPrefix, setSavingPrefix] = useState(false);
   const [savingDigits, setSavingDigits] = useState(false);
+  const [savingMaxModels, setSavingMaxModels] = useState(false);
   const [savingExcelLayout, setSavingExcelLayout] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
   const [message, setMessage] = useState("");
@@ -53,6 +56,7 @@ export default function Settings({ language }: SettingsProps) {
 
     setPrefixDraft(res.printCodePrefix ?? "MSS");
     setDigitsDraft(res.printCodeDigits ?? "5");
+    setMaxModelsDraft(res.maxModelsPerUser ?? "5");
     setSheetNameDraft(res.excelSheetName ?? "Export");
     setFilePrefixDraft(res.excelFilePrefix ?? "contest-export");
     setThemeModeDraft(res.appTheme === "dark" ? "dark" : "light");
@@ -119,6 +123,29 @@ export default function Settings({ language }: SettingsProps) {
       setSettings(prev);
     } finally {
       setSavingDigits(false);
+    }
+  }
+
+  async function saveMaxModels() {
+    const parsed = Number.parseInt(maxModelsDraft.trim(), 10);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setMessage(t(language, "settingsMaxModelsPerUserError"));
+      return;
+    }
+    const next = String(parsed);
+    const prev = { ...settings };
+    setSavingMaxModels(true);
+    setSettings({ ...settings, maxModelsPerUser: next });
+    try {
+      await api("/admin/settings", {
+        method: "PUT",
+        body: JSON.stringify({ maxModelsPerUser: next })
+      });
+    } catch (err: any) {
+      setMessage(err.message || "Error");
+      setSettings(prev);
+    } finally {
+      setSavingMaxModels(false);
     }
   }
 
@@ -240,6 +267,24 @@ export default function Settings({ language }: SettingsProps) {
                       />
                       <Button variant="contained" onClick={saveDigits} disabled={savingDigits || !digitsDraft.trim()}>
                         {savingDigits ? "..." : t(language, "profileSaveButton")}
+                      </Button>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell><Typography>{t(language, "settingsMaxModelsPerUser")}</Typography></TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={maxModelsDraft}
+                        onChange={(event) => setMaxModelsDraft(event.target.value)}
+                        inputProps={{ min: 1 }}
+                        sx={{ width: 120 }}
+                      />
+                      <Button variant="contained" onClick={saveMaxModels} disabled={savingMaxModels || !maxModelsDraft.trim()}>
+                        {savingMaxModels ? "..." : t(language, "profileSaveButton")}
                       </Button>
                     </Stack>
                   </TableCell>

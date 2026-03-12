@@ -68,8 +68,8 @@ export default function Models({ language }: ModelsProps) {
   const [savingModel, setSavingModel] = useState(false);
   const [message, setMessage] = useState("");
   const [imagesEnabled, setImagesEnabled] = useState(false);
+  const [maxModelsPerUser, setMaxModelsPerUser] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editTeamId, setEditTeamId] = useState("");
   const [attachName, setAttachName] = useState("");
@@ -109,7 +109,6 @@ export default function Models({ language }: ModelsProps) {
     const d = await api<ModelDetail>(`/models/${modelId}`);
     setDetail(d);
     setEditName(d.model.name);
-    setEditDescription(d.model.description || "");
     setEditCategoryId(d.model.categoryId);
     setEditTeamId(d.model.teamId || "");
     setExpandedId(modelId);
@@ -127,7 +126,6 @@ export default function Models({ language }: ModelsProps) {
     setExpandedId(null);
     setDetail(null);
     setEditName("");
-    setEditDescription("");
     setEditCategoryId("");
     setEditTeamId("");
     setIsCreating(true);
@@ -141,7 +139,6 @@ export default function Models({ language }: ModelsProps) {
         method: "POST",
         body: JSON.stringify({
           name: editName.trim(),
-          description: editDescription.trim() || undefined,
           categoryId: editCategoryId,
           teamId: editTeamId.trim() || undefined
         })
@@ -163,7 +160,6 @@ export default function Models({ language }: ModelsProps) {
         method: "PUT",
         body: JSON.stringify({
           name: editName.trim(),
-          description: editDescription.trim() || undefined,
           categoryId: editCategoryId,
           teamId: editTeamId.trim() || undefined
         })
@@ -259,6 +255,8 @@ export default function Models({ language }: ModelsProps) {
     try {
       const s = await api<Record<string, string>>("/settings");
       setImagesEnabled(s.modelImages === "true");
+      const max = Number.parseInt(s.maxModelsPerUser ?? "", 10);
+      setMaxModelsPerUser(Number.isFinite(max) && max > 0 ? max : null);
     } catch {
       setImagesEnabled(false);
     }
@@ -274,6 +272,7 @@ export default function Models({ language }: ModelsProps) {
 
   const showMediaPanel = !isCreating && Boolean(detail);
   const tableColumnCount = 5;
+  const atMaxModels = maxModelsPerUser !== null && models.length >= maxModelsPerUser;
 
   const editPanel = (
     <Box sx={{ p: 2 }}>
@@ -284,15 +283,6 @@ export default function Models({ language }: ModelsProps) {
               {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
             </Typography>
             <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" />
-            <TextField
-              label={t(language, "modelsDescriptionPlaceholder")}
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-              fullWidth
-              size="small"
-              multiline
-              minRows={2}
-            />
             <FormControl fullWidth size="small">
               <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
               <Select value={editCategoryId} label={t(language, "modelsCategoryPlaceholder")} onChange={(e) => setEditCategoryId(e.target.value)}>
@@ -391,7 +381,7 @@ export default function Models({ language }: ModelsProps) {
             <Button variant="outlined" startIcon={<PrintIcon />} onClick={printScheda}>
               {t(language, "modelsPrintCard")}
             </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>{t(language, "modelsCreateButton")}</Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate} disabled={atMaxModels}>{t(language, "modelsCreateButton")}</Button>
           </Stack>
         </Stack>
         {!imagesEnabled && (
