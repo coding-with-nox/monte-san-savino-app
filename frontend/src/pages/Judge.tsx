@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Button,
   Chip,
-  Container,
   FormControl,
   IconButton,
   InputLabel,
@@ -26,6 +24,9 @@ import EditNoteIcon from "@mui/icons-material/EditNote";
 import HistoryIcon from "@mui/icons-material/History";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import PageContainer from "../components/PageContainer";
+import EmptyState from "../components/EmptyState";
+import useToast from "../components/useToast";
 
 type JudgeEvent = { eventId: string; eventName: string };
 type Model = {
@@ -48,8 +49,7 @@ export default function Judge({ language }: JudgeProps) {
   const [eventId, setEventId] = useState("");
   const [search, setSearch] = useState("");
   const [models, setModels] = useState<Model[]>([]);
-  const [message, setMessage] = useState("");
-  const [messageSeverity, setMessageSeverity] = useState<"success" | "error">("success");
+  const toast = useToast();
 
   // Vote popover
   const [voteAnchor, setVoteAnchor] = useState<HTMLElement | null>(null);
@@ -85,17 +85,12 @@ export default function Judge({ language }: JudgeProps) {
   }
 
   useEffect(() => {
-    loadEvents().catch((err) => showMessage(err.message, "error"));
+    loadEvents().catch((err) => toast.error(err.message));
   }, []);
 
   useEffect(() => {
-    loadModels().catch((err) => showMessage(err.message, "error"));
+    loadModels().catch((err) => toast.error(err.message));
   }, [eventId]);
-
-  function showMessage(msg: string, severity: "success" | "error" = "success") {
-    setMessage(msg);
-    setMessageSeverity(severity);
-  }
 
   // --- Vote ---
   function openVotePopover(el: HTMLElement, modelId: string) {
@@ -112,9 +107,9 @@ export default function Judge({ language }: JudgeProps) {
       if (historyModelId === voteModelId && historyAnchor) {
         await loadHistory(voteModelId);
       }
-      showMessage(t(language, "judgeVoteSuccess"));
+      toast.success(t(language, "judgeVoteSuccess"));
     } catch (err: any) {
-      showMessage(err.message || "Error", "error");
+      toast.error(err.message || "Error");
     }
     setVoteAnchor(null);
   }
@@ -125,7 +120,7 @@ export default function Judge({ language }: JudgeProps) {
       const rows = await api<VoteHistoryEntry[]>(`/judge/models/${modelId}/votes`);
       setHistoryVotes(rows);
     } catch (err: any) {
-      showMessage(err.message || "Error", "error");
+      toast.error(err.message || "Error");
       setHistoryVotes([]);
     } finally {
       setHistoryLoading(false);
@@ -164,20 +159,19 @@ export default function Judge({ language }: JudgeProps) {
           suggestedCategoryId: modSuggestedCategoryId || undefined
         })
       });
-      showMessage(t(language, "judgeModRequestSent"));
+      toast.success(t(language, "judgeModRequestSent"));
     } catch (err: any) {
-      showMessage(err.message || "Error", "error");
+      toast.error(err.message || "Error");
     }
     setModAnchor(null);
   }
 
   return (
-    <Container maxWidth="lg">
+    <PageContainer maxWidth="lg">
+      {toast.node}
       <Stack spacing={2}>
         <Typography variant="h4">{t(language, "judgeTitle")}</Typography>
         <Typography variant="body2" color="text.secondary">{t(language, "judgeRankHint")}</Typography>
-
-        {message && <Alert severity={messageSeverity} onClose={() => setMessage("")}>{message}</Alert>}
 
         {/* Filters */}
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
@@ -203,6 +197,10 @@ export default function Judge({ language }: JudgeProps) {
           />
           <Button variant="contained" onClick={loadModels}>{t(language, "judgeRefreshButton")}</Button>
         </Stack>
+
+        {models.length === 0 && (
+          <EmptyState title="Nessun modello da giudicare" />
+        )}
 
         {/* Models table */}
         <TableContainer component={Paper} variant="outlined">
@@ -261,15 +259,6 @@ export default function Judge({ language }: JudgeProps) {
                   </TableCell>
                 </TableRow>
               ))}
-              {models.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                      {t(language, "judgeSearchPlaceholder")}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -367,6 +356,6 @@ export default function Judge({ language }: JudgeProps) {
           </Button>
         </Stack>
       </Popover>
-    </Container>
+    </PageContainer>
   );
 }
