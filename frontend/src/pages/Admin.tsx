@@ -18,8 +18,15 @@ import {
   ListItem,
   ListItemText,
   MenuItem,
+  Paper,
   Select,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography
 } from "@mui/material";
@@ -63,6 +70,14 @@ export default function Admin({ language }: AdminProps) {
   // Task 10: event campaigns
   const [eventCampaigns, setEventCampaigns] = useState<EventCampaign[]>([]);
   const [campaignForm, setCampaignForm] = useState({ eventId: "", name: "", enrollmentOpenDate: "", enrollmentCloseDate: "" });
+
+  // Task 14: levels
+  const [levels, setLevels] = useState<{ id: string; name: string; sortOrder?: number | null }[]>([]);
+  const [newLevelName, setNewLevelName] = useState("");
+  const [newLevelSortOrder, setNewLevelSortOrder] = useState("");
+  // Task 14: member roles
+  const [memberRoles, setMemberRoles] = useState<{ id: string; name: string }[]>([]);
+  const [newMemberRoleName, setNewMemberRoleName] = useState("");
 
   // Category edit dialog state
   const [categoryEditDialog, setCategoryEditDialog] = useState(false);
@@ -252,8 +267,43 @@ export default function Admin({ language }: AdminProps) {
     await load();
   }
 
+  // Task 14: levels CRUD
+  async function loadLevels() {
+    try { setLevels(await api<any[]>("/admin/levels")); } catch { setLevels([]); }
+  }
+  async function createLevel() {
+    if (!newLevelName.trim()) return;
+    await api("/admin/levels", {
+      method: "POST",
+      body: JSON.stringify({ name: newLevelName.trim(), sortOrder: newLevelSortOrder ? Number(newLevelSortOrder) : undefined })
+    });
+    setNewLevelName(""); setNewLevelSortOrder("");
+    await loadLevels();
+  }
+  async function deleteLevel(id: string) {
+    await api(`/admin/levels/${id}`, { method: "DELETE" });
+    await loadLevels();
+  }
+
+  // Task 14: member roles CRUD
+  async function loadMemberRoles() {
+    try { setMemberRoles(await api<any[]>("/admin/member-roles")); } catch { setMemberRoles([]); }
+  }
+  async function createMemberRole() {
+    if (!newMemberRoleName.trim()) return;
+    await api("/admin/member-roles", { method: "POST", body: JSON.stringify({ name: newMemberRoleName.trim() }) });
+    setNewMemberRoleName("");
+    await loadMemberRoles();
+  }
+  async function deleteMemberRole(id: string) {
+    await api(`/admin/member-roles/${id}`, { method: "DELETE" });
+    await loadMemberRoles();
+  }
+
   useEffect(() => {
     load().catch((err) => setMessage(err.message));
+    loadLevels();
+    loadMemberRoles();
   }, []);
 
   const eventStatuses = ["draft", "active", "closed"];
@@ -778,6 +828,79 @@ export default function Admin({ language }: AdminProps) {
                 </List>
               </CardContent>
             </Card>
+          </Grid>
+
+          {/* Task 14: Levels */}
+          <Grid item xs={12}>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>{t(language, "adminLevelsTitle")}</Typography>
+              <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
+                <TextField size="small" label={t(language, "adminLevelName")} value={newLevelName} onChange={(e) => setNewLevelName(e.target.value)} />
+                <TextField size="small" label={t(language, "adminLevelSortOrder")} type="number" value={newLevelSortOrder} onChange={(e) => setNewLevelSortOrder(e.target.value)} sx={{ width: 120 }} />
+                <Button variant="contained" size="small" onClick={createLevel} disabled={!newLevelName.trim()}>
+                  {t(language, "adminLevelsAddButton")}
+                </Button>
+              </Stack>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelName")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelSortOrder")}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {levels.map((lvl) => (
+                      <TableRow key={lvl.id}>
+                        <TableCell>{lvl.name}</TableCell>
+                        <TableCell>{lvl.sortOrder ?? "-"}</TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" color="error" onClick={() => deleteLevel(lvl.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Grid>
+
+          {/* Task 14: Member Roles */}
+          <Grid item xs={12}>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>{t(language, "adminMemberRolesTitle")}</Typography>
+              <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
+                <TextField size="small" label={t(language, "adminMemberRoleName")} value={newMemberRoleName} onChange={(e) => setNewMemberRoleName(e.target.value)} />
+                <Button variant="contained" size="small" onClick={createMemberRole} disabled={!newMemberRoleName.trim()}>
+                  {t(language, "adminMemberRolesAddButton")}
+                </Button>
+              </Stack>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminMemberRoleName")}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {memberRoles.map((role) => (
+                      <TableRow key={role.id}>
+                        <TableCell>{role.name}</TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" color="error" onClick={() => deleteMemberRole(role.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
           </Grid>
 
         </Grid>

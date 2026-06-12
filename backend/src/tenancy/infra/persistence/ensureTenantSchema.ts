@@ -104,6 +104,66 @@ export async function ensureTenantSchema() {
     await pool.query(`
       DROP INDEX IF EXISTS ux_votes_judge_model;
     `);
+
+    // Remove old team tables
+    await pool.query(`DROP TABLE IF EXISTS team_members CASCADE;`);
+    await pool.query(`DROP TABLE IF EXISTS teams CASCADE;`);
+    await pool.query(`DROP TABLE IF EXISTS team_roles CASCADE;`);
+
+    // Add levels table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS levels (
+        id uuid PRIMARY KEY,
+        name text NOT NULL,
+        sort_order integer
+      );
+    `);
+
+    // Add member_roles table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS member_roles (
+        id uuid PRIMARY KEY,
+        name text NOT NULL
+      );
+    `);
+
+    // Add model_team_members table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS model_team_members (
+        id uuid PRIMARY KEY,
+        model_id uuid NOT NULL,
+        name text NOT NULL,
+        surname text NOT NULL,
+        role text NOT NULL
+      );
+    `);
+
+    // Add seqId to categories
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'categories'
+            AND column_name = 'seq_id'
+        ) THEN
+          ALTER TABLE categories ADD COLUMN seq_id serial NOT NULL;
+        END IF;
+      END $$;
+    `);
+
+    // Add levelId, displayNumber, isTeam to models; remove teamId
+    await pool.query(`
+      ALTER TABLE IF EXISTS models
+        ADD COLUMN IF NOT EXISTS level_id uuid,
+        ADD COLUMN IF NOT EXISTS display_number integer,
+        ADD COLUMN IF NOT EXISTS is_team boolean NOT NULL DEFAULT false;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS models
+        DROP COLUMN IF EXISTS team_id;
+    `);
   } finally {
     await pool.end();
   }

@@ -48,10 +48,15 @@ type Model = {
   description?: string | null;
   code?: string | null;
   categoryId: string;
-  teamId?: string | null;
+  levelId: string;
   imageUrl?: string | null;
+  isTeam: boolean;
+  displayNumber?: number | null;
 };
-type ModelDetail = { model: Model; images: { id: string; url: string }[] };
+type Level = { id: string; name: string; sortOrder?: number | null };
+type MemberRole = { id: string; name: string };
+type TeamMember = { name: string; surname: string; role: string };
+type ModelDetail = { model: Model; images: { id: string; url: string }[]; teamMembers: TeamMember[] };
 type Category = { id: string; eventId: string; name: string; status: string };
 
 interface ModelsProps {
@@ -71,7 +76,14 @@ export default function Models({ language }: ModelsProps) {
   const [maxModelsPerUser, setMaxModelsPerUser] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
-  const [editTeamId, setEditTeamId] = useState("");
+  const [levels, setLevels] = useState<Level[]>([]);
+  const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
+  const [editLevelId, setEditLevelId] = useState("");
+  const [editIsTeam, setEditIsTeam] = useState(false);
+  const [editTeamMembers, setEditTeamMembers] = useState<TeamMember[]>([]);
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberSurname, setNewMemberSurname] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState("");
   const [attachName, setAttachName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -100,6 +112,13 @@ export default function Models({ language }: ModelsProps) {
     }
   }
 
+  async function loadLevels() {
+    try { setLevels(await api<Level[]>("/public/levels")); } catch { setLevels([]); }
+  }
+  async function loadMemberRoles() {
+    try { setMemberRoles(await api<MemberRole[]>("/public/member-roles")); } catch { setMemberRoles([]); }
+  }
+
   async function openModel(modelId: string) {
     if (expandedId === modelId) {
       setExpandedId(null);
@@ -110,7 +129,9 @@ export default function Models({ language }: ModelsProps) {
     setDetail(d);
     setEditName(d.model.name);
     setEditCategoryId(d.model.categoryId);
-    setEditTeamId(d.model.teamId || "");
+    setEditLevelId(d.model.levelId || "");
+    setEditIsTeam(d.model.isTeam || false);
+    setEditTeamMembers(d.teamMembers || []);
     setExpandedId(modelId);
     setIsCreating(false);
     setAttachName("");
@@ -127,7 +148,12 @@ export default function Models({ language }: ModelsProps) {
     setDetail(null);
     setEditName("");
     setEditCategoryId("");
-    setEditTeamId("");
+    setEditLevelId("");
+    setEditIsTeam(false);
+    setEditTeamMembers([]);
+    setNewMemberName("");
+    setNewMemberSurname("");
+    setNewMemberRole("");
     setIsCreating(true);
     setAttachName("");
   }
@@ -140,7 +166,9 @@ export default function Models({ language }: ModelsProps) {
         body: JSON.stringify({
           name: editName.trim(),
           categoryId: editCategoryId,
-          teamId: editTeamId.trim() || undefined
+          levelId: editLevelId,
+          isTeam: editIsTeam,
+          teamMembers: editIsTeam ? editTeamMembers : []
         })
       });
       setIsCreating(false);
@@ -161,7 +189,9 @@ export default function Models({ language }: ModelsProps) {
         body: JSON.stringify({
           name: editName.trim(),
           categoryId: editCategoryId,
-          teamId: editTeamId.trim() || undefined
+          levelId: editLevelId,
+          isTeam: editIsTeam,
+          teamMembers: editTeamMembers
         })
       });
       closePanel();
@@ -262,7 +292,18 @@ export default function Models({ language }: ModelsProps) {
     }
   }
 
-  useEffect(() => { load(); loadCategories(); loadSettings(); }, []);
+  function addTeamMember() {
+    if (!newMemberName.trim() || !newMemberSurname.trim() || !newMemberRole) return;
+    setEditTeamMembers(prev => [...prev, { name: newMemberName.trim(), surname: newMemberSurname.trim(), role: newMemberRole }]);
+    setNewMemberName("");
+    setNewMemberSurname("");
+    setNewMemberRole("");
+  }
+  function removeTeamMember(idx: number) {
+    setEditTeamMembers(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  useEffect(() => { load(); loadCategories(); loadSettings(); loadLevels(); loadMemberRoles(); }, []);
 
   const openCategories = categories.filter((c) => c.status === "open");
   const getCategoryName = (catId: string) => {
@@ -289,8 +330,45 @@ export default function Models({ language }: ModelsProps) {
                 {openCategories.map((cat) => <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>)}
               </Select>
             </FormControl>
-            <TextField label={t(language, "modelsTeamPlaceholder")} value={editTeamId} onChange={(e) => setEditTeamId(e.target.value)} fullWidth size="small" />
-            <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId} fullWidth>
+            <FormControl fullWidth size="small">
+              <InputLabel>{t(language, "modelsLevelPlaceholder")}</InputLabel>
+              <Select value={editLevelId} label={t(language, "modelsLevelPlaceholder")} onChange={(e) => setEditLevelId(e.target.value)}>
+                {levels.map((lvl) => <MenuItem key={lvl.id} value={lvl.id}>{lvl.name}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <input type="checkbox" id="isTeam" checked={editIsTeam} onChange={(e) => setEditIsTeam(e.target.checked)} />
+              <Typography variant="body2" component="label" htmlFor="isTeam">
+                {t(language, "modelsIsTeamLabel")}
+              </Typography>
+            </Stack>
+            {editIsTeam && (
+              <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>{t(language, "modelsTeamMembersSection")}</Typography>
+                {editTeamMembers.map((m, idx) => (
+                  <Stack key={idx} direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ flexGrow: 1 }}>{m.name} {m.surname} — {m.role}</Typography>
+                    <IconButton size="small" color="error" onClick={() => removeTeamMember(idx)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                ))}
+                <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
+                  <TextField size="small" label={t(language, "modelsMemberName")} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
+                  <TextField size="small" label={t(language, "modelsMemberSurname")} value={newMemberSurname} onChange={(e) => setNewMemberSurname(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
+                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel>{t(language, "modelsMemberRole")}</InputLabel>
+                    <Select value={newMemberRole} label={t(language, "modelsMemberRole")} onChange={(e) => setNewMemberRole(e.target.value)}>
+                      {memberRoles.map((r) => <MenuItem key={r.id} value={r.name}>{r.name}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                  <Button variant="outlined" size="small" onClick={addTeamMember} disabled={!newMemberName.trim() || !newMemberSurname.trim() || !newMemberRole}>
+                    {t(language, "modelsAddMemberButton")}
+                  </Button>
+                </Stack>
+              </Box>
+            )}
+            <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || !editLevelId} fullWidth>
               {savingModel ? t(language, "modelsUploading") : isCreating ? t(language, "modelsCreateButton") : t(language, "modelsSaveButton")}
             </Button>
           </Stack>

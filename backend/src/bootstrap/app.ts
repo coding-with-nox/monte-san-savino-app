@@ -9,7 +9,6 @@ import { judgeRoutes } from "../contest/infra/http/judge.routes";
 import { modelUploadRoutes } from "../contest/infra/http/modelUpload.routes";
 import { userRoutes } from "../identity/infra/http/user.routes";
 import { adminUserRoutes } from "../identity/infra/http/admin.routes";
-import { teamRoutes } from "../contest/infra/http/team.routes";
 import { modelRoutes } from "../contest/infra/http/model.routes";
 import { eventRoutes, enrollmentRoutes } from "../contest/infra/http/event.routes";
 import { categoryRoutes } from "../contest/infra/http/category.routes";
@@ -20,14 +19,15 @@ import { exportRoutes } from "../contest/infra/http/export.routes";
 import { awardRoutes } from "../contest/infra/http/award.routes";
 import { judgeAdminRoutes } from "../contest/infra/http/judge-admin.routes";
 import { adminModelsRoutes } from "../contest/infra/http/admin-models.routes";
+import { adminLevelsRoutes, publicLevelsRoutes } from "../contest/infra/http/levels.routes";
 import { qrRoutes } from "../contest/infra/http/qr.routes";
 import { sponsorRoutes } from "../contest/infra/http/sponsor.routes";
 import { specialMentionRoutes } from "../contest/infra/http/special-mention.routes";
 import { judgeModificationRoutes, adminModificationRoutes } from "../contest/infra/http/modification-request.routes";
 import { publicCategoryRoutes } from "../contest/infra/http/public-categories.routes";
 import { settingsRoutes, adminSettingsRoutes } from "../contest/infra/http/settings.routes";
-import { teamRolesRoutes, teamRolesPublicRoutes } from "../contest/infra/http/team-roles.routes";
 import { eventCampaignsRoutes } from "../contest/infra/http/event-campaigns.routes";
+import { adminMemberRolesRoutes, publicMemberRolesRoutes } from "../contest/infra/http/member-roles.routes";
 
 export function buildApp() {
   const rawCorsOrigin = process.env.CORS_ORIGIN ?? "";
@@ -61,7 +61,6 @@ export function buildApp() {
           { name: "Judging", description: "Flusso di voto dei giudici." },
           { name: "Models", description: "Gestione modelli e upload immagini." },
           { name: "Users", description: "Profilo utente." },
-          { name: "Teams", description: "Gestione team." },
           { name: "Events", description: "Gestione eventi." },
           { name: "Categories", description: "Gestione categorie." },
           { name: "Enrollments", description: "Iscrizioni utenti." },
@@ -102,7 +101,6 @@ export function buildApp() {
     .use(identityRoutes)
     .use(userRoutes)
     .use(adminUserRoutes)
-    .use(teamRoutes)
     .use(modelRoutes)
     .use(judgeRoutes)
     .use(modelUploadRoutes)
@@ -118,6 +116,10 @@ export function buildApp() {
     .use(awardRoutes)
     .use(judgeAdminRoutes)
     .use(adminModelsRoutes)
+    .use(adminLevelsRoutes)
+    .use(publicLevelsRoutes)
+    .use(adminMemberRolesRoutes)
+    .use(publicMemberRolesRoutes)
     .use(qrRoutes)
     .use(sponsorRoutes)
     .use(specialMentionRoutes)
@@ -126,7 +128,5 @@ export function buildApp() {
     .use(publicCategoryRoutes)
     .use(settingsRoutes)
     .use(adminSettingsRoutes)
-    .use(teamRolesRoutes)
-    .use(teamRolesPublicRoutes)
     .use(eventCampaignsRoutes);
 }

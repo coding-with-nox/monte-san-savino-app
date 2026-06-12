@@ -33,7 +33,6 @@ import PersonIcon from "@mui/icons-material/Person";
 import Login from "./pages/Login";
 import Judge from "./pages/Judge";
 import Profile from "./pages/Profile";
-import Teams from "./pages/Teams";
 import Models from "./pages/Models";
 import PublicEvents from "./pages/PublicEvents";
 import Admin from "./pages/Admin";
@@ -164,8 +163,7 @@ export default function App() {
 
   const allNavItems = [
     { label: t(language, "navProfile"), path: "/", minRole: "user" as Role },
-    { label: t(language, "navTeams"), path: "/teams", minRole: "user" as Role },
-    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
+{ label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
     { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null },
     { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role },
     { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role },
@@ -309,8 +307,7 @@ export default function App() {
               )}
             />
             <Route path="/" element={<Protected><Profile language={language} /></Protected>} />
-            <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
-            <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
+<Route path="/models" element={<Protected><Models language={language} /></Protected>} />
             <Route path="/public-events" element={<PublicEvents language={language} />} />
             <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />
             <Route path="/users" element={<Protected><RequireRole min="manager"><Users language={language} /></RequireRole></Protected>} />
