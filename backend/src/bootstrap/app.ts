@@ -27,6 +27,7 @@ import { judgeModificationRoutes, adminModificationRoutes } from "../contest/inf
 import { publicCategoryRoutes } from "../contest/infra/http/public-categories.routes";
 import { settingsRoutes, adminSettingsRoutes } from "../contest/infra/http/settings.routes";
 import { eventCampaignsRoutes } from "../contest/infra/http/event-campaigns.routes";
+import { adminMemberRolesRoutes, publicMemberRolesRoutes } from "../contest/infra/http/member-roles.routes";
 
 export function buildApp() {
   const rawCorsOrigin = process.env.CORS_ORIGIN ?? "";
@@ -117,6 +118,8 @@ export function buildApp() {
     .use(adminModelsRoutes)
     .use(adminLevelsRoutes)
     .use(publicLevelsRoutes)
+    .use(adminMemberRolesRoutes)
+    .use(publicMemberRolesRoutes)
     .use(qrRoutes)
     .use(sponsorRoutes)
     .use(specialMentionRoutes)
