@@ -9,7 +9,6 @@ import { judgeRoutes } from "../contest/infra/http/judge.routes";
 import { modelUploadRoutes } from "../contest/infra/http/modelUpload.routes";
 import { userRoutes } from "../identity/infra/http/user.routes";
 import { adminUserRoutes } from "../identity/infra/http/admin.routes";
-import { teamRoutes } from "../contest/infra/http/team.routes";
 import { modelRoutes } from "../contest/infra/http/model.routes";
 import { eventRoutes, enrollmentRoutes } from "../contest/infra/http/event.routes";
 import { categoryRoutes } from "../contest/infra/http/category.routes";
@@ -26,7 +25,6 @@ import { specialMentionRoutes } from "../contest/infra/http/special-mention.rout
 import { judgeModificationRoutes, adminModificationRoutes } from "../contest/infra/http/modification-request.routes";
 import { publicCategoryRoutes } from "../contest/infra/http/public-categories.routes";
 import { settingsRoutes, adminSettingsRoutes } from "../contest/infra/http/settings.routes";
-import { teamRolesRoutes, teamRolesPublicRoutes } from "../contest/infra/http/team-roles.routes";
 import { eventCampaignsRoutes } from "../contest/infra/http/event-campaigns.routes";
 
 export function buildApp() {
@@ -61,7 +59,6 @@ export function buildApp() {
           { name: "Judging", description: "Flusso di voto dei giudici." },
           { name: "Models", description: "Gestione modelli e upload immagini." },
           { name: "Users", description: "Profilo utente." },
-          { name: "Teams", description: "Gestione team." },
           { name: "Events", description: "Gestione eventi." },
           { name: "Categories", description: "Gestione categorie." },
           { name: "Enrollments", description: "Iscrizioni utenti." },
@@ -102,7 +99,6 @@ export function buildApp() {
     .use(identityRoutes)
     .use(userRoutes)
     .use(adminUserRoutes)
-    .use(teamRoutes)
     .use(modelRoutes)
     .use(judgeRoutes)
     .use(modelUploadRoutes)
@@ -126,7 +122,5 @@ export function buildApp() {
     .use(publicCategoryRoutes)
     .use(settingsRoutes)
     .use(adminSettingsRoutes)
-    .use(teamRolesRoutes)
-    .use(teamRolesPublicRoutes)
     .use(eventCampaignsRoutes);
 }
