@@ -2,9 +2,9 @@ import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable, teamsTable, teamMembersTable } from "../persistence/schema";
+import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable } from "../persistence/schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
-import { formatModelCode, normalizeModelCodeDigits, normalizeModelCodePrefix } from "./model-code";
+import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 
 type ExportSettings = {
   includeModelCode: boolean;
@@ -12,9 +12,7 @@ type ExportSettings = {
   includeParticipantEmail: boolean;
   excelSheetName: string;
   excelFilePrefix: string;
-  modelCodePrefix: string;
-  modelCodeDigits: number;
-  modelUserDigits: number;
+  displayNumberPadding: number;
 };
 
 type ZipEntry = {
@@ -272,15 +270,14 @@ async function loadExportSettings(tenantDb: any): Promise<ExportSettings> {
   for (const row of rows as Array<{ key: string; value: string }>) {
     map.set(row.key, row.value);
   }
+  const codeFormat = await loadModelCodeFormatSettings(tenantDb);
   return {
     includeModelCode: boolFromSetting(map.get("exportIncludeModelCode"), true),
     includeModelDescription: boolFromSetting(map.get("exportIncludeModelDescription"), true),
     includeParticipantEmail: boolFromSetting(map.get("exportIncludeParticipantEmail"), true),
     excelSheetName: normalizePlainText(map.get("excelSheetName"), "Export", 31),
     excelFilePrefix: normalizeFilePart(map.get("excelFilePrefix"), "contest-export"),
-    modelCodePrefix: normalizeModelCodePrefix(map.get("printCodePrefix")),
-    modelCodeDigits: normalizeModelCodeDigits(map.get("printCodeDigits")),
-    modelUserDigits: 4
+    displayNumberPadding: codeFormat.displayNumberPadding
   };
 }
 
@@ -303,11 +300,9 @@ function buildSheetName(settings: ExportSettings, suffix: string) {
   return sanitizeSheetName(`${settings.excelSheetName}-${suffix}`);
 }
 
-function formatModelCodeForExport(settings: ExportSettings, code: number | null | undefined, userSeqId?: number | null) {
-  return formatModelCode(code, userSeqId ?? null, {
-    prefix: settings.modelCodePrefix,
-    digits: settings.modelCodeDigits,
-    userDigits: settings.modelUserDigits
+function formatModelCodeForExport(settings: ExportSettings, code: number | null | undefined, categorySeqId?: number | null, displayNumber?: number | null) {
+  return formatModelCode(code, categorySeqId ?? null, displayNumber ?? null, {
+    displayNumberPadding: settings.displayNumberPadding
   });
 }
 
@@ -315,12 +310,13 @@ async function getLabelRows(tenantDb: any, eventId: string, exportSettings: Expo
   const rows = await tenantDb
     .select({
       userEmail: usersTable.email,
-      userSeqId: usersTable.seqId,
       firstName: userProfilesTable.firstName,
       lastName: userProfilesTable.lastName,
       categoryName: categoriesTable.name,
+      categorySeqId: categoriesTable.seqId,
       modelName: modelsTable.name,
-      modelCode: modelsTable.code
+      modelCode: modelsTable.code,
+      displayNumber: modelsTable.displayNumber
     })
     .from(modelsTable)
     .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
@@ -332,7 +328,7 @@ async function getLabelRows(tenantDb: any, eventId: string, exportSettings: Expo
     utente: fullName(row.firstName, row.lastName, row.userEmail) || row.userEmail || "",
     categoria: row.categoryName ?? "",
     nomeModello: row.modelName ?? "",
-    codice: formatModelCodeForExport(exportSettings, row.modelCode, row.userSeqId)
+    codice: formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber)
   }));
 }
 
@@ -348,13 +344,14 @@ const managerExportRoutes = new Elysia()
         eventName: eventsTable.name,
         userId: registrationsTable.userId,
         email: usersTable.email,
-        userSeqId: usersTable.seqId,
         participant: userProfilesTable.firstName,
         participantLastName: userProfilesTable.lastName,
         modelName: modelsTable.name,
         modelCode: modelsTable.code,
         modelDescription: modelsTable.description,
         categoryName: categoriesTable.name,
+        categorySeqId: categoriesTable.seqId,
+        displayNumber: modelsTable.displayNumber,
         checkedIn: registrationsTable.checkedIn
       })
       .from(registrationsTable)
@@ -382,7 +379,7 @@ const managerExportRoutes = new Elysia()
         base.email = row.email ?? "";
       }
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.userSeqId);
+        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.modelDescription ?? "";
@@ -407,16 +404,16 @@ const managerExportRoutes = new Elysia()
       .select({
         id: modelsTable.id,
         userId: modelsTable.userId,
-        teamId: modelsTable.teamId,
         categoryId: modelsTable.categoryId,
         name: modelsTable.name,
         description: modelsTable.description,
         code: modelsTable.code,
         imageUrl: modelsTable.imageUrl,
-        userSeqId: usersTable.seqId
+        categorySeqId: categoriesTable.seqId,
+        displayNumber: modelsTable.displayNumber
       })
       .from(modelsTable)
-      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId));
+      .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId));
     const rows = categoryId
       ? await baseQuery.where(eq(modelsTable.categoryId, categoryId as any))
       : await baseQuery;
@@ -429,7 +426,7 @@ const managerExportRoutes = new Elysia()
         nome: row.name
       };
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.code, row.userSeqId);
+        base.codice = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.description ?? "";
@@ -460,7 +457,6 @@ const managerExportRoutes = new Elysia()
       .select({
         userId: registrationsTable.userId,
         email: usersTable.email,
-        userSeqId: usersTable.seqId,
         firstName: userProfilesTable.firstName,
         lastName: userProfilesTable.lastName
       })
@@ -478,22 +474,22 @@ const managerExportRoutes = new Elysia()
     const models = await tenantDb
       .select({
         userId: modelsTable.userId,
-        userSeqId: usersTable.seqId,
         modelName: modelsTable.name,
         modelCode: modelsTable.code,
         modelDescription: modelsTable.description,
-        categoryName: categoriesTable.name
+        categoryName: categoriesTable.name,
+        categorySeqId: categoriesTable.seqId,
+        displayNumber: modelsTable.displayNumber
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
       .where(eq(categoriesTable.eventId, eventId as any));
 
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
       const list = modelsByUser.get(model.userId) ?? [];
       const parts = [model.modelName];
-      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.userSeqId);
+      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.categorySeqId, model.displayNumber);
       if (exportSettings.includeModelCode && formattedCode) {
         parts.push(`(${formattedCode})`);
       }
@@ -562,20 +558,20 @@ const managerExportRoutes = new Elysia()
     const models = await tenantDb
       .select({
         userId: modelsTable.userId,
-        userSeqId: usersTable.seqId,
         modelName: modelsTable.name,
         modelCode: modelsTable.code,
-        categoryName: categoriesTable.name
+        categoryName: categoriesTable.name,
+        categorySeqId: categoriesTable.seqId,
+        displayNumber: modelsTable.displayNumber
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
       .where(eq(categoriesTable.eventId, eventId as any));
 
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
       const list = modelsByUser.get(model.userId) ?? [];
-      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.userSeqId);
+      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.categorySeqId, model.displayNumber);
       list.push(`${model.modelName}${formattedCode ? ` (${formattedCode})` : ""} - ${model.categoryName}`);
       modelsByUser.set(model.userId, list);
     }
@@ -749,14 +745,14 @@ const userExportRoutes = new Elysia()
         modelCode: modelsTable.code,
         modelDescription: modelsTable.description,
         categoryName: categoriesTable.name,
-        checkedIn: registrationsTable.checkedIn,
-        userSeqId: usersTable.seqId
+        categorySeqId: categoriesTable.seqId,
+        displayNumber: modelsTable.displayNumber,
+        checkedIn: registrationsTable.checkedIn
       })
       .from(registrationsTable)
       .leftJoin(eventsTable, eq(eventsTable.id, registrationsTable.eventId))
       .leftJoin(modelsTable, eq(modelsTable.id, registrationsTable.modelId))
       .leftJoin(categoriesTable, eq(categoriesTable.id, registrationsTable.categoryId))
-      .leftJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
       .where(eq(registrationsTable.userId, user!.id as any));
 
     const excelRows = (rows as any[]).map((row) => {
@@ -768,7 +764,7 @@ const userExportRoutes = new Elysia()
         checkIn: row.checkedIn ? "true" : "false"
       };
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.userSeqId);
+        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.modelDescription ?? "";
@@ -808,22 +804,16 @@ const userExportRoutes = new Elysia()
       return { error: "User not found" };
     }
 
-    // Count teams
-    const teamCount = await tenantDb
-      .select({ id: teamsTable.id })
-      .from(teamMembersTable)
-      .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
-      .where(eq(teamMembersTable.userId, user!.id as any));
-
     // Load models (optionally filtered by event)
     const modelsQuery = tenantDb
       .select({
         id: modelsTable.id,
         name: modelsTable.name,
         code: modelsTable.code,
-        teamId: modelsTable.teamId,
         categoryId: modelsTable.categoryId,
         categoryName: categoriesTable.name,
+        categorySeqId: categoriesTable.seqId,
+        displayNumber: modelsTable.displayNumber,
         eventId: categoriesTable.eventId
       })
       .from(modelsTable)
@@ -834,38 +824,17 @@ const userExportRoutes = new Elysia()
       : await modelsQuery;
 
     const userSeqId = profile.seqId;
-    const paddedUserId = String(userSeqId).padStart(exportSettings.modelUserDigits, "0");
+    const paddedUserId = String(userSeqId).padStart(4, "0");
 
-    // Build model rows HTML, including team members if model is in a team
-    const modelRowsHtml = await Promise.all((allModels as any[]).map(async (model) => {
-      const code = formatModelCodeForExport(exportSettings, model.code, userSeqId);
-      const isTeam = model.teamId ? 1 : 0;
-      let teamInfo = "";
-      if (model.teamId) {
-        // Task 07: fetch team members
-        const members = await tenantDb
-          .select({
-            firstName: userProfilesTable.firstName,
-            lastName: userProfilesTable.lastName,
-            email: usersTable.email,
-            role: teamMembersTable.role
-          })
-          .from(teamMembersTable)
-          .leftJoin(usersTable, eq(usersTable.id, teamMembersTable.userId))
-          .leftJoin(userProfilesTable, eq(userProfilesTable.userId, teamMembersTable.userId))
-          .where(eq(teamMembersTable.teamId, model.teamId as any));
-        const memberNames = (members as any[])
-          .map((m) => `${fullName(m.firstName, m.lastName, m.email)}${m.role ? ` (${m.role})` : ""}`)
-          .join(", ");
-        teamInfo = `<br/><small>Team: ${memberNames}</small>`;
-      }
+    // Build model rows HTML
+    const modelRowsHtml = (allModels as any[]).map((model) => {
+      const code = formatModelCodeForExport(exportSettings, model.code, model.categorySeqId, model.displayNumber);
       return `<tr>
         <td>${code || model.id.slice(0, 8)}</td>
-        <td>${model.name}${teamInfo}</td>
-        <td>${isTeam}</td>
+        <td>${model.name}</td>
         <td>${model.categoryName ?? ""}</td>
       </tr>`;
-    }));
+    });
 
     const title = "Monte San Savino";
     set.headers["content-type"] = "text/html; charset=utf-8";
@@ -897,7 +866,6 @@ const userExportRoutes = new Elysia()
     <p><strong>Last name:</strong> ${profile.lastName ?? ""}</p>
     <p><strong>Country:</strong> ${profile.city ?? ""}</p>
     <p><strong>E-mail address:</strong> ${profile.email}</p>
-    <p><strong>Total Teams:</strong> ${teamCount.length}</p>
     <p><strong>Model Total:</strong> ${allModels.length}</p>
   </div>
   <div class="section">
@@ -906,12 +874,11 @@ const userExportRoutes = new Elysia()
         <tr>
           <th>Model ID</th>
           <th>Model Title</th>
-          <th>Is Team</th>
           <th>Class Title</th>
         </tr>
       </thead>
       <tbody>
-        ${modelRowsHtml.join("") || "<tr><td colspan=\"4\">Nessun modello</td></tr>"}
+        ${modelRowsHtml.join("") || "<tr><td colspan=\"3\">Nessun modello</td></tr>"}
       </tbody>
     </table>
   </div>
