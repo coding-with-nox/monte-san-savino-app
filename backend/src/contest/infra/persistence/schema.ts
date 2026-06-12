@@ -1,21 +1,14 @@
-import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index, serial } from "drizzle-orm/pg-core";
 
-export const teamsTable = pgTable("teams", {
+// REMOVED: teamsTable, teamMembersTable, teamRolesTable
+
+export const levelsTable = pgTable("levels", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
-  ownerId: uuid("owner_id").notNull()
+  sortOrder: integer("sort_order")
 });
 
-export const teamMembersTable = pgTable("team_members", {
-  teamId: uuid("team_id").notNull(),
-  userId: uuid("user_id").notNull(),
-  role: text("role").notNull()
-}, (t) => ({
-  uniq: uniqueIndex("ux_team_user").on(t.teamId, t.userId)
-}));
-
-// Task 08: predefined team roles
-export const teamRolesTable = pgTable("team_roles", {
+export const memberRolesTable = pgTable("member_roles", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull()
 });
@@ -32,10 +25,10 @@ export const categoriesTable = pgTable("categories", {
   id: uuid("id").primaryKey(),
   eventId: uuid("event_id").notNull(),
   name: text("name").notNull(),
-  status: text("status").default("open").notNull() // open | closed
+  status: text("status").default("open").notNull(),
+  seqId: serial("seq_id").notNull()
 });
 
-// Task 10: event campaigns with enrollment open/close dates
 export const eventCampaignsTable = pgTable("event_campaigns", {
   id: uuid("id").primaryKey(),
   eventId: uuid("event_id").notNull(),
@@ -44,8 +37,6 @@ export const eventCampaignsTable = pgTable("event_campaigns", {
   enrollmentCloseDate: text("enrollment_close_date")
 });
 
-// Task 02: allow multiple enrollments per user per event (one per model)
-// Unique constraints are now partial indexes in DB; Drizzle doesn't enforce them here
 export const registrationsTable = pgTable("registrations", {
   id: uuid("id").primaryKey(),
   userId: uuid("user_id").notNull(),
@@ -59,15 +50,25 @@ export const registrationsTable = pgTable("registrations", {
 export const modelsTable = pgTable("models", {
   id: uuid("id").primaryKey(),
   userId: uuid("user_id").notNull(),
-  teamId: uuid("team_id"),
   categoryId: uuid("category_id").notNull(),
+  levelId: uuid("level_id").notNull(),
   name: text("name").notNull(),
   description: text("description"),
   code: integer("code"),
-  imageUrl: text("image_url")
+  imageUrl: text("image_url"),
+  isTeam: boolean("is_team").default(false).notNull(),
+  displayNumber: integer("display_number")
 }, (t) => ({
   uniqCode: uniqueIndex("ux_models_code").on(t.code)
 }));
+
+export const modelTeamMembersTable = pgTable("model_team_members", {
+  id: uuid("id").primaryKey(),
+  modelId: uuid("model_id").notNull(),
+  name: text("name").notNull(),
+  surname: text("surname").notNull(),
+  role: text("role").notNull()
+});
 
 export const modelImagesTable = pgTable("model_images", {
   id: uuid("id").primaryKey(),
@@ -79,7 +80,7 @@ export const votesTable = pgTable("votes", {
   id: uuid("id").primaryKey(),
   judgeId: uuid("judge_id").notNull(),
   modelId: uuid("model_id").notNull(),
-  rank: integer("rank").notNull(), // 0..3
+  rank: integer("rank").notNull(),
   createdAt: timestamp("created_at").defaultNow()
 }, (t) => ({
   byJudgeModel: index("ix_votes_judge_model").on(t.judgeId, t.modelId),
@@ -90,7 +91,7 @@ export const judgeAssignmentsTable = pgTable("judge_assignments", {
   id: uuid("id").primaryKey(),
   eventId: uuid("event_id").notNull(),
   judgeId: uuid("judge_id").notNull(),
-  categoryId: uuid("category_id") // null = all categories in event
+  categoryId: uuid("category_id")
 }, (t) => ({
   uniq: uniqueIndex("ux_judge_event").on(t.eventId, t.judgeId)
 }));
@@ -111,7 +112,7 @@ export const sponsorsTable = pgTable("sponsors", {
   logoUrl: text("logo_url"),
   websiteUrl: text("website_url"),
   description: text("description"),
-  tier: text("tier").default("bronze").notNull() // bronze | silver | gold | platinum
+  tier: text("tier").default("bronze").notNull()
 });
 
 export const specialMentionsTable = pgTable("special_mentions", {
@@ -120,18 +121,17 @@ export const specialMentionsTable = pgTable("special_mentions", {
   modelId: uuid("model_id").notNull(),
   title: text("title").notNull(),
   description: text("description"),
-  awardedBy: uuid("awarded_by").notNull(), // manager/admin userId
+  awardedBy: uuid("awarded_by").notNull(),
   createdAt: timestamp("created_at").defaultNow()
 });
 
-// Task 03: added suggestedCategoryId for category-change requests
 export const modificationRequestsTable = pgTable("modification_requests", {
   id: uuid("id").primaryKey(),
   modelId: uuid("model_id").notNull(),
   judgeId: uuid("judge_id").notNull(),
   reason: text("reason").notNull(),
   suggestedCategoryId: uuid("suggested_category_id"),
-  status: text("status").default("pending").notNull(), // pending | resolved | rejected
+  status: text("status").default("pending").notNull(),
   createdAt: timestamp("created_at").defaultNow()
 });
 
