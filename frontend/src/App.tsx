@@ -22,7 +22,6 @@ import {
   ThemeProvider,
   Toolbar,
   Typography,
-  createTheme,
   useMediaQuery
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -42,6 +41,7 @@ import Labels from "./pages/Labels";
 import { api } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
+import { buildTheme } from "./lib/theme";
 
 function Protected({ children }: { children: React.ReactNode }) {
   return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
@@ -122,23 +122,7 @@ export default function App() {
     languageEn: t(language, "languageEn")
   };
 
-  const presetPrimary: Record<"violet" | "ocean" | "forest", { light: string; dark: string }> = {
-    violet: { light: "#6750a4", dark: "#d0bcff" },
-    ocean: { light: "#006d77", dark: "#83c5be" },
-    forest: { light: "#2d6a4f", dark: "#95d5b2" }
-  };
-
-  const muiTheme = useMemo(() => createTheme({
-    palette: {
-      mode: themeMode,
-      primary: {
-        main: themeMode === "light" ? presetPrimary[themePreset].light : presetPrimary[themePreset].dark
-      }
-    },
-    typography: {
-      fontFamily: "\"Roboto\", \"Segoe UI\", system-ui, sans-serif"
-    }
-  }), [themeMode, themePreset]);
+  const muiTheme = useMemo(() => buildTheme(themeMode, themePreset), [themeMode, themePreset]);
 
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
 
