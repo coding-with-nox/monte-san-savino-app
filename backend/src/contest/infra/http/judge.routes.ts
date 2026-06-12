@@ -130,10 +130,11 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
         description: modelsTable.description,
         code: modelsTable.code,
         imageUrl: modelsTable.imageUrl,
-        userSeqId: usersTable.seqId
+        displayNumber: modelsTable.displayNumber,
+        categorySeqId: categoriesTable.seqId
       })
       .from(modelsTable)
-      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
+      .leftJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
       .where(eq(modelsTable.id, params.modelId as any));
     const images = await tenantDb.select().from(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
     if (!rows.length) {
@@ -143,7 +144,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     return {
       model: {
         ...(rows[0] as any),
-        code: formatModelCode((rows[0] as any).code, (rows[0] as any).userSeqId, codeFormat) || null
+        code: formatModelCode((rows[0] as any).code, (rows[0] as any).categorySeqId, (rows[0] as any).displayNumber, codeFormat) || null
       },
       images
     };

@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, modelsTable } from "../persistence/schema";
-import { usersTable } from "../../../identity/infra/persistence/schema";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 
 export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
@@ -17,40 +16,43 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
         .select({
           id: modelsTable.id,
           userId: modelsTable.userId,
-          teamId: modelsTable.teamId,
           categoryId: modelsTable.categoryId,
           name: modelsTable.name,
           description: modelsTable.description,
           code: modelsTable.code,
           imageUrl: modelsTable.imageUrl,
-          userSeqId: usersTable.seqId
+          levelId: modelsTable.levelId,
+          displayNumber: modelsTable.displayNumber,
+          isTeam: modelsTable.isTeam,
+          categorySeqId: categoriesTable.seqId
         })
         .from(modelsTable)
-        .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId));
+        .leftJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId));
       return rows.map((row: any) => ({
         ...row,
-        code: formatModelCode(row.code, row.userSeqId, codeFormat) || null
+        code: formatModelCode(row.code, row.categorySeqId, row.displayNumber, codeFormat) || null
       }));
     }
     const rows = await tenantDb
       .select({
         id: modelsTable.id,
         userId: modelsTable.userId,
-        teamId: modelsTable.teamId,
         categoryId: modelsTable.categoryId,
         name: modelsTable.name,
         description: modelsTable.description,
         code: modelsTable.code,
         imageUrl: modelsTable.imageUrl,
-        userSeqId: usersTable.seqId
+        levelId: modelsTable.levelId,
+        displayNumber: modelsTable.displayNumber,
+        isTeam: modelsTable.isTeam,
+        categorySeqId: categoriesTable.seqId
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
       .where(eq(categoriesTable.eventId, eventId as any));
     return rows.map((row: any) => ({
       ...row,
-      code: formatModelCode(row.code, row.userSeqId, codeFormat) || null
+      code: formatModelCode(row.code, row.categorySeqId, row.displayNumber, codeFormat) || null
     }));
   }, {
     detail: {
