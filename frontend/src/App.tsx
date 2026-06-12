@@ -24,11 +24,17 @@ import {
   Typography,
   useMediaQuery
 } from "@mui/material";
+import BottomNavigation from "@mui/material/BottomNavigation";
+import BottomNavigationAction from "@mui/material/BottomNavigationAction";
 import MenuIcon from "@mui/icons-material/Menu";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PersonIcon from "@mui/icons-material/Person";
+import HomeIcon from "@mui/icons-material/Home";
+import CategoryIcon from "@mui/icons-material/Category";
+import EventIcon from "@mui/icons-material/Event";
+import GavelIcon from "@mui/icons-material/Gavel";
 import Login from "./pages/Login";
 import Judge from "./pages/Judge";
 import Profile from "./pages/Profile";
@@ -162,6 +168,17 @@ export default function App() {
     return roleAtLeast(role, item.minRole);
   });
 
+  const bottomNavItems = [
+    { label: t(language, "navProfile"),      path: "/",              icon: <HomeIcon /> },
+    { label: t(language, "navModels"),       path: "/models",        icon: <CategoryIcon /> },
+    { label: t(language, "navPublicEvents"), path: "/public-events", icon: <EventIcon /> },
+    ...(role && roleAtLeast(role, "judge") ? [{ label: t(language, "navJudge"), path: "/judge", icon: <GavelIcon /> }] : []),
+  ];
+
+  const bottomNavValue = bottomNavItems.findIndex((item) =>
+    item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path)
+  );
+
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
     return location.pathname.startsWith(path);
@@ -201,26 +218,26 @@ export default function App() {
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
       <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
-        <AppBar position="static" color="primary">
+        <AppBar position="static" elevation={0} sx={{ bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" }}>
           <Toolbar sx={{ gap: 2 }}>
             {isMobile && (
-              <IconButton color="inherit" edge="start" onClick={() => setDrawerOpen(true)}>
+              <IconButton color="default" edge="start" onClick={() => setDrawerOpen(true)}>
                 <MenuIcon />
               </IconButton>
             )}
-            <Typography variant="h6" sx={{ flexGrow: isMobile ? 1 : 0 }}>
+            <Typography variant="h6" sx={{ flexGrow: isMobile ? 1 : 0, color: "text.primary" }}>
               Miniatures Contest
             </Typography>
             {!isMobile && (
-              <Stack direction="row" spacing={1} sx={{ flexGrow: 1, ml: 2, flexWrap: "wrap" }}>
+              <Stack direction="row" spacing={0.5} sx={{ flexGrow: 1, ml: 2, flexWrap: "wrap" }}>
                 {navItems.map((item) => (
                   <Button
                     key={item.path}
-                    color="inherit"
                     component={RouterLink}
                     to={item.path}
-                    variant={isActive(item.path) ? "outlined" : "text"}
-                    sx={{ borderColor: "rgba(255,255,255,0.4)" }}
+                    variant={isActive(item.path) ? "contained" : "text"}
+                    color={isActive(item.path) ? "secondary" : "inherit"}
+                    sx={{ color: isActive(item.path) ? undefined : "text.primary" }}
                   >
                     {item.label}
                   </Button>
@@ -241,7 +258,7 @@ export default function App() {
                 </Select>
               </FormControl>
               <IconButton
-                color="inherit"
+                color="default"
                 onClick={() => setThemeMode(themeMode === "light" ? "dark" : "light")}
                 aria-label={`${labels.themeToggle}: ${themeMode === "light" ? labels.themeDark : labels.themeLight}`}
                 title={`${labels.themeToggle}: ${themeMode === "light" ? labels.themeDark : labels.themeLight}`}
@@ -280,7 +297,7 @@ export default function App() {
         <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
           {drawerContent}
         </Drawer>
-        <Box>
+        <Box sx={{ pb: isMobile && role ? "56px" : 0 }}>
           <Routes>
             <Route
               path="/login"
@@ -301,6 +318,32 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Box>
+        {isMobile && role && (
+          <BottomNavigation
+            value={bottomNavValue === -1 ? false : bottomNavValue}
+            showLabels
+            sx={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: (theme) => theme.zIndex.appBar,
+              borderTop: "1px solid",
+              borderColor: "divider",
+              bgcolor: "background.paper",
+            }}
+          >
+            {bottomNavItems.map((item) => (
+              <BottomNavigationAction
+                key={item.path}
+                label={item.label}
+                icon={item.icon}
+                component={RouterLink}
+                to={item.path}
+              />
+            ))}
+          </BottomNavigation>
+        )}
       </Box>
     </ThemeProvider>
   );
