@@ -19,6 +19,7 @@ import { exportRoutes } from "../contest/infra/http/export.routes";
 import { awardRoutes } from "../contest/infra/http/award.routes";
 import { judgeAdminRoutes } from "../contest/infra/http/judge-admin.routes";
 import { adminModelsRoutes } from "../contest/infra/http/admin-models.routes";
+import { adminLevelsRoutes, publicLevelsRoutes } from "../contest/infra/http/levels.routes";
 import { qrRoutes } from "../contest/infra/http/qr.routes";
 import { sponsorRoutes } from "../contest/infra/http/sponsor.routes";
 import { specialMentionRoutes } from "../contest/infra/http/special-mention.routes";
@@ -114,6 +115,8 @@ export function buildApp() {
     .use(awardRoutes)
     .use(judgeAdminRoutes)
     .use(adminModelsRoutes)
+    .use(adminLevelsRoutes)
+    .use(publicLevelsRoutes)
     .use(qrRoutes)
     .use(sponsorRoutes)
     .use(specialMentionRoutes)
