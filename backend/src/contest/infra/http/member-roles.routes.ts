@@ -27,7 +27,7 @@ export const adminMemberRolesRoutes = new Elysia({ prefix: "/admin/member-roles"
     return { updated: true };
   }, {
     params: t.Object({ id: t.String() }),
-    body: t.Object({ name: t.String() }),
+    body: t.Object({ name: t.Optional(t.String()) }),
     detail: { summary: "Aggiorna ruolo membro", tags: ["Admin"], security: [{ bearerAuth: [] }] }
   })
   .delete("/:id", async ({ tenantDb, params, set }) => {
