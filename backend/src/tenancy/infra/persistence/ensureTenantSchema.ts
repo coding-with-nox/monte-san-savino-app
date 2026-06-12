@@ -144,7 +144,9 @@ export async function ensureTenantSchema() {
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'categories' AND column_name = 'seq_id'
+          WHERE table_schema = 'public'
+            AND table_name = 'categories'
+            AND column_name = 'seq_id'
         ) THEN
           ALTER TABLE categories ADD COLUMN seq_id serial NOT NULL;
         END IF;
