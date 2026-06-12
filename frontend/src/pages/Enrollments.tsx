@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Box,
   Button,
   Chip,
   Collapse,
-  Container,
   FormControl,
   Grid,
   IconButton,
@@ -29,6 +27,9 @@ import { api } from "../lib/api";
 import { getRole, roleAtLeast } from "../lib/auth";
 import { downloadAuthenticatedFile } from "../lib/download";
 import { Language, t } from "../lib/i18n";
+import PageContainer from "../components/PageContainer";
+import EmptyState from "../components/EmptyState";
+import useToast from "../components/useToast";
 
 type Enrollment = {
   id: string;
@@ -63,7 +64,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [message, setMessage] = useState("");
+  const toast = useToast();
   const [isCreating, setIsCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exportingMine, setExportingMine] = useState(false);
@@ -135,9 +136,9 @@ export default function Enrollments({ language }: EnrollmentsProps) {
       if (isManager) {
         await loadAdminEnrollments();
       }
-      setMessage(t(language, "enrollmentsSubmitted"));
+      toast.success(t(language, "enrollmentsSubmitted"));
     } catch (err: any) {
-      setMessage(err.message || "Unable to enroll");
+      toast.error(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -148,7 +149,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
     try {
       await downloadAuthenticatedFile("/exports/my-enrollments", "my-enrollments.xlsx");
     } catch (err: any) {
-      setMessage(err.message || "Export failed");
+      toast.error(err?.message ?? String(err));
     } finally {
       setExportingMine(false);
     }
@@ -156,14 +157,14 @@ export default function Enrollments({ language }: EnrollmentsProps) {
 
   async function exportEnrollmentsByEvent() {
     if (!adminEventId) {
-      setMessage(t(language, "enrollmentsEventSelect"));
+      toast.info(t(language, "enrollmentsEventSelect"));
       return;
     }
     setExportingAdmin(true);
     try {
       await downloadAuthenticatedFile(`/exports/enrollments?eventId=${encodeURIComponent(adminEventId)}`, `enrollments-${adminEventId}.xlsx`);
     } catch (err: any) {
-      setMessage(err.message || "Export failed");
+      toast.error(err?.message ?? String(err));
     } finally {
       setExportingAdmin(false);
     }
@@ -177,15 +178,15 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   }
 
   useEffect(() => {
-    load().catch((err) => setMessage(err.message));
+    load().catch((err) => toast.error(err?.message ?? String(err)));
     loadEvents();
     loadModels();
     loadCategories();
-    loadUsers().catch((err) => setMessage(err.message));
+    loadUsers().catch((err) => toast.error(err?.message ?? String(err)));
   }, []);
 
   useEffect(() => {
-    loadAdminEnrollments().catch((err) => setMessage(err.message));
+    loadAdminEnrollments().catch((err) => toast.error(err?.message ?? String(err)));
   }, [adminEventId, isManager]);
 
   const getEventName = (id: string) => {
@@ -262,47 +263,48 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   );
 
   const renderTable = (items: Enrollment[], isPast: boolean) => (
-    <TableContainer component={Paper} variant="outlined">
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsEventSelect")}</TableCell>
-            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelColumn")}</TableCell>
-            <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategoryColumn")}</TableCell>
-            <TableCell sx={{ fontWeight: 700 }}>Check-in</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {items.map((enrollment) => (
-            <TableRow key={enrollment.id} hover>
-              <TableCell>
-                <Typography fontWeight={600}>{getEventName(enrollment.eventId)}</Typography>
-              </TableCell>
-              <TableCell>{getModelName(enrollment.modelId)}</TableCell>
-              <TableCell>{getCategoryName(enrollment.categoryId)}</TableCell>
-              <TableCell>
-                {enrollment.checkedIn ? (
-                  <Chip label={t(language, "enrollmentsCheckedIn")} size="small" color="success" variant="outlined" />
-                ) : (
-                  <Chip label="No" size="small" variant="outlined" />
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-          {items.length === 0 && (
+    items.length === 0 ? (
+      <EmptyState
+        title={isPast ? "Nessuna iscrizione passata" : "Nessuna iscrizione attiva"}
+        description="Non hai ancora iscrizioni in questa sezione."
+      />
+    ) : (
+      <TableContainer component={Paper} variant="outlined">
+        <Table>
+          <TableHead>
             <TableRow>
-              <TableCell colSpan={4} align="center">
-                <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>-</Typography>
-              </TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsEventSelect")}</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelColumn")}</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategoryColumn")}</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Check-in</TableCell>
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
+          </TableHead>
+          <TableBody>
+            {items.map((enrollment) => (
+              <TableRow key={enrollment.id} hover>
+                <TableCell>
+                  <Typography fontWeight={600}>{getEventName(enrollment.eventId)}</Typography>
+                </TableCell>
+                <TableCell>{getModelName(enrollment.modelId)}</TableCell>
+                <TableCell>{getCategoryName(enrollment.categoryId)}</TableCell>
+                <TableCell>
+                  {enrollment.checkedIn ? (
+                    <Chip label={t(language, "enrollmentsCheckedIn")} size="small" color="success" variant="outlined" />
+                  ) : (
+                    <Chip label="No" size="small" variant="outlined" />
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    )
   );
 
   return (
-    <Container maxWidth="lg">
+    <PageContainer maxWidth="lg">
+      {toast.node}
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
           <Typography variant="h4">{t(language, "enrollmentsTitle")}</Typography>
@@ -320,8 +322,6 @@ export default function Enrollments({ language }: EnrollmentsProps) {
             </Button>
           </Stack>
         </Stack>
-
-        {message && <Alert severity="info" onClose={() => setMessage("")}>{message}</Alert>}
 
         <Collapse in={isCreating}>
           <Paper variant="outlined" sx={{ mb: 1 }}>
@@ -405,6 +405,6 @@ export default function Enrollments({ language }: EnrollmentsProps) {
           </>
         )}
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }
