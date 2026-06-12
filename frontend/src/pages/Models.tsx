@@ -7,7 +7,6 @@ import {
   Chip,
   CircularProgress,
   Collapse,
-  Container,
   Divider,
   FormControl,
   Grid,
@@ -41,6 +40,10 @@ import ImageIcon from "@mui/icons-material/Image";
 import HideImageIcon from "@mui/icons-material/HideImage";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import PageContainer from "../components/PageContainer";
+import SectionCard from "../components/SectionCard";
+import EmptyState from "../components/EmptyState";
+import useToast from "../components/useToast";
 
 type Model = {
   id: string;
@@ -71,7 +74,7 @@ export default function Models({ language }: ModelsProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
-  const [message, setMessage] = useState("");
+  const toast = useToast();
   const [imagesEnabled, setImagesEnabled] = useState(false);
   const [maxModelsPerUser, setMaxModelsPerUser] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
@@ -100,7 +103,7 @@ export default function Models({ language }: ModelsProps) {
       const url = window.URL.createObjectURL(blob);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (err: any) {
-      setMessage(err.message || "Error");
+      toast.error(err?.message ?? String(err));
     }
   }
 
@@ -174,7 +177,7 @@ export default function Models({ language }: ModelsProps) {
       setIsCreating(false);
       await load();
     } catch (err: any) {
-      setMessage(err.message || "Unable to create model");
+      toast.error(err?.message ?? String(err));
     } finally {
       setSavingModel(false);
     }
@@ -197,7 +200,7 @@ export default function Models({ language }: ModelsProps) {
       closePanel();
       await load();
     } catch (err: any) {
-      setMessage(err.message || "Unable to save model");
+      toast.error(err?.message ?? String(err));
     } finally {
       setSavingModel(false);
     }
@@ -258,7 +261,7 @@ export default function Models({ language }: ModelsProps) {
       setDetail(d);
       setAttachName("");
     } catch (err: any) {
-      setMessage(err.message || "Upload failed");
+      toast.error(err?.message ?? String(err));
     } finally {
       setUploading(false);
     }
@@ -450,7 +453,8 @@ export default function Models({ language }: ModelsProps) {
   );
 
   return (
-    <Container maxWidth="lg">
+    <PageContainer maxWidth="lg">
+      {toast.node}
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
@@ -467,7 +471,6 @@ export default function Models({ language }: ModelsProps) {
             {t(language, "modelsImagesDisabledHint")}
           </Alert>
         )}
-        {message && <Alert severity="error" onClose={() => setMessage("")}>{message}</Alert>}
         <Collapse in={isCreating}>
           <Paper variant="outlined" sx={{ mb: 1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
@@ -477,87 +480,87 @@ export default function Models({ language }: ModelsProps) {
             {editPanel}
           </Paper>
         </Collapse>
-        <TableContainer component={Paper} variant="outlined">
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700, width: 72 }}>{t(language, "modelsPreviewColumn")}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCodeColumn")}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
-                <TableCell align="right" sx={{ width: 100 }} />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {models.map((model) => (
-                <React.Fragment key={model.id}>
-                  <TableRow
-                    hover
-                    sx={{
-                      cursor: "pointer",
-                      "& > td": { borderBottom: expandedId === model.id ? "none" : undefined }
-                    }}
-                    onClick={() => openModel(model.id)}
-                    selected={expandedId === model.id}
-                  >
-                    <TableCell sx={{ width: 72, p: 1 }}>
-                      {model.imageUrl ? (
-                        <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
-                      ) : (
-                        <Avatar
-                          variant="rounded"
-                          sx={{
-                            width: 40,
-                            height: 40,
-                            bgcolor: imagesEnabled ? "action.hover" : "action.disabledBackground"
-                          }}
-                        >
-                          {imagesEnabled ? (
-                            <ImageIcon fontSize="small" color="disabled" />
-                          ) : (
-                            <HideImageIcon fontSize="small" color="disabled" />
-                          )}
-                        </Avatar>
-                      )}
-                    </TableCell>
-                    <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={model.code || "-"}
-                        sx={{ "& .MuiChip-label": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }}
-                      />
-                    </TableCell>
-                    <TableCell><Chip size="small" label={getCategoryName(model.categoryId)} /></TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                        <IconButton size="small" onClick={(e) => { e.stopPropagation(); openModel(model.id); }} color="primary"><EditIcon fontSize="small" /></IconButton>
-                        <IconButton size="small" onClick={(e) => { e.stopPropagation(); deleteModel(model.id); }} color="error"><DeleteIcon fontSize="small" /></IconButton>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
+        <SectionCard title={t(language, "modelsTitle")}>
+          {models.length === 0 && (
+            <EmptyState title="Nessun modello" description="Aggiungi il tuo primo modello per iniziare." />
+          )}
+          {models.length > 0 && (
+            <TableContainer component={Paper} variant="outlined">
+              <Table>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={tableColumnCount} sx={{ p: 0 }}>
-                      <Collapse in={expandedId === model.id} unmountOnExit>
-                        <Divider />
-                        {editPanel}
-                      </Collapse>
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: 72 }}>{t(language, "modelsPreviewColumn")}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCodeColumn")}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
+                    <TableCell align="right" sx={{ width: 100 }} />
                   </TableRow>
-                </React.Fragment>
-              ))}
-              {models.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={tableColumnCount} align="center">
-                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>{t(language, "modelsSelectHint")}</Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {models.map((model) => (
+                    <React.Fragment key={model.id}>
+                      <TableRow
+                        hover
+                        sx={{
+                          cursor: "pointer",
+                          "& > td": { borderBottom: expandedId === model.id ? "none" : undefined }
+                        }}
+                        onClick={() => openModel(model.id)}
+                        selected={expandedId === model.id}
+                      >
+                        <TableCell sx={{ width: 72, p: 1 }}>
+                          {model.imageUrl ? (
+                            <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
+                          ) : (
+                            <Avatar
+                              variant="rounded"
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                bgcolor: imagesEnabled ? "action.hover" : "action.disabledBackground"
+                              }}
+                            >
+                              {imagesEnabled ? (
+                                <ImageIcon fontSize="small" color="disabled" />
+                              ) : (
+                                <HideImageIcon fontSize="small" color="disabled" />
+                              )}
+                            </Avatar>
+                          )}
+                        </TableCell>
+                        <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={model.code || "-"}
+                            sx={{ "& .MuiChip-label": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }}
+                          />
+                        </TableCell>
+                        <TableCell><Chip size="small" label={getCategoryName(model.categoryId)} /></TableCell>
+                        <TableCell align="right">
+                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); openModel(model.id); }} color="primary"><EditIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); deleteModel(model.id); }} color="error"><DeleteIcon fontSize="small" /></IconButton>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell colSpan={tableColumnCount} sx={{ p: 0 }}>
+                          <Collapse in={expandedId === model.id} unmountOnExit>
+                            <Divider />
+                            {editPanel}
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    </React.Fragment>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </SectionCard>
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }
