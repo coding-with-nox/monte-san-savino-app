@@ -1,7 +1,5 @@
 import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index, serial } from "drizzle-orm/pg-core";
 
-// REMOVED: teamsTable, teamMembersTable, teamRolesTable
-
 export const levelsTable = pgTable("levels", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
