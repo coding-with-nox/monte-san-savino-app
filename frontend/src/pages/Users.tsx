@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Box,
   Button,
   Chip,
-  Container,
   Dialog,
   DialogActions,
   DialogContent,
@@ -39,6 +37,9 @@ import { downloadAuthenticatedFile } from "../lib/download";
 import { Language, t } from "../lib/i18n";
 import ActiveSwitch from "../lib/ActiveSwitch";
 import ProfileEditSections from "../components/ProfileEditSections";
+import PageContainer from "../components/PageContainer";
+import EmptyState from "../components/EmptyState";
+import useToast from "../components/useToast";
 
 type User = { id: string; email: string; role: string; isActive: boolean };
 type Event = { id: string; name: string; status: string };
@@ -68,7 +69,7 @@ export default function Users({ language }: UsersProps) {
   const [exportEventId, setExportEventId] = useState("");
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
-  const [message, setMessage] = useState("");
+  const toast = useToast();
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -94,8 +95,8 @@ export default function Users({ language }: UsersProps) {
   }
 
   useEffect(() => {
-    load().catch((err) => setMessage(err.message));
-    loadEvents().catch((err) => setMessage(err.message));
+    load().catch((err) => toast.error(err.message));
+    loadEvents().catch((err) => toast.error(err.message));
   }, []);
 
   // --- Create dialog ---
@@ -121,9 +122,9 @@ export default function Users({ language }: UsersProps) {
       await load();
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) {
-        setMessage(t(language, "usersEmailExists"));
+        toast.error(t(language, "usersEmailExists"));
       } else {
-        setMessage(err.message || "Unable to create user");
+        toast.error(err.message || "Unable to create user");
       }
     } finally {
       setSaving(false);
@@ -186,7 +187,7 @@ export default function Users({ language }: UsersProps) {
     } else {
       msg += ` - ${t(language, "adminEmailNotSent")}`;
     }
-    setMessage(msg);
+    toast.info(msg);
   }
 
   async function saveProfile() {
@@ -206,19 +207,19 @@ export default function Users({ language }: UsersProps) {
     setEditingFields(false);
     const updated = await api<UserProfile>(`/admin/users/${editProfile.id}/profile`);
     setEditProfile(updated);
-    setMessage(t(language, "adminProfileSaved"));
+    toast.success(t(language, "adminProfileSaved"));
   }
 
   async function exportUsersExcel() {
     if (!exportEventId) {
-      setMessage(t(language, "enrollmentsEventSelect"));
+      toast.info(t(language, "enrollmentsEventSelect"));
       return;
     }
     setExportingExcel(true);
     try {
       await downloadAuthenticatedFile(`/exports/users/by-event/excel?eventId=${encodeURIComponent(exportEventId)}`, `users-by-event-${exportEventId}.xlsx`);
     } catch (err: any) {
-      setMessage(err.message || "Export failed");
+      toast.error(err.message || "Export failed");
     } finally {
       setExportingExcel(false);
     }
@@ -226,7 +227,7 @@ export default function Users({ language }: UsersProps) {
 
   async function exportUsersPdf() {
     if (!exportEventId) {
-      setMessage(t(language, "enrollmentsEventSelect"));
+      toast.info(t(language, "enrollmentsEventSelect"));
       return;
     }
     setExportingPdf(true);
@@ -237,14 +238,15 @@ export default function Users({ language }: UsersProps) {
       window.open(url, "_blank", "noopener,noreferrer");
       window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
     } catch (err: any) {
-      setMessage(err.message || "Export failed");
+      toast.error(err.message || "Export failed");
     } finally {
       setExportingPdf(false);
     }
   }
 
   return (
-    <Container maxWidth="lg">
+    <PageContainer>
+      {toast.node}
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
           <Typography variant="h4">{t(language, "usersTitle")}</Typography>
@@ -283,7 +285,9 @@ export default function Users({ language }: UsersProps) {
             </Button>
           </Stack>
         </Stack>
-        {message && <Alert severity="info" onClose={() => setMessage("")}>{message}</Alert>}
+        {users.length === 0 && (
+          <EmptyState title="Nessun utente" />
+        )}
         <TableContainer component={Paper} variant="outlined">
           <Table>
             <TableHead>
@@ -319,15 +323,6 @@ export default function Users({ language }: UsersProps) {
                   </TableCell>
                 </TableRow>
               ))}
-              {users.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                      {t(language, "usersNoUsers")}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -481,6 +476,6 @@ export default function Users({ language }: UsersProps) {
           </>
         )}
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 }
