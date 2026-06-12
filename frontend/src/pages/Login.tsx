@@ -1,12 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Alert,
   Box,
   Button,
-  Card,
-  CardContent,
-  Container,
   Stack,
   TextField,
   Typography
@@ -14,6 +10,9 @@ import {
 import { ApiError, api } from "../lib/api";
 import { createCodeChallenge, generateCodeVerifier, setSession } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
+import PageContainer from "../components/PageContainer";
+import SectionCard from "../components/SectionCard";
+import useToast from "../components/useToast";
 
 interface LoginProps {
   language: Language;
@@ -23,8 +22,8 @@ export default function Login({ language }: LoginProps) {
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [err, setErr] = useState<string | null>(null);
   const [emailError, setEmailError] = useState("");
+  const toast = useToast();
 
   const labels = useMemo(() => ({
     eyebrow: t(language, "loginEyebrow"),
@@ -58,15 +57,14 @@ export default function Login({ language }: LoginProps) {
   function handleError(error: unknown) {
     console.error(error);
     if (error instanceof Error && error.message) {
-      setErr(error.message);
+      toast.error(error.message);
       return;
     }
-    setErr(labels.errorGeneric);
+    toast.error(labels.errorGeneric);
   }
 
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null);
     try {
       try {
         const tokenRes = await api<{ accessToken: string; refreshToken: string; expiresIn: number; expires_in?: number }>("/auth/login", {
@@ -107,7 +105,6 @@ export default function Login({ language }: LoginProps) {
   }
 
   async function onRegister() {
-    setErr(null);
     if (!validateEmail(email)) return;
     try {
       await api("/auth/register", {
@@ -121,59 +118,53 @@ export default function Login({ language }: LoginProps) {
   }
 
   return (
-    <Container maxWidth="sm" sx={{ py: { xs: 6, md: 10 } }}>
-      <Card elevation={6}>
-        <CardContent>
-          <Stack spacing={3}>
-            <Box>
-              <Typography variant="overline" color="primary">
-                {labels.eyebrow}
-              </Typography>
-              <Typography variant="h4">{labels.title}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {labels.subtitle}
-              </Typography>
-            </Box>
+    <PageContainer maxWidth="sm">
+      {toast.node}
+      <SectionCard title="Miniatures Contest">
+        <Stack spacing={3}>
+          <Box>
+            <Typography variant="overline" color="primary">
+              {labels.eyebrow}
+            </Typography>
+            <Typography variant="h4">{labels.title}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {labels.subtitle}
+            </Typography>
+          </Box>
 
-            <Stack component="form" spacing={2} onSubmit={onLogin}>
-              <TextField
-                label={labels.emailLabel}
-                placeholder={labels.emailPlaceholder}
-                value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  if (emailError) validateEmail(event.target.value);
-                }}
-                onBlur={() => validateEmail(email)}
-                error={!!emailError}
-                helperText={emailError}
-                fullWidth
-              />
-              <TextField
-                label={labels.passwordLabel}
-                placeholder={labels.passwordPlaceholder}
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                fullWidth
-              />
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <Button type="submit" variant="contained" color="primary" fullWidth>
-                  {labels.loginButton}
-                </Button>
-                <Button type="button" variant="outlined" onClick={onRegister} fullWidth>
-                  {labels.signupButton}
-                </Button>
-              </Stack>
-              {err && (
-                <Alert severity="error">
-                  <strong>{labels.errorTitle}</strong> — {err}
-                </Alert>
-              )}
+          <Stack component="form" spacing={2} onSubmit={onLogin}>
+            <TextField
+              label={labels.emailLabel}
+              placeholder={labels.emailPlaceholder}
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                if (emailError) validateEmail(event.target.value);
+              }}
+              onBlur={() => validateEmail(email)}
+              error={!!emailError}
+              helperText={emailError}
+              fullWidth
+            />
+            <TextField
+              label={labels.passwordLabel}
+              placeholder={labels.passwordPlaceholder}
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              fullWidth
+            />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <Button type="submit" variant="contained" color="primary" fullWidth>
+                {labels.loginButton}
+              </Button>
+              <Button type="button" variant="outlined" onClick={onRegister} fullWidth>
+                {labels.signupButton}
+              </Button>
             </Stack>
           </Stack>
-        </CardContent>
-      </Card>
-    </Container>
+        </Stack>
+      </SectionCard>
+    </PageContainer>
   );
 }
