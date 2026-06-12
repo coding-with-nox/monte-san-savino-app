@@ -1,6 +1,6 @@
 import { getTenantDbFromEnv } from "../tenancy/infra/tenantDbFactory";
 import { usersTable, userProfilesTable } from "../identity/infra/persistence/schema";
-import { eventsTable, categoriesTable, sponsorsTable } from "../contest/infra/persistence/schema";
+import { eventsTable, categoriesTable, sponsorsTable, levelsTable, memberRolesTable } from "../contest/infra/persistence/schema";
 import { BcryptHasher } from "../identity/infra/crypto/bcryptHasher";
 
 export async function seedDatabase() {
@@ -57,6 +57,22 @@ export async function seedDatabase() {
   await db.insert(sponsorsTable).values([
     { id: crypto.randomUUID(), eventId: event1Id, name: "Citadel Colour", tier: "gold" },
     { id: crypto.randomUUID(), eventId: event1Id, name: "Vallejo", tier: "silver" }
+  ]);
+
+  // --- Levels ---
+  await db.insert(levelsTable).values([
+    { id: crypto.randomUUID(), name: "Junior", sortOrder: 1 },
+    { id: crypto.randomUUID(), name: "Senior", sortOrder: 2 },
+    { id: crypto.randomUUID(), name: "Open", sortOrder: 3 },
+    { id: crypto.randomUUID(), name: "Master", sortOrder: 4 }
+  ]);
+
+  // --- Member Roles ---
+  await db.insert(memberRolesTable).values([
+    { id: crypto.randomUUID(), name: "Pilota" },
+    { id: crypto.randomUUID(), name: "Co-pilota" },
+    { id: crypto.randomUUID(), name: "Meccanico" },
+    { id: crypto.randomUUID(), name: "Navigatore" }
   ]);
 
   console.log("[seed] Demo data inserted successfully.");
