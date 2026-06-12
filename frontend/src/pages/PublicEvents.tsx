@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Chip,
-  Container,
   List,
   ListItem,
   ListItemText,
@@ -13,6 +12,9 @@ import {
 } from "@mui/material";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import PageContainer from "../components/PageContainer";
+import EmptyState from "../components/EmptyState";
+import useToast from "../components/useToast";
 
 type Event = { id: string; name: string; status: string; startDate?: string | null; endDate?: string | null };
 
@@ -22,9 +24,14 @@ interface PublicEventsProps {
 
 export default function PublicEvents({ language }: PublicEventsProps) {
   const [events, setEvents] = useState<Event[]>([]);
+  const toast = useToast();
 
   async function load() {
-    setEvents(await api<Event[]>("/public/events"));
+    try {
+      setEvents(await api<Event[]>("/public/events"));
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   }
 
   useEffect(() => {
@@ -32,11 +39,12 @@ export default function PublicEvents({ language }: PublicEventsProps) {
   }, []);
 
   return (
-    <Container maxWidth="lg">
+    <PageContainer>
+      {toast.node}
       <Stack spacing={3}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">{t(language, "publicEventsTitle")}</Typography>
-          <Button variant="outlined" onClick={load}>
+          <Button variant="contained" color="secondary" onClick={load}>
             {t(language, "publicEventsRefreshButton")}
           </Button>
         </Stack>
@@ -52,13 +60,13 @@ export default function PublicEvents({ language }: PublicEventsProps) {
                   <Chip label={event.status} size="small" color="success" />
                 </ListItem>
               ))}
-              {events.length === 0 && (
-                <Typography variant="body2" color="text.secondary">—</Typography>
-              )}
             </List>
+            {events.length === 0 && (
+              <EmptyState title="Nessun evento" description="Non ci sono eventi pubblici al momento." />
+            )}
           </CardContent>
         </Card>
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }
