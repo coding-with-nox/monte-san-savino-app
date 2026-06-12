@@ -62,6 +62,76 @@ export function buildTheme(mode: ThemeMode, preset: ThemePreset): Theme {
     shape: { borderRadius: 16 },
     typography: {
       fontFamily: '"Roboto", "Segoe UI", system-ui, sans-serif',
+      h4: {
+        fontWeight: 600,
+        letterSpacing: "-0.02em",
+      },
+      h6: {
+        fontWeight: 600,
+        fontSize: "1rem",
+        letterSpacing: "0.01em",
+      },
+      caption: {
+        fontWeight: 500,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase" as const,
+        fontSize: "0.7rem",
+      },
+      body1: {
+        fontWeight: 400,
+      },
+    },
+    components: {
+      MuiCard: {
+        defaultProps: { elevation: 0 },
+        styleOverrides: {
+          root: {
+            backgroundColor: s.container,
+            borderRadius: 20,
+            border: `1px solid ${mode === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+          },
+        },
+      },
+      MuiCardContent: {
+        styleOverrides: {
+          root: {
+            padding: "20px 24px",
+            "&:last-child": { paddingBottom: "20px" },
+          },
+        },
+      },
+      MuiButton: {
+        defaultProps: { disableElevation: true },
+        styleOverrides: {
+          root: {
+            borderRadius: 20,
+            textTransform: "none",
+            fontWeight: 600,
+            paddingLeft: 20,
+            paddingRight: 20,
+          },
+        },
+      },
+      MuiAlert: {
+        styleOverrides: {
+          root: { borderRadius: 16 },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: { borderRadius: 8 },
+        },
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: { borderRadius: 20 },
+        },
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: { borderRadius: 12 },
+        },
+      },
     },
   });
 }
