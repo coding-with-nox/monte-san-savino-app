@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { and, desc, eq, ilike, isNotNull } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
@@ -47,23 +47,17 @@ async function computeDisplayNumber(tenantDb: any, userId: string, categoryId: s
   if (eventCategoryIds.length === 0) return 1;
 
   // Find max displayNumber among all models in this event
-  let maxDisplay = 0;
-  for (const catId of eventCategoryIds) {
-    const [maxRow] = await tenantDb
-      .select({ displayNumber: modelsTable.displayNumber })
-      .from(modelsTable)
-      .where(and(
-        eq(modelsTable.categoryId, catId as any),
-        isNotNull(modelsTable.displayNumber)
-      ))
-      .orderBy(desc(modelsTable.displayNumber))
-      .limit(1);
-    if (maxRow?.displayNumber != null && maxRow.displayNumber > maxDisplay) {
-      maxDisplay = maxRow.displayNumber;
-    }
-  }
+  const [maxRow] = await tenantDb
+    .select({ displayNumber: modelsTable.displayNumber })
+    .from(modelsTable)
+    .where(and(
+      inArray(modelsTable.categoryId, eventCategoryIds as any[]),
+      isNotNull(modelsTable.displayNumber)
+    ))
+    .orderBy(desc(modelsTable.displayNumber))
+    .limit(1);
 
-  return maxDisplay + 1;
+  return (maxRow?.displayNumber ?? 0) + 1;
 }
 
 async function generateModelCode(tenantDb: any): Promise<number> {
@@ -105,10 +99,13 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       .from(modelsTable)
       .leftJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
       .where(and(...clauses));
-    return rows.map((row: any) => ({
-      ...row,
-      code: formatModelCode(row.code, row.categorySeqId, row.displayNumber, codeFormat) || null
-    }));
+    return rows.map((row: any) => {
+      const { categorySeqId, ...rest } = row;
+      return {
+        ...rest,
+        code: formatModelCode(row.code, categorySeqId, row.displayNumber, codeFormat) || null
+      };
+    });
   }, {
     detail: {
       summary: "Lista modelli",
@@ -212,11 +209,11 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       .from(modelTeamMembersTable)
       .where(eq(modelTeamMembersTable.modelId, params.modelId as any));
 
-    const row = rows[0] as any;
+    const { categorySeqId, ...modelRow } = rows[0] as any;
     return {
       model: {
-        ...row,
-        code: formatModelCode(row.code, row.categorySeqId, row.displayNumber, codeFormat) || null
+        ...modelRow,
+        code: formatModelCode(modelRow.code, categorySeqId, modelRow.displayNumber, codeFormat) || null
       },
       images,
       teamMembers
