@@ -28,10 +28,10 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
         })
         .from(modelsTable)
         .leftJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId));
-      return rows.map((row: any) => ({
-        ...row,
-        code: formatModelCode(row.code, row.categorySeqId, row.displayNumber, codeFormat) || null
-      }));
+      return rows.map((row: any) => {
+        const { categorySeqId, ...rest } = row;
+        return { ...rest, code: formatModelCode(row.code, categorySeqId, row.displayNumber, codeFormat) || null };
+      });
     }
     const rows = await tenantDb
       .select({
@@ -50,10 +50,10 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
       .where(eq(categoriesTable.eventId, eventId as any));
-    return rows.map((row: any) => ({
-      ...row,
-      code: formatModelCode(row.code, row.categorySeqId, row.displayNumber, codeFormat) || null
-    }));
+    return rows.map((row: any) => {
+      const { categorySeqId, ...rest } = row;
+      return { ...rest, code: formatModelCode(row.code, categorySeqId, row.displayNumber, codeFormat) || null };
+    });
   }, {
     detail: {
       summary: "Lista modelli (admin)",
@@ -74,7 +74,6 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
     body: t.Object({
       name: t.Optional(t.String()),
       categoryId: t.Optional(t.String()),
-      teamId: t.Optional(t.String()),
       description: t.Optional(t.String()),
       code: t.Optional(t.Union([t.Number(), t.String()])),
       imageUrl: t.Optional(t.String())

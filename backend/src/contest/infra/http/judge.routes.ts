@@ -124,7 +124,6 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       .select({
         id: modelsTable.id,
         userId: modelsTable.userId,
-        teamId: modelsTable.teamId,
         categoryId: modelsTable.categoryId,
         name: modelsTable.name,
         description: modelsTable.description,
@@ -141,10 +140,11 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       return { model: null, images };
     }
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
+    const { categorySeqId: catSeqId, ...modelRow } = rows[0] as any;
     return {
       model: {
-        ...(rows[0] as any),
-        code: formatModelCode((rows[0] as any).code, (rows[0] as any).categorySeqId, (rows[0] as any).displayNumber, codeFormat) || null
+        ...modelRow,
+        code: formatModelCode(modelRow.code, catSeqId, modelRow.displayNumber, codeFormat) || null
       },
       images
     };
