@@ -280,7 +280,7 @@ export default function App() {
         <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
           {drawerContent}
         </Drawer>
-        <Box sx={{ py: 4 }}>
+        <Box>
           <Routes>
             <Route
               path="/login"
