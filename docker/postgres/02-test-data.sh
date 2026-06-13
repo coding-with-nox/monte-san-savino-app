@@ -776,3 +776,32 @@ echo "  user2@test.com    → user  (Luigi Bianchi, team Aquile Blu + Dragoni Ve
 echo "  user3@test.com    → user  (Anna Verdi, partecipante MSS 2025)"
 echo "  user4@test.com    → user  (Carlo Neri, DISATTIVATO)"
 echo "  user5@test.com    → user  (senza profilo, iscrizione senza modello)"
+
+# ===========================================================================
+# UTENTE ADMIN CASUALE — generato ad ogni avvio
+# ===========================================================================
+RAND_PASS=$(cat /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 16)
+RAND_UUID=$(cat /proc/sys/kernel/random/uuid)
+RAND_SUFFIX=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 6)
+RAND_EMAIL="admin-${RAND_SUFFIX}@mss.local"
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$TENANT_DB_NAME" <<SQL
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+INSERT INTO users (id, email, role, password_hash, is_active)
+VALUES ('${RAND_UUID}', '${RAND_EMAIL}', 'admin', crypt('${RAND_PASS}', gen_salt('bf', 10)), true)
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO user_profiles (user_id, first_name, last_name)
+VALUES ('${RAND_UUID}', 'Admin', 'Casuale')
+ON CONFLICT (user_id) DO NOTHING;
+SQL
+
+echo ""
+echo "============================================================"
+echo "  ADMIN CASUALE (usa queste credenziali per il primo login)"
+echo "============================================================"
+echo "  Email:    ${RAND_EMAIL}"
+echo "  Password: ${RAND_PASS}"
+echo "  Ruolo:    admin"
+echo "============================================================"
+echo ""
