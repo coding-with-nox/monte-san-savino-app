@@ -38,18 +38,18 @@ describe("AuthenticateUser.unit", () => {
 
   it("throws 'Invalid credentials' when user is not found", async () => {
     const uc = new AuthenticateUser(stubRepo(null), stubHasher(true));
-    expect(uc.execute({ email: "nobody@example.com", password: "pw" })).rejects.toThrow("Invalid credentials");
+    await expect(uc.execute({ email: "nobody@example.com", password: "pw" })).rejects.toThrow("Invalid credentials");
   });
 
   it("throws when user is disabled (canLogin returns false)", async () => {
     const user = makeDisabledUser();
     const uc = new AuthenticateUser(stubRepo(user), stubHasher(true));
-    expect(uc.execute({ email: "bob@example.com", password: "pw" })).rejects.toThrow();
+    await expect(uc.execute({ email: "bob@example.com", password: "pw" })).rejects.toThrow();
   });
 
   it("throws 'Invalid credentials' when password is wrong", async () => {
     const user = makeActiveUser();
     const uc = new AuthenticateUser(stubRepo(user), stubHasher(false));
-    expect(uc.execute({ email: "alice@example.com", password: "wrong" })).rejects.toThrow("Invalid credentials");
+    await expect(uc.execute({ email: "alice@example.com", password: "wrong" })).rejects.toThrow("Invalid credentials");
   });
 });

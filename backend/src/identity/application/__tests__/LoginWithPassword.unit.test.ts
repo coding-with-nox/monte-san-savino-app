@@ -47,13 +47,13 @@ describe("LoginWithPassword.unit", () => {
 
   it("throws when user not found", async () => {
     const uc = new LoginWithPassword(stubRepo(null), stubHasher(true), stubTokens());
-    expect(uc.execute({ email: "ghost@example.com", password: "pw" })).rejects.toThrow();
+    await expect(uc.execute({ email: "ghost@example.com", password: "pw" })).rejects.toThrow();
   });
 
   it("throws 'Invalid credentials' when password is wrong", async () => {
     const user = makeActiveUser();
     const uc = new LoginWithPassword(stubRepo(user), stubHasher(false), stubTokens());
-    expect(uc.execute({ email: "alice@example.com", password: "bad" })).rejects.toThrow("Invalid credentials");
+    await expect(uc.execute({ email: "alice@example.com", password: "bad" })).rejects.toThrow("Invalid credentials");
   });
 
   it("token payload contains sub, email, role", async () => {

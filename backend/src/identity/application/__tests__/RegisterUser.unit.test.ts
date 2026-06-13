@@ -53,7 +53,7 @@ describe("RegisterUser.unit", () => {
     const existing = new User("old-id", Email.create("taken@example.com"), "user", "h", true);
     const repo = stubRepo(existing);
     const uc = new RegisterUser(repo, stubHasher());
-    expect(uc.execute({ id: "new-id", email: "taken@example.com", password: "pw" })).rejects.toThrow("Email already registered");
+    await expect(uc.execute({ id: "new-id", email: "taken@example.com", password: "pw" })).rejects.toThrow("Email already registered");
   });
 
   it("does not call save when email is already registered", async () => {
