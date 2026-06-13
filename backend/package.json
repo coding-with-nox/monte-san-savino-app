@@ -8,7 +8,9 @@
     "drizzle:generate": "bunx drizzle-kit generate",
     "drizzle:migrate": "bunx drizzle-kit migrate",
     "drizzle:push": "bunx drizzle-kit push",
-    "seed": "bun src/bootstrap/seed.ts"
+    "seed": "bun src/bootstrap/seed.ts",
+    "test:setup": "PG_DB=tenant_db_test bunx drizzle-kit push",
+    "test": "bun test"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.0.0",
