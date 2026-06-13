@@ -44,10 +44,11 @@ export const loggerMiddleware = new Elysia({ name: "logger" })
     }
   })
 
-  .onError(({ request, error, code, log }) => {
+  .onError(({ request, error, code, log, rootLogger }) => {
     const url = new URL(request.url);
     const msg = "message" in error ? error.message : String(error);
-    log!.error(
+    const activeLog = log ?? rootLogger;
+    activeLog.error(
       {
         err: error,
         errorCode: code,
