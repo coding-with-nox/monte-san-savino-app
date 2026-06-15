@@ -165,6 +165,11 @@ export async function ensureTenantSchema() {
         DROP COLUMN IF EXISTS team_id;
     `);
 
+    // Add email to model_team_members
+    await pool.query(`
+      ALTER TABLE model_team_members ADD COLUMN IF NOT EXISTS email text;
+    `);
+
     // Remove stale role names and insert correct ones idempotently
     await pool.query(`
       DELETE FROM member_roles WHERE name IN ('Pilota', 'Co-pilota', 'Meccanico', 'Navigatore');
