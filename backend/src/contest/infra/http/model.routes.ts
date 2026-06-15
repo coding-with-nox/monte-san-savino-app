@@ -243,19 +243,28 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       .from(categoriesTable)
       .where(eq(categoriesTable.id, model.categoryId as any))
       .limit(1);
-    if (catRow) {
-      const campaigns = await tenantDb
-        .select({ enrollmentCloseDate: eventCampaignsTable.enrollmentCloseDate })
-        .from(eventCampaignsTable)
-        .where(eq(eventCampaignsTable.eventId, catRow.eventId as any));
-      const now = new Date();
-      const isClosed = campaigns.some(
-        (c: any) => c.enrollmentCloseDate && new Date(c.enrollmentCloseDate) < now
-      );
-      if (isClosed) {
-        set.status = 403;
-        return { error: "Enrollment period is closed" };
-      }
+
+    if (!catRow) {
+      set.status = 422;
+      return { error: "Model has no valid category" };
+    }
+
+    const campaigns = await tenantDb
+      .select({ enrollmentCloseDate: eventCampaignsTable.enrollmentCloseDate })
+      .from(eventCampaignsTable)
+      .where(eq(eventCampaignsTable.eventId, catRow.eventId as any));
+
+    const now = new Date();
+    const isClosed = campaigns.length > 0 && campaigns.every((c: any) => {
+      if (!c.enrollmentCloseDate) return false;
+      const closeDate = new Date(c.enrollmentCloseDate);
+      if (isNaN(closeDate.getTime())) return false; // malformed date → treat as open
+      return closeDate < now;
+    });
+
+    if (isClosed) {
+      set.status = 403;
+      return { error: "Enrollment period is closed" };
     }
 
     const updateData: Record<string, unknown> = {};
@@ -307,6 +316,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       security: [{ bearerAuth: [] }]
     }
   })
+  // Enrollment period guard intentionally omitted: deletion allowed after close date (spec §5b admin only applies to edits)
   .delete("/:modelId", async ({ tenantDb, user, params, set }) => {
     const rows = await tenantDb
       .select()
