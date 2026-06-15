@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
-import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable } from "../persistence/schema";
+import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable } from "../persistence/schema";
 
 async function getCategorySeqId(tenantDb: any, categoryId: string): Promise<number | null> {
   const [row] = await tenantDb
@@ -235,6 +235,28 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user!.id as any)));
 
     if (!rows.length) { set.status = 404; return { error: "Not found" }; }
+
+    // Temporal guard: block edits when enrollment period is closed
+    const model = rows[0] as any;
+    const [catRow] = await tenantDb
+      .select({ eventId: categoriesTable.eventId })
+      .from(categoriesTable)
+      .where(eq(categoriesTable.id, model.categoryId as any))
+      .limit(1);
+    if (catRow) {
+      const campaigns = await tenantDb
+        .select({ enrollmentCloseDate: eventCampaignsTable.enrollmentCloseDate })
+        .from(eventCampaignsTable)
+        .where(eq(eventCampaignsTable.eventId, catRow.eventId as any));
+      const now = new Date();
+      const isClosed = campaigns.some(
+        (c: any) => c.enrollmentCloseDate && new Date(c.enrollmentCloseDate) < now
+      );
+      if (isClosed) {
+        set.status = 403;
+        return { error: "Enrollment period is closed" };
+      }
+    }
 
     const updateData: Record<string, unknown> = {};
     if (body.name !== undefined) updateData.name = body.name;
