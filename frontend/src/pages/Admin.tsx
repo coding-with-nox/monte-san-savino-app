@@ -41,7 +41,6 @@ type Sponsor = { id: string; eventId: string; name: string; tier: string };
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
 type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null };
-type TeamRole = { id: string; name: string };
 type EventCampaign = { id: string; eventId: string; name: string; enrollmentOpenDate?: string | null; enrollmentCloseDate?: string | null };
 
 interface AdminProps {
@@ -63,9 +62,6 @@ export default function Admin({ language }: AdminProps) {
   const [sponsorForm, setSponsorForm] = useState({ eventId: "", name: "", tier: "bronze" });
   const [mentionForm, setMentionForm] = useState({ eventId: "", modelId: "", title: "" });
   const toast = useToast();
-  // Task 08: team roles
-  const [teamRoles, setTeamRoles] = useState<TeamRole[]>([]);
-  const [teamRoleForm, setTeamRoleForm] = useState("");
   // Task 10: event campaigns
   const [eventCampaigns, setEventCampaigns] = useState<EventCampaign[]>([]);
   const [campaignForm, setCampaignForm] = useState({ eventId: "", name: "", enrollmentOpenDate: "", enrollmentCloseDate: "" });
@@ -94,7 +90,6 @@ export default function Admin({ language }: AdminProps) {
     setModRequests(await api<ModificationRequest[]>("/admin/modification-requests"));
     setJudgeAssignments(await api<JudgeAssignmentEntry[]>("/admin/judges/assignments"));
     setSpecialMentions(await api<SpecialMention[]>("/awards/mentions"));
-    setTeamRoles(await api<TeamRole[]>("/admin/team-roles"));
     setEventCampaigns(await api<EventCampaign[]>("/admin/event-campaigns"));
   }
 
@@ -229,19 +224,6 @@ export default function Admin({ language }: AdminProps) {
 
   async function updateModRequestStatus(id: string, status: string) {
     await api(`/admin/modification-requests/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
-    await load();
-  }
-
-  // Task 08: team roles CRUD
-  async function createTeamRole() {
-    if (!teamRoleForm.trim()) return;
-    await api("/admin/team-roles", { method: "POST", body: JSON.stringify({ name: teamRoleForm.trim() }) });
-    setTeamRoleForm("");
-    await load();
-  }
-
-  async function deleteTeamRole(id: string) {
-    await api(`/admin/team-roles/${id}`, { method: "DELETE" });
     await load();
   }
 
@@ -685,38 +667,6 @@ export default function Admin({ language }: AdminProps) {
                     </Stack>
                   ))}
                 </Stack>
-            </SectionCard>
-          </Grid>
-
-          {/* Task 08: Team Roles */}
-          <Grid item xs={12} md={6}>
-            <SectionCard title={t(language, "adminTeamRolesTitle")}>
-                <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                  <TextField
-                    label={t(language, "adminTeamRoleNamePlaceholder")}
-                    value={teamRoleForm}
-                    onChange={(e) => setTeamRoleForm(e.target.value)}
-                    size="small"
-                    fullWidth
-                  />
-                  <Button variant="contained" onClick={createTeamRole} disabled={!teamRoleForm.trim()}>
-                    {t(language, "adminCreateButton")}
-                  </Button>
-                </Stack>
-                <List dense>
-                  {teamRoles.map((role) => (
-                    <ListItem key={role.id} disableGutters secondaryAction={
-                      <IconButton size="small" color="error" onClick={() => deleteTeamRole(role.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    }>
-                      <ListItemText primary={role.name} />
-                    </ListItem>
-                  ))}
-                  {teamRoles.length === 0 && (
-                    <ListItem><ListItemText secondary={t(language, "adminNoData")} /></ListItem>
-                  )}
-                </List>
             </SectionCard>
           </Grid>
 
