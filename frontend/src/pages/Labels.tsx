@@ -1,12 +1,9 @@
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Button,
-  Container,
   FormControl,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   Stack,
   Typography
@@ -17,6 +14,9 @@ import TableChartIcon from "@mui/icons-material/TableChart";
 import { api } from "../lib/api";
 import { downloadAuthenticatedFile } from "../lib/download";
 import { Language, t } from "../lib/i18n";
+import PageContainer from "../components/PageContainer";
+import SectionCard from "../components/SectionCard";
+import useToast from "../components/useToast";
 
 type Event = { id: string; name: string; status: string };
 type LabelRow = { utente: string; categoria: string; nomeModello: string; codice: string };
@@ -131,9 +131,9 @@ interface LabelsProps {
 }
 
 export default function Labels({ language }: LabelsProps) {
+  const toast = useToast();
   const [events, setEvents] = useState<Event[]>([]);
   const [eventId, setEventId] = useState("");
-  const [message, setMessage] = useState("");
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [printingDymo, setPrintingDymo] = useState(false);
@@ -144,14 +144,14 @@ export default function Labels({ language }: LabelsProps) {
 
   async function exportExcel() {
     if (!eventId) {
-      setMessage(t(language, "enrollmentsEventSelect"));
+      toast.info(t(language, "enrollmentsEventSelect"));
       return;
     }
     setExportingExcel(true);
     try {
       await downloadAuthenticatedFile(`/exports/labels/excel?eventId=${encodeURIComponent(eventId)}`, `labels-${eventId}.xlsx`);
     } catch (err: any) {
-      setMessage(err.message || "Export failed");
+      toast.error(err?.message ?? String(err));
     } finally {
       setExportingExcel(false);
     }
@@ -159,7 +159,7 @@ export default function Labels({ language }: LabelsProps) {
 
   async function printDymo() {
     if (!eventId) {
-      setMessage(t(language, "enrollmentsEventSelect"));
+      toast.info(t(language, "enrollmentsEventSelect"));
       return;
     }
     setPrintingDymo(true);
@@ -168,7 +168,7 @@ export default function Labels({ language }: LabelsProps) {
       const printers: any[] = dymo.label.framework.getPrinters();
       const dymoprinter = printers.find((p: any) => p.printerType === "LabelWriterPrinter");
       if (!dymoprinter) {
-        setMessage(t(language, "labelsDymoNoPrinter"));
+        toast.error(t(language, "labelsDymoNoPrinter"));
         return;
       }
       const rows = await api<LabelRow[]>(`/exports/labels/data?eventId=${encodeURIComponent(eventId)}`);
@@ -177,9 +177,9 @@ export default function Labels({ language }: LabelsProps) {
         const label = dymo.label.framework.openLabelXml(labelXml);
         label.print(dymoprinter.name);
       }
-      setMessage(t(language, "labelsDymoPrinted"));
+      toast.success(t(language, "labelsDymoPrinted"));
     } catch (err: any) {
-      setMessage(err.message || "DYMO print failed");
+      toast.error(err?.message ?? String(err));
     } finally {
       setPrintingDymo(false);
     }
@@ -187,7 +187,7 @@ export default function Labels({ language }: LabelsProps) {
 
   async function exportPdf() {
     if (!eventId) {
-      setMessage(t(language, "enrollmentsEventSelect"));
+      toast.info(t(language, "enrollmentsEventSelect"));
       return;
     }
     setExportingPdf(true);
@@ -198,23 +198,23 @@ export default function Labels({ language }: LabelsProps) {
       window.open(url, "_blank", "noopener,noreferrer");
       window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
     } catch (err: any) {
-      setMessage(err.message || "Export failed");
+      toast.error(err?.message ?? String(err));
     } finally {
       setExportingPdf(false);
     }
   }
 
   useEffect(() => {
-    loadEvents().catch((err) => setMessage(err.message));
+    loadEvents().catch((err) => toast.error(err?.message ?? String(err)));
   }, []);
 
   return (
-    <Container maxWidth="md">
+    <PageContainer>
+      {toast.node}
       <Stack spacing={2}>
         <Typography variant="h4">{t(language, "labelsTitle")}</Typography>
-        {message && <Alert severity="info" onClose={() => setMessage("")}>{message}</Alert>}
 
-        <Paper variant="outlined" sx={{ p: 2 }}>
+        <SectionCard title="Esportazione etichette">
           <Stack spacing={2}>
             <FormControl size="small" fullWidth>
               <InputLabel>{t(language, "enrollmentsEventSelect")}</InputLabel>
@@ -233,6 +233,7 @@ export default function Labels({ language }: LabelsProps) {
             <Stack direction="row" spacing={1}>
               <Button
                 variant="contained"
+                color="secondary"
                 startIcon={<TableChartIcon />}
                 onClick={exportExcel}
                 disabled={!eventId || exportingExcel}
@@ -240,7 +241,8 @@ export default function Labels({ language }: LabelsProps) {
                 {exportingExcel ? "..." : t(language, "labelsExportExcel")}
               </Button>
               <Button
-                variant="outlined"
+                variant="contained"
+                color="secondary"
                 startIcon={<PictureAsPdfIcon />}
                 onClick={exportPdf}
                 disabled={!eventId || exportingPdf}
@@ -248,7 +250,7 @@ export default function Labels({ language }: LabelsProps) {
                 {exportingPdf ? "..." : t(language, "labelsExportPdf")}
               </Button>
               <Button
-                variant="outlined"
+                variant="contained"
                 color="secondary"
                 startIcon={<PrintIcon />}
                 onClick={printDymo}
@@ -262,8 +264,8 @@ export default function Labels({ language }: LabelsProps) {
               {t(language, "labelsHint")}
             </Typography>
           </Stack>
-        </Paper>
+        </SectionCard>
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }

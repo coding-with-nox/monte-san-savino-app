@@ -1,11 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Button,
-  Card,
-  CardContent,
   Chip,
-  Container,
   Dialog,
   DialogActions,
   DialogContent,
@@ -18,7 +14,6 @@ import {
   ListItem,
   ListItemText,
   MenuItem,
-  Paper,
   Select,
   Stack,
   Table,
@@ -34,6 +29,10 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import { api, ApiError } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import PageContainer from "../components/PageContainer";
+import SectionCard from "../components/SectionCard";
+import { EmptyValue } from "../components/Field";
+import useToast from "../components/useToast";
 
 type Event = { id: string; name: string; status: string };
 type Category = { id: string; eventId: string; name: string; status: string };
@@ -42,7 +41,6 @@ type Sponsor = { id: string; eventId: string; name: string; tier: string };
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
 type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null };
-type TeamRole = { id: string; name: string };
 type EventCampaign = { id: string; eventId: string; name: string; enrollmentOpenDate?: string | null; enrollmentCloseDate?: string | null };
 
 interface AdminProps {
@@ -63,10 +61,7 @@ export default function Admin({ language }: AdminProps) {
   const [judgeAssignment, setJudgeAssignment] = useState({ eventId: "", judgeId: "", categoryId: "" });
   const [sponsorForm, setSponsorForm] = useState({ eventId: "", name: "", tier: "bronze" });
   const [mentionForm, setMentionForm] = useState({ eventId: "", modelId: "", title: "" });
-  const [message, setMessage] = useState("");
-  // Task 08: team roles
-  const [teamRoles, setTeamRoles] = useState<TeamRole[]>([]);
-  const [teamRoleForm, setTeamRoleForm] = useState("");
+  const toast = useToast();
   // Task 10: event campaigns
   const [eventCampaigns, setEventCampaigns] = useState<EventCampaign[]>([]);
   const [campaignForm, setCampaignForm] = useState({ eventId: "", name: "", enrollmentOpenDate: "", enrollmentCloseDate: "" });
@@ -95,7 +90,6 @@ export default function Admin({ language }: AdminProps) {
     setModRequests(await api<ModificationRequest[]>("/admin/modification-requests"));
     setJudgeAssignments(await api<JudgeAssignmentEntry[]>("/admin/judges/assignments"));
     setSpecialMentions(await api<SpecialMention[]>("/awards/mentions"));
-    setTeamRoles(await api<TeamRole[]>("/admin/team-roles"));
     setEventCampaigns(await api<EventCampaign[]>("/admin/event-campaigns"));
   }
 
@@ -117,7 +111,7 @@ export default function Admin({ language }: AdminProps) {
       await load();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setMessage(t(language, "adminCategoryDuplicate"));
+        toast.error(t(language, "adminCategoryDuplicate"));
       } else {
         throw err;
       }
@@ -151,7 +145,7 @@ export default function Admin({ language }: AdminProps) {
     if (judgeAssignment.categoryId.trim()) body.categoryId = judgeAssignment.categoryId.trim();
     await api("/admin/judges/assignments", { method: "POST", body: JSON.stringify(body) });
     setJudgeAssignment({ eventId: "", judgeId: "", categoryId: "" });
-    setMessage(t(language, "adminJudgeAssigned"));
+    toast.success(t(language, "adminJudgeAssigned"));
     await load();
   }
 
@@ -209,7 +203,7 @@ export default function Admin({ language }: AdminProps) {
       })
     });
     setMentionForm({ eventId: "", modelId: "", title: "" });
-    setMessage(t(language, "adminMentionCreate"));
+    toast.success(t(language, "adminMentionCreate"));
     await load();
   }
 
@@ -224,25 +218,12 @@ export default function Admin({ language }: AdminProps) {
       await api(`/categories/${cat.id}/status`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
       await load();
     } catch {
-      setMessage(t(language, "adminCategoryCloseError"));
+      toast.error(t(language, "adminCategoryCloseError"));
     }
   }
 
   async function updateModRequestStatus(id: string, status: string) {
     await api(`/admin/modification-requests/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
-    await load();
-  }
-
-  // Task 08: team roles CRUD
-  async function createTeamRole() {
-    if (!teamRoleForm.trim()) return;
-    await api("/admin/team-roles", { method: "POST", body: JSON.stringify({ name: teamRoleForm.trim() }) });
-    setTeamRoleForm("");
-    await load();
-  }
-
-  async function deleteTeamRole(id: string) {
-    await api(`/admin/team-roles/${id}`, { method: "DELETE" });
     await load();
   }
 
@@ -301,7 +282,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   useEffect(() => {
-    load().catch((err) => setMessage(err.message));
+    load().catch((err) => toast.error(err?.message ?? String(err)));
     loadLevels();
     loadMemberRoles();
   }, []);
@@ -324,18 +305,14 @@ export default function Admin({ language }: AdminProps) {
   };
 
   return (
-    <Container maxWidth="lg">
+    <PageContainer maxWidth="lg">
+      {toast.node}
       <Stack spacing={3}>
         <Typography variant="h4">{t(language, "adminTitle")}</Typography>
-        {message && <Alert severity="info" onClose={() => setMessage("")}>{message}</Alert>}
         <Grid container spacing={2}>
           {/* Events */}
           <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "adminEventsTitle")}
-                </Typography>
+            <SectionCard title={t(language, "adminEventsTitle")}>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={4}>
                     <TextField
@@ -383,17 +360,12 @@ export default function Admin({ language }: AdminProps) {
                     </ListItem>
                   ))}
                 </List>
-              </CardContent>
-            </Card>
+            </SectionCard>
           </Grid>
 
           {/* Categories with Status */}
           <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "adminCategoriesTitle")}
-                </Typography>
+            <SectionCard title={t(language, "adminCategoriesTitle")}>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={4}>
                     <FormControl fullWidth>
@@ -450,17 +422,12 @@ export default function Admin({ language }: AdminProps) {
                     </ListItem>
                   ))}
                 </List>
-              </CardContent>
-            </Card>
+            </SectionCard>
           </Grid>
 
           {/* Judge Assignments (with optional category) */}
           <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "adminJudgeAssignTitle")}
-                </Typography>
+            <SectionCard title={t(language, "adminJudgeAssignTitle")}>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={3}>
                     <FormControl fullWidth>
@@ -542,17 +509,12 @@ export default function Admin({ language }: AdminProps) {
                     </List>
                   </>
                 )}
-              </CardContent>
-            </Card>
+            </SectionCard>
           </Grid>
 
           {/* Sponsors */}
           <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "adminSponsorsTitle")}
-                </Typography>
+            <SectionCard title={t(language, "adminSponsorsTitle")}>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={3}>
                     <FormControl fullWidth>
@@ -605,17 +567,12 @@ export default function Admin({ language }: AdminProps) {
                     </ListItem>
                   ))}
                 </List>
-              </CardContent>
-            </Card>
+            </SectionCard>
           </Grid>
 
           {/* Special Mentions */}
           <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "adminSpecialMentionsTitle")}
-                </Typography>
+            <SectionCard title={t(language, "adminSpecialMentionsTitle")}>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={3}>
                     <FormControl fullWidth>
@@ -678,17 +635,12 @@ export default function Admin({ language }: AdminProps) {
                     </List>
                   </>
                 )}
-              </CardContent>
-            </Card>
+            </SectionCard>
           </Grid>
 
           {/* Modification Requests */}
           <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t(language, "adminModRequestsTitle")}
-                </Typography>
+            <SectionCard title={t(language, "adminModRequestsTitle")}>
                 <Stack spacing={1}>
                   {modRequests.map((req) => (
                     <Stack key={req.id} spacing={1}>
@@ -715,50 +667,12 @@ export default function Admin({ language }: AdminProps) {
                     </Stack>
                   ))}
                 </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Task 08: Team Roles */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>{t(language, "adminTeamRolesTitle")}</Typography>
-                <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                  <TextField
-                    label={t(language, "adminTeamRoleNamePlaceholder")}
-                    value={teamRoleForm}
-                    onChange={(e) => setTeamRoleForm(e.target.value)}
-                    size="small"
-                    fullWidth
-                  />
-                  <Button variant="contained" onClick={createTeamRole} disabled={!teamRoleForm.trim()}>
-                    {t(language, "adminCreateButton")}
-                  </Button>
-                </Stack>
-                <List dense>
-                  {teamRoles.map((role) => (
-                    <ListItem key={role.id} disableGutters secondaryAction={
-                      <IconButton size="small" color="error" onClick={() => deleteTeamRole(role.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    }>
-                      <ListItemText primary={role.name} />
-                    </ListItem>
-                  ))}
-                  {teamRoles.length === 0 && (
-                    <ListItem><ListItemText secondary={t(language, "adminNoData")} /></ListItem>
-                  )}
-                </List>
-              </CardContent>
-            </Card>
+            </SectionCard>
           </Grid>
 
           {/* Task 10: Event Campaigns */}
           <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>{t(language, "adminEventCampaignsTitle")}</Typography>
+            <SectionCard title={t(language, "adminEventCampaignsTitle")}>
                 <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
                   <Grid item xs={12} md={3}>
                     <FormControl fullWidth size="small">
@@ -826,14 +740,12 @@ export default function Admin({ language }: AdminProps) {
                     <ListItem><ListItemText secondary={t(language, "adminNoData")} /></ListItem>
                   )}
                 </List>
-              </CardContent>
-            </Card>
+            </SectionCard>
           </Grid>
 
           {/* Task 14: Levels */}
           <Grid item xs={12}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>{t(language, "adminLevelsTitle")}</Typography>
+            <SectionCard title={t(language, "adminLevelsTitle")}>
               <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
                 <TextField size="small" label={t(language, "adminLevelName")} value={newLevelName} onChange={(e) => setNewLevelName(e.target.value)} />
                 <TextField size="small" label={t(language, "adminLevelSortOrder")} type="number" value={newLevelSortOrder} onChange={(e) => setNewLevelSortOrder(e.target.value)} sx={{ width: 120 }} />
@@ -865,13 +777,12 @@ export default function Admin({ language }: AdminProps) {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </Paper>
+            </SectionCard>
           </Grid>
 
           {/* Task 14: Member Roles */}
           <Grid item xs={12}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>{t(language, "adminMemberRolesTitle")}</Typography>
+            <SectionCard title={t(language, "adminMemberRolesTitle")}>
               <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
                 <TextField size="small" label={t(language, "adminMemberRoleName")} value={newMemberRoleName} onChange={(e) => setNewMemberRoleName(e.target.value)} />
                 <Button variant="contained" size="small" onClick={createMemberRole} disabled={!newMemberRoleName.trim()}>
@@ -900,12 +811,13 @@ export default function Admin({ language }: AdminProps) {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </Paper>
+            </SectionCard>
           </Grid>
 
         </Grid>
       </Stack>
 
+      {/* Dialogs */}
       {/* Category Edit Dialog */}
       <Dialog open={categoryEditDialog} onClose={() => setCategoryEditDialog(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{t(language, "adminCategoryEditTitle")}</DialogTitle>
@@ -986,6 +898,6 @@ export default function Admin({ language }: AdminProps) {
           <Button onClick={() => setJudgeEditDialog(false)}>{t(language, "profileCancelButton")}</Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 }

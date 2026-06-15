@@ -69,10 +69,10 @@ export async function seedDatabase() {
 
   // --- Member Roles ---
   await db.insert(memberRolesTable).values([
-    { id: crypto.randomUUID(), name: "Pilota" },
-    { id: crypto.randomUUID(), name: "Co-pilota" },
-    { id: crypto.randomUUID(), name: "Meccanico" },
-    { id: crypto.randomUUID(), name: "Navigatore" }
+    { id: crypto.randomUUID(), name: "Scultore" },
+    { id: crypto.randomUUID(), name: "Pittore" },
+    { id: crypto.randomUUID(), name: "Concept Artist" },
+    { id: crypto.randomUUID(), name: "Art Director" }
   ]);
 
   console.log("[seed] Demo data inserted successfully.");

@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Button,
-  Container,
   FormControl,
   InputLabel,
   MenuItem,
@@ -23,6 +21,9 @@ import {
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import ActiveSwitch from "../lib/ActiveSwitch";
+import PageContainer from "../components/PageContainer";
+import SectionCard from "../components/SectionCard";
+import useToast from "../components/useToast";
 
 interface SettingsProps {
   language: Language;
@@ -31,6 +32,7 @@ interface SettingsProps {
 type SettingsTab = "general" | "theme" | "export";
 
 export default function Settings({ language }: SettingsProps) {
+  const toast = useToast();
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [tab, setTab] = useState<SettingsTab>("general");
 
@@ -48,7 +50,6 @@ export default function Settings({ language }: SettingsProps) {
   const [savingMaxModels, setSavingMaxModels] = useState(false);
   const [savingExcelLayout, setSavingExcelLayout] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
-  const [message, setMessage] = useState("");
 
   async function load() {
     const res = await api<Record<string, string>>("/settings");
@@ -76,7 +77,7 @@ export default function Settings({ language }: SettingsProps) {
         body: JSON.stringify({ [key]: String(!current) })
       });
     } catch (err: any) {
-      setMessage(err.message || "Error");
+      toast.error(err?.message ?? String(err));
       setSettings(prev);
     }
   }
@@ -84,7 +85,7 @@ export default function Settings({ language }: SettingsProps) {
   async function savePrefix() {
     const next = prefixDraft.trim().toUpperCase();
     if (!next) {
-      setMessage("Il prefisso non puo essere vuoto.");
+      toast.error("Il prefisso non puo essere vuoto.");
       return;
     }
     const prev = { ...settings };
@@ -95,8 +96,9 @@ export default function Settings({ language }: SettingsProps) {
         method: "PUT",
         body: JSON.stringify({ printCodePrefix: next })
       });
+      toast.success(t(language, "profileSaveButton"));
     } catch (err: any) {
-      setMessage(err.message || "Error");
+      toast.error(err?.message ?? String(err));
       setSettings(prev);
     } finally {
       setSavingPrefix(false);
@@ -106,7 +108,7 @@ export default function Settings({ language }: SettingsProps) {
   async function saveDigits() {
     const parsed = Number.parseInt(digitsDraft.trim(), 10);
     if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
-      setMessage(t(language, "settingsPrintCodeDigitsError"));
+      toast.error(t(language, "settingsPrintCodeDigitsError"));
       return;
     }
     const next = String(parsed);
@@ -118,8 +120,9 @@ export default function Settings({ language }: SettingsProps) {
         method: "PUT",
         body: JSON.stringify({ printCodeDigits: next })
       });
+      toast.success(t(language, "profileSaveButton"));
     } catch (err: any) {
-      setMessage(err.message || "Error");
+      toast.error(err?.message ?? String(err));
       setSettings(prev);
     } finally {
       setSavingDigits(false);
@@ -129,7 +132,7 @@ export default function Settings({ language }: SettingsProps) {
   async function saveMaxModels() {
     const parsed = Number.parseInt(maxModelsDraft.trim(), 10);
     if (!Number.isFinite(parsed) || parsed < 1) {
-      setMessage(t(language, "settingsMaxModelsPerUserError"));
+      toast.error(t(language, "settingsMaxModelsPerUserError"));
       return;
     }
     const next = String(parsed);
@@ -141,8 +144,9 @@ export default function Settings({ language }: SettingsProps) {
         method: "PUT",
         body: JSON.stringify({ maxModelsPerUser: next })
       });
+      toast.success(t(language, "profileSaveButton"));
     } catch (err: any) {
-      setMessage(err.message || "Error");
+      toast.error(err?.message ?? String(err));
       setSettings(prev);
     } finally {
       setSavingMaxModels(false);
@@ -153,7 +157,7 @@ export default function Settings({ language }: SettingsProps) {
     const sheetName = sheetNameDraft.trim();
     const filePrefix = filePrefixDraft.trim();
     if (!sheetName || !filePrefix) {
-      setMessage(t(language, "settingsExcelLayoutError"));
+      toast.error(t(language, "settingsExcelLayoutError"));
       return;
     }
     const prev = { ...settings };
@@ -167,8 +171,9 @@ export default function Settings({ language }: SettingsProps) {
           excelFilePrefix: filePrefix
         })
       });
+      toast.success(t(language, "profileSaveButton"));
     } catch (err: any) {
-      setMessage(err.message || "Error");
+      toast.error(err?.message ?? String(err));
       setSettings(prev);
     } finally {
       setSavingExcelLayout(false);
@@ -190,8 +195,9 @@ export default function Settings({ language }: SettingsProps) {
       window.localStorage.setItem("theme", themeModeDraft);
       window.localStorage.setItem("themePreset", themePresetDraft);
       window.dispatchEvent(new Event("theme-settings-updated"));
+      toast.success(t(language, "profileSaveButton"));
     } catch (err: any) {
-      setMessage(err.message || "Error");
+      toast.error(err?.message ?? String(err));
       setSettings(prev);
     } finally {
       setSavingTheme(false);
@@ -199,14 +205,14 @@ export default function Settings({ language }: SettingsProps) {
   }
 
   useEffect(() => {
-    load().catch((err) => setMessage(err.message));
+    load().catch((err) => toast.error(err?.message ?? String(err)));
   }, []);
 
   return (
-    <Container maxWidth="md">
+    <PageContainer>
+      {toast.node}
       <Stack spacing={2}>
         <Typography variant="h4">{t(language, "settingsTitle")}</Typography>
-        {message && <Alert severity="error" onClose={() => setMessage("")}>{message}</Alert>}
 
         <Paper variant="outlined">
           <Tabs value={tab} onChange={(_, value) => setTab(value)}>
@@ -217,85 +223,87 @@ export default function Settings({ language }: SettingsProps) {
         </Paper>
 
         {tab === "general" && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>{t(language, "settingsSettingColumn")}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 300 }}>{t(language, "settingsValueColumn")}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  <TableCell><Typography>{t(language, "settingsModelImages")}</Typography></TableCell>
-                  <TableCell align="right">
-                    <ActiveSwitch
-                      checked={settings.modelImages === "true"}
-                      onChange={() => toggle("modelImages")}
-                      activeLabel={t(language, "adminUserActive")}
-                      inactiveLabel={t(language, "adminUserInactive")}
-                    />
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell><Typography>{t(language, "settingsPrintCodePrefix")}</Typography></TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={1} justifyContent="flex-end">
-                      <TextField
-                        size="small"
-                        value={prefixDraft}
-                        onChange={(event) => setPrefixDraft(event.target.value)}
-                        sx={{ minWidth: 180 }}
+          <SectionCard title={t(language, "settingsTabGeneral")}>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>{t(language, "settingsSettingColumn")}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, width: 300 }}>{t(language, "settingsValueColumn")}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsModelImages")}</Typography></TableCell>
+                    <TableCell align="right">
+                      <ActiveSwitch
+                        checked={settings.modelImages === "true"}
+                        onChange={() => toggle("modelImages")}
+                        activeLabel={t(language, "adminUserActive")}
+                        inactiveLabel={t(language, "adminUserInactive")}
                       />
-                      <Button variant="contained" onClick={savePrefix} disabled={savingPrefix || !prefixDraft.trim()}>
-                        {savingPrefix ? "..." : t(language, "profileSaveButton")}
-                      </Button>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell><Typography>{t(language, "settingsPrintCodeDigits")}</Typography></TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={1} justifyContent="flex-end">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={digitsDraft}
-                        onChange={(event) => setDigitsDraft(event.target.value)}
-                        inputProps={{ min: 1, max: 10 }}
-                        sx={{ width: 120 }}
-                      />
-                      <Button variant="contained" onClick={saveDigits} disabled={savingDigits || !digitsDraft.trim()}>
-                        {savingDigits ? "..." : t(language, "profileSaveButton")}
-                      </Button>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell><Typography>{t(language, "settingsMaxModelsPerUser")}</Typography></TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={1} justifyContent="flex-end">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={maxModelsDraft}
-                        onChange={(event) => setMaxModelsDraft(event.target.value)}
-                        inputProps={{ min: 1 }}
-                        sx={{ width: 120 }}
-                      />
-                      <Button variant="contained" onClick={saveMaxModels} disabled={savingMaxModels || !maxModelsDraft.trim()}>
-                        {savingMaxModels ? "..." : t(language, "profileSaveButton")}
-                      </Button>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsPrintCodePrefix")}</Typography></TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <TextField
+                          size="small"
+                          value={prefixDraft}
+                          onChange={(event) => setPrefixDraft(event.target.value)}
+                          sx={{ minWidth: 180 }}
+                        />
+                        <Button variant="contained" onClick={savePrefix} disabled={savingPrefix || !prefixDraft.trim()}>
+                          {savingPrefix ? "..." : t(language, "profileSaveButton")}
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsPrintCodeDigits")}</Typography></TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <TextField
+                          type="number"
+                          size="small"
+                          value={digitsDraft}
+                          onChange={(event) => setDigitsDraft(event.target.value)}
+                          inputProps={{ min: 1, max: 10 }}
+                          sx={{ width: 120 }}
+                        />
+                        <Button variant="contained" onClick={saveDigits} disabled={savingDigits || !digitsDraft.trim()}>
+                          {savingDigits ? "..." : t(language, "profileSaveButton")}
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsMaxModelsPerUser")}</Typography></TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <TextField
+                          type="number"
+                          size="small"
+                          value={maxModelsDraft}
+                          onChange={(event) => setMaxModelsDraft(event.target.value)}
+                          inputProps={{ min: 1 }}
+                          sx={{ width: 120 }}
+                        />
+                        <Button variant="contained" onClick={saveMaxModels} disabled={savingMaxModels || !maxModelsDraft.trim()}>
+                          {savingMaxModels ? "..." : t(language, "profileSaveButton")}
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </SectionCard>
         )}
 
         {tab === "theme" && (
-          <Paper variant="outlined" sx={{ p: 2 }}>
+          <SectionCard title={t(language, "settingsTabTheme")}>
             <Stack spacing={2}>
               <FormControl fullWidth>
                 <InputLabel>{t(language, "settingsThemeMode")}</InputLabel>
@@ -328,88 +336,90 @@ export default function Settings({ language }: SettingsProps) {
                 </Button>
               </Stack>
             </Stack>
-          </Paper>
+          </SectionCard>
         )}
 
         {tab === "export" && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>{t(language, "settingsSettingColumn")}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 300 }}>{t(language, "settingsValueColumn")}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  <TableCell><Typography>{t(language, "settingsExportIncludeCode")}</Typography></TableCell>
-                  <TableCell align="right">
-                    <ActiveSwitch
-                      checked={settings.exportIncludeModelCode !== "false"}
-                      onChange={() => toggle("exportIncludeModelCode")}
-                      activeLabel={t(language, "adminUserActive")}
-                      inactiveLabel={t(language, "adminUserInactive")}
-                    />
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell><Typography>{t(language, "settingsExportIncludeDescription")}</Typography></TableCell>
-                  <TableCell align="right">
-                    <ActiveSwitch
-                      checked={settings.exportIncludeModelDescription !== "false"}
-                      onChange={() => toggle("exportIncludeModelDescription")}
-                      activeLabel={t(language, "adminUserActive")}
-                      inactiveLabel={t(language, "adminUserInactive")}
-                    />
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell><Typography>{t(language, "settingsExportIncludeEmail")}</Typography></TableCell>
-                  <TableCell align="right">
-                    <ActiveSwitch
-                      checked={settings.exportIncludeParticipantEmail !== "false"}
-                      onChange={() => toggle("exportIncludeParticipantEmail")}
-                      activeLabel={t(language, "adminUserActive")}
-                      inactiveLabel={t(language, "adminUserInactive")}
-                    />
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell><Typography>{t(language, "settingsExcelSheetName")}</Typography></TableCell>
-                  <TableCell align="right">
-                    <TextField
-                      size="small"
-                      value={sheetNameDraft}
-                      onChange={(event) => setSheetNameDraft(event.target.value)}
-                      sx={{ minWidth: 220 }}
-                    />
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell><Typography>{t(language, "settingsExcelFilePrefix")}</Typography></TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+          <SectionCard title={t(language, "settingsTabExport")}>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>{t(language, "settingsSettingColumn")}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, width: 300 }}>{t(language, "settingsValueColumn")}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsExportIncludeCode")}</Typography></TableCell>
+                    <TableCell align="right">
+                      <ActiveSwitch
+                        checked={settings.exportIncludeModelCode !== "false"}
+                        onChange={() => toggle("exportIncludeModelCode")}
+                        activeLabel={t(language, "adminUserActive")}
+                        inactiveLabel={t(language, "adminUserInactive")}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsExportIncludeDescription")}</Typography></TableCell>
+                    <TableCell align="right">
+                      <ActiveSwitch
+                        checked={settings.exportIncludeModelDescription !== "false"}
+                        onChange={() => toggle("exportIncludeModelDescription")}
+                        activeLabel={t(language, "adminUserActive")}
+                        inactiveLabel={t(language, "adminUserInactive")}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsExportIncludeEmail")}</Typography></TableCell>
+                    <TableCell align="right">
+                      <ActiveSwitch
+                        checked={settings.exportIncludeParticipantEmail !== "false"}
+                        onChange={() => toggle("exportIncludeParticipantEmail")}
+                        activeLabel={t(language, "adminUserActive")}
+                        inactiveLabel={t(language, "adminUserInactive")}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsExcelSheetName")}</Typography></TableCell>
+                    <TableCell align="right">
                       <TextField
                         size="small"
-                        value={filePrefixDraft}
-                        onChange={(event) => setFilePrefixDraft(event.target.value)}
+                        value={sheetNameDraft}
+                        onChange={(event) => setSheetNameDraft(event.target.value)}
                         sx={{ minWidth: 220 }}
                       />
-                      <Button
-                        variant="contained"
-                        onClick={saveExcelLayout}
-                        disabled={savingExcelLayout || !sheetNameDraft.trim() || !filePrefixDraft.trim()}
-                      >
-                        {savingExcelLayout ? "..." : t(language, "profileSaveButton")}
-                      </Button>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsExcelFilePrefix")}</Typography></TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <TextField
+                          size="small"
+                          value={filePrefixDraft}
+                          onChange={(event) => setFilePrefixDraft(event.target.value)}
+                          sx={{ minWidth: 220 }}
+                        />
+                        <Button
+                          variant="contained"
+                          onClick={saveExcelLayout}
+                          disabled={savingExcelLayout || !sheetNameDraft.trim() || !filePrefixDraft.trim()}
+                        >
+                          {savingExcelLayout ? "..." : t(language, "profileSaveButton")}
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </SectionCard>
         )}
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }

@@ -65,7 +65,8 @@ export const modelTeamMembersTable = pgTable("model_team_members", {
   modelId: uuid("model_id").notNull(),
   name: text("name").notNull(),
   surname: text("surname").notNull(),
-  role: text("role").notNull()
+  role: text("role").notNull(),
+  email: text("email")
 });
 
 export const modelImagesTable = pgTable("model_images", {

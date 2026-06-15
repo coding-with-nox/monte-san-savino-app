@@ -75,8 +75,8 @@ services:
       - ./docker/postgres/02-test-data.sh:/scripts/02-test-data.sh:ro
     command: >
       bash -c "until pg_isready -h postgres -p 5432 -U $${POSTGRES_USER}; do sleep 1; done;
-      /scripts/01-init-tenant.sh &&
-      /scripts/02-test-data.sh"
+      bash /scripts/01-init-tenant.sh &&
+      bash /scripts/02-test-data.sh"
     restart: "no"
 
 volumes:

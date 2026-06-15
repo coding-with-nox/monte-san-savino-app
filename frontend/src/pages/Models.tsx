@@ -4,10 +4,10 @@ import {
   Avatar,
   Box,
   Button,
+  ButtonGroup,
   Chip,
   CircularProgress,
   Collapse,
-  Container,
   Divider,
   FormControl,
   Grid,
@@ -41,6 +41,10 @@ import ImageIcon from "@mui/icons-material/Image";
 import HideImageIcon from "@mui/icons-material/HideImage";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import PageContainer from "../components/PageContainer";
+import SectionCard from "../components/SectionCard";
+import EmptyState from "../components/EmptyState";
+import useToast from "../components/useToast";
 
 type Model = {
   id: string;
@@ -55,7 +59,7 @@ type Model = {
 };
 type Level = { id: string; name: string; sortOrder?: number | null };
 type MemberRole = { id: string; name: string };
-type TeamMember = { name: string; surname: string; role: string };
+type TeamMember = { name: string; surname: string; role: string; email?: string };
 type ModelDetail = { model: Model; images: { id: string; url: string }[]; teamMembers: TeamMember[] };
 type Category = { id: string; eventId: string; name: string; status: string };
 
@@ -71,7 +75,7 @@ export default function Models({ language }: ModelsProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
-  const [message, setMessage] = useState("");
+  const toast = useToast();
   const [imagesEnabled, setImagesEnabled] = useState(false);
   const [maxModelsPerUser, setMaxModelsPerUser] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
@@ -81,9 +85,12 @@ export default function Models({ language }: ModelsProps) {
   const [editLevelId, setEditLevelId] = useState("");
   const [editIsTeam, setEditIsTeam] = useState(false);
   const [editTeamMembers, setEditTeamMembers] = useState<TeamMember[]>([]);
+  const [teamNameMode, setTeamNameMode] = useState<"auto" | "manual">("manual");
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberSurname, setNewMemberSurname] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("");
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [emailError, setEmailError] = useState(false);
   const [attachName, setAttachName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -100,7 +107,7 @@ export default function Models({ language }: ModelsProps) {
       const url = window.URL.createObjectURL(blob);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (err: any) {
-      setMessage(err.message || "Error");
+      toast.error(err?.message ?? String(err));
     }
   }
 
@@ -132,6 +139,8 @@ export default function Models({ language }: ModelsProps) {
     setEditLevelId(d.model.levelId || "");
     setEditIsTeam(d.model.isTeam || false);
     setEditTeamMembers(d.teamMembers || []);
+    setTeamNameMode("manual");
+    setEmailError(false);
     setExpandedId(modelId);
     setIsCreating(false);
     setAttachName("");
@@ -151,9 +160,12 @@ export default function Models({ language }: ModelsProps) {
     setEditLevelId("");
     setEditIsTeam(false);
     setEditTeamMembers([]);
+    setTeamNameMode("manual");
     setNewMemberName("");
     setNewMemberSurname("");
     setNewMemberRole("");
+    setNewMemberEmail("");
+    setEmailError(false);
     setIsCreating(true);
     setAttachName("");
   }
@@ -174,7 +186,7 @@ export default function Models({ language }: ModelsProps) {
       setIsCreating(false);
       await load();
     } catch (err: any) {
-      setMessage(err.message || "Unable to create model");
+      toast.error(err?.message ?? String(err));
     } finally {
       setSavingModel(false);
     }
@@ -197,7 +209,7 @@ export default function Models({ language }: ModelsProps) {
       closePanel();
       await load();
     } catch (err: any) {
-      setMessage(err.message || "Unable to save model");
+      toast.error(err?.message ?? String(err));
     } finally {
       setSavingModel(false);
     }
@@ -258,7 +270,7 @@ export default function Models({ language }: ModelsProps) {
       setDetail(d);
       setAttachName("");
     } catch (err: any) {
-      setMessage(err.message || "Upload failed");
+      toast.error(err?.message ?? String(err));
     } finally {
       setUploading(false);
     }
@@ -294,14 +306,31 @@ export default function Models({ language }: ModelsProps) {
 
   function addTeamMember() {
     if (!newMemberName.trim() || !newMemberSurname.trim() || !newMemberRole) return;
-    setEditTeamMembers(prev => [...prev, { name: newMemberName.trim(), surname: newMemberSurname.trim(), role: newMemberRole }]);
+    if (newMemberEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newMemberEmail.trim())) {
+      setEmailError(true);
+      return;
+    }
+    setEmailError(false);
+    setEditTeamMembers(prev => [...prev, {
+      name: newMemberName.trim(),
+      surname: newMemberSurname.trim(),
+      role: newMemberRole,
+      ...(newMemberEmail.trim() ? { email: newMemberEmail.trim() } : {})
+    }]);
     setNewMemberName("");
     setNewMemberSurname("");
     setNewMemberRole("");
+    setNewMemberEmail("");
   }
   function removeTeamMember(idx: number) {
     setEditTeamMembers(prev => prev.filter((_, i) => i !== idx));
   }
+
+  useEffect(() => {
+    if (teamNameMode === "auto") {
+      setEditName(editTeamMembers.map(m => m.surname).filter(Boolean).join(" / "));
+    }
+  }, [teamNameMode, editTeamMembers]);
 
   useEffect(() => { load(); loadCategories(); loadSettings(); loadLevels(); loadMemberRoles(); }, []);
 
@@ -323,7 +352,26 @@ export default function Models({ language }: ModelsProps) {
             <Typography variant="subtitle2">
               {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
             </Typography>
-            <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" />
+            {editIsTeam && (
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="body2">{t(language, "modelsTeamNameLabel")}:</Typography>
+                <ButtonGroup size="small" variant="outlined">
+                  <Button
+                    onClick={() => setTeamNameMode("manual")}
+                    variant={teamNameMode === "manual" ? "contained" : "outlined"}
+                  >
+                    {t(language, "modelsTeamNameManual")}
+                  </Button>
+                  <Button
+                    onClick={() => setTeamNameMode("auto")}
+                    variant={teamNameMode === "auto" ? "contained" : "outlined"}
+                  >
+                    {t(language, "modelsTeamNameAuto")}
+                  </Button>
+                </ButtonGroup>
+              </Stack>
+            )}
+            <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" disabled={editIsTeam && teamNameMode === "auto"} />
             <FormControl fullWidth size="small">
               <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
               <Select value={editCategoryId} label={t(language, "modelsCategoryPlaceholder")} onChange={(e) => setEditCategoryId(e.target.value)}>
@@ -337,7 +385,7 @@ export default function Models({ language }: ModelsProps) {
               </Select>
             </FormControl>
             <Stack direction="row" alignItems="center" spacing={1}>
-              <input type="checkbox" id="isTeam" checked={editIsTeam} onChange={(e) => setEditIsTeam(e.target.checked)} />
+              <input type="checkbox" id="isTeam" checked={editIsTeam} onChange={(e) => { setEditIsTeam(e.target.checked); if (!e.target.checked) setTeamNameMode("manual"); }} />
               <Typography variant="body2" component="label" htmlFor="isTeam">
                 {t(language, "modelsIsTeamLabel")}
               </Typography>
@@ -347,7 +395,9 @@ export default function Models({ language }: ModelsProps) {
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>{t(language, "modelsTeamMembersSection")}</Typography>
                 {editTeamMembers.map((m, idx) => (
                   <Stack key={idx} direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                    <Typography variant="body2" sx={{ flexGrow: 1 }}>{m.name} {m.surname} — {m.role}</Typography>
+                    <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                      {m.name} {m.surname} — {m.role}{m.email ? ` (${m.email})` : ""}
+                    </Typography>
                     <IconButton size="small" color="error" onClick={() => removeTeamMember(idx)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -356,6 +406,7 @@ export default function Models({ language }: ModelsProps) {
                 <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
                   <TextField size="small" label={t(language, "modelsMemberName")} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
                   <TextField size="small" label={t(language, "modelsMemberSurname")} value={newMemberSurname} onChange={(e) => setNewMemberSurname(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
+                  <TextField size="small" label="Email" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} sx={{ flex: 1, minWidth: 140 }} type="email" error={emailError} helperText={emailError ? t(language, "emailValidationInvalid") : ""} />
                   <FormControl size="small" sx={{ minWidth: 120 }}>
                     <InputLabel>{t(language, "modelsMemberRole")}</InputLabel>
                     <Select value={newMemberRole} label={t(language, "modelsMemberRole")} onChange={(e) => setNewMemberRole(e.target.value)}>
@@ -450,7 +501,8 @@ export default function Models({ language }: ModelsProps) {
   );
 
   return (
-    <Container maxWidth="lg">
+    <PageContainer maxWidth="lg">
+      {toast.node}
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
@@ -467,7 +519,6 @@ export default function Models({ language }: ModelsProps) {
             {t(language, "modelsImagesDisabledHint")}
           </Alert>
         )}
-        {message && <Alert severity="error" onClose={() => setMessage("")}>{message}</Alert>}
         <Collapse in={isCreating}>
           <Paper variant="outlined" sx={{ mb: 1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
@@ -477,87 +528,87 @@ export default function Models({ language }: ModelsProps) {
             {editPanel}
           </Paper>
         </Collapse>
-        <TableContainer component={Paper} variant="outlined">
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700, width: 72 }}>{t(language, "modelsPreviewColumn")}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCodeColumn")}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
-                <TableCell align="right" sx={{ width: 100 }} />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {models.map((model) => (
-                <React.Fragment key={model.id}>
-                  <TableRow
-                    hover
-                    sx={{
-                      cursor: "pointer",
-                      "& > td": { borderBottom: expandedId === model.id ? "none" : undefined }
-                    }}
-                    onClick={() => openModel(model.id)}
-                    selected={expandedId === model.id}
-                  >
-                    <TableCell sx={{ width: 72, p: 1 }}>
-                      {model.imageUrl ? (
-                        <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
-                      ) : (
-                        <Avatar
-                          variant="rounded"
-                          sx={{
-                            width: 40,
-                            height: 40,
-                            bgcolor: imagesEnabled ? "action.hover" : "action.disabledBackground"
-                          }}
-                        >
-                          {imagesEnabled ? (
-                            <ImageIcon fontSize="small" color="disabled" />
-                          ) : (
-                            <HideImageIcon fontSize="small" color="disabled" />
-                          )}
-                        </Avatar>
-                      )}
-                    </TableCell>
-                    <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={model.code || "-"}
-                        sx={{ "& .MuiChip-label": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }}
-                      />
-                    </TableCell>
-                    <TableCell><Chip size="small" label={getCategoryName(model.categoryId)} /></TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                        <IconButton size="small" onClick={(e) => { e.stopPropagation(); openModel(model.id); }} color="primary"><EditIcon fontSize="small" /></IconButton>
-                        <IconButton size="small" onClick={(e) => { e.stopPropagation(); deleteModel(model.id); }} color="error"><DeleteIcon fontSize="small" /></IconButton>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
+        <SectionCard title={t(language, "modelsTitle")}>
+          {models.length === 0 && (
+            <EmptyState title="Nessun modello" description="Aggiungi il tuo primo modello per iniziare." />
+          )}
+          {models.length > 0 && (
+            <TableContainer component={Paper} variant="outlined">
+              <Table>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={tableColumnCount} sx={{ p: 0 }}>
-                      <Collapse in={expandedId === model.id} unmountOnExit>
-                        <Divider />
-                        {editPanel}
-                      </Collapse>
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: 72 }}>{t(language, "modelsPreviewColumn")}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCodeColumn")}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
+                    <TableCell align="right" sx={{ width: 100 }} />
                   </TableRow>
-                </React.Fragment>
-              ))}
-              {models.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={tableColumnCount} align="center">
-                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>{t(language, "modelsSelectHint")}</Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {models.map((model) => (
+                    <React.Fragment key={model.id}>
+                      <TableRow
+                        hover
+                        sx={{
+                          cursor: "pointer",
+                          "& > td": { borderBottom: expandedId === model.id ? "none" : undefined }
+                        }}
+                        onClick={() => openModel(model.id)}
+                        selected={expandedId === model.id}
+                      >
+                        <TableCell sx={{ width: 72, p: 1 }}>
+                          {model.imageUrl ? (
+                            <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
+                          ) : (
+                            <Avatar
+                              variant="rounded"
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                bgcolor: imagesEnabled ? "action.hover" : "action.disabledBackground"
+                              }}
+                            >
+                              {imagesEnabled ? (
+                                <ImageIcon fontSize="small" color="disabled" />
+                              ) : (
+                                <HideImageIcon fontSize="small" color="disabled" />
+                              )}
+                            </Avatar>
+                          )}
+                        </TableCell>
+                        <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={model.code || "-"}
+                            sx={{ "& .MuiChip-label": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }}
+                          />
+                        </TableCell>
+                        <TableCell><Chip size="small" label={getCategoryName(model.categoryId)} /></TableCell>
+                        <TableCell align="right">
+                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); openModel(model.id); }} color="primary"><EditIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); deleteModel(model.id); }} color="error"><DeleteIcon fontSize="small" /></IconButton>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell colSpan={tableColumnCount} sx={{ p: 0 }}>
+                          <Collapse in={expandedId === model.id} unmountOnExit>
+                            <Divider />
+                            {editPanel}
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    </React.Fragment>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </SectionCard>
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }

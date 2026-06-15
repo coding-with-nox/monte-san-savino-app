@@ -143,7 +143,8 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
               modelId,
               name: m.name,
               surname: m.surname,
-              role: m.role
+              role: m.role,
+              email: m.email ?? null
             }))
           );
         }
@@ -170,7 +171,8 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       teamMembers: t.Optional(t.Array(t.Object({
         name: t.String(),
         surname: t.String(),
-        role: t.String()
+        role: t.String(),
+        email: t.Optional(t.String({ format: "email" }))
       })))
     }),
     detail: {
@@ -253,7 +255,8 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
             modelId: params.modelId,
             name: m.name,
             surname: m.surname,
-            role: m.role
+            role: m.role,
+            email: m.email ?? null
           }))
         );
       }
@@ -272,7 +275,8 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       teamMembers: t.Optional(t.Array(t.Object({
         name: t.String(),
         surname: t.String(),
-        role: t.String()
+        role: t.String(),
+        email: t.Optional(t.String({ format: "email" }))
       })))
     }),
     detail: {
