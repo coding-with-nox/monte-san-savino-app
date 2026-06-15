@@ -1,7 +1,8 @@
 import { Elysia, t } from "elysia";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { emailService } from "../../../shared/infra/email/emailService";
+// TODO: import emailService when handler is implemented
+// import { emailService } from "../../../shared/infra/email/emailService";
 
 export const reminderRoutes = new Elysia({ prefix: "/admin/reminders" })
   .use(tenantMiddleware)
