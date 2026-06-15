@@ -303,6 +303,7 @@ export default function Models({ language }: ModelsProps) {
 
   function addTeamMember() {
     if (!newMemberName.trim() || !newMemberSurname.trim() || !newMemberRole) return;
+    if (newMemberEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newMemberEmail.trim())) return;
     setEditTeamMembers(prev => [...prev, {
       name: newMemberName.trim(),
       surname: newMemberSurname.trim(),
@@ -321,6 +322,8 @@ export default function Models({ language }: ModelsProps) {
   useEffect(() => {
     if (teamNameMode === "auto") {
       setEditName(editTeamMembers.map(m => m.surname).filter(Boolean).join(" / "));
+    } else {
+      setEditName("");
     }
   }, [teamNameMode, editTeamMembers]);
 
@@ -346,19 +349,19 @@ export default function Models({ language }: ModelsProps) {
             </Typography>
             {editIsTeam && (
               <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography variant="body2">Nome squadra:</Typography>
+                <Typography variant="body2">{t(language, "modelsTeamNameLabel")}:</Typography>
                 <ButtonGroup size="small" variant="outlined">
                   <Button
                     onClick={() => setTeamNameMode("manual")}
                     variant={teamNameMode === "manual" ? "contained" : "outlined"}
                   >
-                    Manuale
+                    {t(language, "modelsTeamNameManual")}
                   </Button>
                   <Button
                     onClick={() => setTeamNameMode("auto")}
                     variant={teamNameMode === "auto" ? "contained" : "outlined"}
                   >
-                    Auto
+                    {t(language, "modelsTeamNameAuto")}
                   </Button>
                 </ButtonGroup>
               </Stack>
