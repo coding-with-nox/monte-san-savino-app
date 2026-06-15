@@ -172,7 +172,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         name: t.String(),
         surname: t.String(),
         role: t.String(),
-        email: t.Optional(t.String())
+        email: t.Optional(t.String({ format: "email" }))
       })))
     }),
     detail: {
@@ -276,7 +276,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         name: t.String(),
         surname: t.String(),
         role: t.String(),
-        email: t.Optional(t.String())
+        email: t.Optional(t.String({ format: "email" }))
       })))
     }),
     detail: {
