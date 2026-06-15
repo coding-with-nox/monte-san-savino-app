@@ -90,6 +90,7 @@ export default function Models({ language }: ModelsProps) {
   const [newMemberSurname, setNewMemberSurname] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("");
   const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [emailError, setEmailError] = useState(false);
   const [attachName, setAttachName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -139,6 +140,7 @@ export default function Models({ language }: ModelsProps) {
     setEditIsTeam(d.model.isTeam || false);
     setEditTeamMembers(d.teamMembers || []);
     setTeamNameMode("manual");
+    setEmailError(false);
     setExpandedId(modelId);
     setIsCreating(false);
     setAttachName("");
@@ -163,6 +165,7 @@ export default function Models({ language }: ModelsProps) {
     setNewMemberSurname("");
     setNewMemberRole("");
     setNewMemberEmail("");
+    setEmailError(false);
     setIsCreating(true);
     setAttachName("");
   }
@@ -303,7 +306,11 @@ export default function Models({ language }: ModelsProps) {
 
   function addTeamMember() {
     if (!newMemberName.trim() || !newMemberSurname.trim() || !newMemberRole) return;
-    if (newMemberEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newMemberEmail.trim())) return;
+    if (newMemberEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newMemberEmail.trim())) {
+      setEmailError(true);
+      return;
+    }
+    setEmailError(false);
     setEditTeamMembers(prev => [...prev, {
       name: newMemberName.trim(),
       surname: newMemberSurname.trim(),
@@ -378,7 +385,7 @@ export default function Models({ language }: ModelsProps) {
               </Select>
             </FormControl>
             <Stack direction="row" alignItems="center" spacing={1}>
-              <input type="checkbox" id="isTeam" checked={editIsTeam} onChange={(e) => setEditIsTeam(e.target.checked)} />
+              <input type="checkbox" id="isTeam" checked={editIsTeam} onChange={(e) => { setEditIsTeam(e.target.checked); if (!e.target.checked) setTeamNameMode("manual"); }} />
               <Typography variant="body2" component="label" htmlFor="isTeam">
                 {t(language, "modelsIsTeamLabel")}
               </Typography>
@@ -399,7 +406,7 @@ export default function Models({ language }: ModelsProps) {
                 <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
                   <TextField size="small" label={t(language, "modelsMemberName")} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
                   <TextField size="small" label={t(language, "modelsMemberSurname")} value={newMemberSurname} onChange={(e) => setNewMemberSurname(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
-                  <TextField size="small" label="Email" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} sx={{ flex: 1, minWidth: 140 }} type="email" />
+                  <TextField size="small" label="Email" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} sx={{ flex: 1, minWidth: 140 }} type="email" error={emailError} helperText={emailError ? t(language, "emailValidationInvalid") : ""} />
                   <FormControl size="small" sx={{ minWidth: 120 }}>
                     <InputLabel>{t(language, "modelsMemberRole")}</InputLabel>
                     <Select value={newMemberRole} label={t(language, "modelsMemberRole")} onChange={(e) => setNewMemberRole(e.target.value)}>
