@@ -113,7 +113,37 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .post("/", async ({ tenantDb, user, body }) => {
+  .post("/", async ({ tenantDb, user, body, set }) => {
+    // Temporal guard: block creation when enrollment period is closed
+    if (!body.categoryId) {
+      (set as any).status = 422;
+      return { error: "Invalid category" };
+    }
+    const [postCatRow] = await tenantDb
+      .select({ eventId: categoriesTable.eventId })
+      .from(categoriesTable)
+      .where(eq(categoriesTable.id, body.categoryId as any))
+      .limit(1);
+    if (!postCatRow) {
+      (set as any).status = 422;
+      return { error: "Invalid category" };
+    }
+    const postCampaigns = await tenantDb
+      .select({ enrollmentCloseDate: eventCampaignsTable.enrollmentCloseDate })
+      .from(eventCampaignsTable)
+      .where(eq(eventCampaignsTable.eventId, postCatRow.eventId as any));
+    const postNow = new Date();
+    const postIsClosed = postCampaigns.length > 0 && postCampaigns.some((c: any) => {
+      if (!c.enrollmentCloseDate) return false; // null = no close date = open
+      const closeDate = new Date(c.enrollmentCloseDate);
+      if (isNaN(closeDate.getTime())) return false; // malformed date = treat as open
+      return closeDate < postNow;
+    });
+    if (postIsClosed) {
+      (set as any).status = 403;
+      return { error: "Enrollment period is closed" };
+    }
+
     const modelId = crypto.randomUUID();
     let lastError: unknown = null;
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
@@ -255,10 +285,10 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       .where(eq(eventCampaignsTable.eventId, catRow.eventId as any));
 
     const now = new Date();
-    const isClosed = campaigns.length > 0 && campaigns.every((c: any) => {
-      if (!c.enrollmentCloseDate) return false;
+    const isClosed = campaigns.length > 0 && campaigns.some((c: any) => {
+      if (!c.enrollmentCloseDate) return false; // null = no close date = open
       const closeDate = new Date(c.enrollmentCloseDate);
-      if (isNaN(closeDate.getTime())) return false; // malformed date → treat as open
+      if (isNaN(closeDate.getTime())) return false; // malformed date = treat as open
       return closeDate < now;
     });
 
