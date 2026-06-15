@@ -4,6 +4,7 @@ import {
   Avatar,
   Box,
   Button,
+  ButtonGroup,
   Chip,
   CircularProgress,
   Collapse,
@@ -58,7 +59,7 @@ type Model = {
 };
 type Level = { id: string; name: string; sortOrder?: number | null };
 type MemberRole = { id: string; name: string };
-type TeamMember = { name: string; surname: string; role: string };
+type TeamMember = { name: string; surname: string; role: string; email?: string };
 type ModelDetail = { model: Model; images: { id: string; url: string }[]; teamMembers: TeamMember[] };
 type Category = { id: string; eventId: string; name: string; status: string };
 
@@ -84,9 +85,11 @@ export default function Models({ language }: ModelsProps) {
   const [editLevelId, setEditLevelId] = useState("");
   const [editIsTeam, setEditIsTeam] = useState(false);
   const [editTeamMembers, setEditTeamMembers] = useState<TeamMember[]>([]);
+  const [teamNameMode, setTeamNameMode] = useState<"auto" | "manual">("manual");
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberSurname, setNewMemberSurname] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("");
+  const [newMemberEmail, setNewMemberEmail] = useState("");
   const [attachName, setAttachName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -135,6 +138,7 @@ export default function Models({ language }: ModelsProps) {
     setEditLevelId(d.model.levelId || "");
     setEditIsTeam(d.model.isTeam || false);
     setEditTeamMembers(d.teamMembers || []);
+    setTeamNameMode("manual");
     setExpandedId(modelId);
     setIsCreating(false);
     setAttachName("");
@@ -154,9 +158,11 @@ export default function Models({ language }: ModelsProps) {
     setEditLevelId("");
     setEditIsTeam(false);
     setEditTeamMembers([]);
+    setTeamNameMode("manual");
     setNewMemberName("");
     setNewMemberSurname("");
     setNewMemberRole("");
+    setNewMemberEmail("");
     setIsCreating(true);
     setAttachName("");
   }
@@ -297,14 +303,26 @@ export default function Models({ language }: ModelsProps) {
 
   function addTeamMember() {
     if (!newMemberName.trim() || !newMemberSurname.trim() || !newMemberRole) return;
-    setEditTeamMembers(prev => [...prev, { name: newMemberName.trim(), surname: newMemberSurname.trim(), role: newMemberRole }]);
+    setEditTeamMembers(prev => [...prev, {
+      name: newMemberName.trim(),
+      surname: newMemberSurname.trim(),
+      role: newMemberRole,
+      ...(newMemberEmail.trim() ? { email: newMemberEmail.trim() } : {})
+    }]);
     setNewMemberName("");
     setNewMemberSurname("");
     setNewMemberRole("");
+    setNewMemberEmail("");
   }
   function removeTeamMember(idx: number) {
     setEditTeamMembers(prev => prev.filter((_, i) => i !== idx));
   }
+
+  useEffect(() => {
+    if (teamNameMode === "auto") {
+      setEditName(editTeamMembers.map(m => m.surname).filter(Boolean).join(" / "));
+    }
+  }, [teamNameMode, editTeamMembers]);
 
   useEffect(() => { load(); loadCategories(); loadSettings(); loadLevels(); loadMemberRoles(); }, []);
 
@@ -326,7 +344,26 @@ export default function Models({ language }: ModelsProps) {
             <Typography variant="subtitle2">
               {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
             </Typography>
-            <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" />
+            {editIsTeam && (
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="body2">Nome squadra:</Typography>
+                <ButtonGroup size="small" variant="outlined">
+                  <Button
+                    onClick={() => setTeamNameMode("manual")}
+                    variant={teamNameMode === "manual" ? "contained" : "outlined"}
+                  >
+                    Manuale
+                  </Button>
+                  <Button
+                    onClick={() => setTeamNameMode("auto")}
+                    variant={teamNameMode === "auto" ? "contained" : "outlined"}
+                  >
+                    Auto
+                  </Button>
+                </ButtonGroup>
+              </Stack>
+            )}
+            <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" disabled={editIsTeam && teamNameMode === "auto"} />
             <FormControl fullWidth size="small">
               <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
               <Select value={editCategoryId} label={t(language, "modelsCategoryPlaceholder")} onChange={(e) => setEditCategoryId(e.target.value)}>
@@ -350,7 +387,9 @@ export default function Models({ language }: ModelsProps) {
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>{t(language, "modelsTeamMembersSection")}</Typography>
                 {editTeamMembers.map((m, idx) => (
                   <Stack key={idx} direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                    <Typography variant="body2" sx={{ flexGrow: 1 }}>{m.name} {m.surname} — {m.role}</Typography>
+                    <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                      {m.name} {m.surname} — {m.role}{m.email ? ` (${m.email})` : ""}
+                    </Typography>
                     <IconButton size="small" color="error" onClick={() => removeTeamMember(idx)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -359,6 +398,7 @@ export default function Models({ language }: ModelsProps) {
                 <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
                   <TextField size="small" label={t(language, "modelsMemberName")} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
                   <TextField size="small" label={t(language, "modelsMemberSurname")} value={newMemberSurname} onChange={(e) => setNewMemberSurname(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
+                  <TextField size="small" label="Email" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} sx={{ flex: 1, minWidth: 140 }} type="email" />
                   <FormControl size="small" sx={{ minWidth: 120 }}>
                     <InputLabel>{t(language, "modelsMemberRole")}</InputLabel>
                     <Select value={newMemberRole} label={t(language, "modelsMemberRole")} onChange={(e) => setNewMemberRole(e.target.value)}>
