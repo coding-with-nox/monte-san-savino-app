@@ -322,8 +322,6 @@ export default function Models({ language }: ModelsProps) {
   useEffect(() => {
     if (teamNameMode === "auto") {
       setEditName(editTeamMembers.map(m => m.surname).filter(Boolean).join(" / "));
-    } else {
-      setEditName("");
     }
   }, [teamNameMode, editTeamMembers]);
 
