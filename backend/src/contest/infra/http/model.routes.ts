@@ -75,6 +75,50 @@ function isCodeConflict(err: unknown): boolean {
   return msg.includes("ux_models_code") || msg.includes("models_code_key");
 }
 
+async function checkEnrollmentOpen(
+  tenantDb: any,
+  categoryId: string,
+  set: any
+): Promise<{ blocked: boolean }> {
+  const [catRow] = await tenantDb
+    .select({ eventId: categoriesTable.eventId })
+    .from(categoriesTable)
+    .where(eq(categoriesTable.id, categoryId as any))
+    .limit(1);
+
+  if (!catRow) {
+    set.status = 422;
+    set.body = { error: "Invalid category" };
+    return { blocked: true };
+  }
+
+  const campaigns = await tenantDb
+    .select({ enrollmentCloseDate: eventCampaignsTable.enrollmentCloseDate })
+    .from(eventCampaignsTable)
+    .where(eq(eventCampaignsTable.eventId, catRow.eventId as any));
+
+  const now = new Date();
+  const isClosed = campaigns.length > 0 && campaigns.some((c: any) => {
+    if (!c.enrollmentCloseDate) return false;
+    // Parse as end-of-day Italy time (UTC+1/+2): append T23:59:59+01:00 if date-only string
+    const raw = c.enrollmentCloseDate as string;
+    const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+      ? `${raw}T23:59:59+01:00`
+      : raw;
+    const closeDate = new Date(dateStr);
+    if (isNaN(closeDate.getTime())) return false;
+    return closeDate < now;
+  });
+
+  if (isClosed) {
+    set.status = 403;
+    set.body = { error: "Enrollment period is closed" };
+    return { blocked: true };
+  }
+
+  return { blocked: false };
+}
+
 export const modelRoutes = new Elysia({ prefix: "/models" })
   .use(tenantMiddleware)
   .use(requireRole("user"))
@@ -115,33 +159,10 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
   })
   .post("/", async ({ tenantDb, user, body, set }) => {
     // Temporal guard: block creation when enrollment period is closed
-    if (!body.categoryId) {
-      (set as any).status = 422;
-      return { error: "Invalid category" };
-    }
-    const [postCatRow] = await tenantDb
-      .select({ eventId: categoriesTable.eventId })
-      .from(categoriesTable)
-      .where(eq(categoriesTable.id, body.categoryId as any))
-      .limit(1);
-    if (!postCatRow) {
-      (set as any).status = 422;
-      return { error: "Invalid category" };
-    }
-    const postCampaigns = await tenantDb
-      .select({ enrollmentCloseDate: eventCampaignsTable.enrollmentCloseDate })
-      .from(eventCampaignsTable)
-      .where(eq(eventCampaignsTable.eventId, postCatRow.eventId as any));
-    const postNow = new Date();
-    const postIsClosed = postCampaigns.length > 0 && postCampaigns.some((c: any) => {
-      if (!c.enrollmentCloseDate) return false; // null = no close date = open
-      const closeDate = new Date(c.enrollmentCloseDate);
-      if (isNaN(closeDate.getTime())) return false; // malformed date = treat as open
-      return closeDate < postNow;
-    });
-    if (postIsClosed) {
-      (set as any).status = 403;
-      return { error: "Enrollment period is closed" };
+    // Managers and admins can always create models (spec §5b)
+    if (user?.role !== "manager" && user?.role !== "admin") {
+      const guard = await checkEnrollmentOpen(tenantDb, body.categoryId, set);
+      if (guard.blocked) return (set as any).body;
     }
 
     const modelId = crypto.randomUUID();
@@ -267,34 +288,11 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (!rows.length) { set.status = 404; return { error: "Not found" }; }
 
     // Temporal guard: block edits when enrollment period is closed
+    // Managers and admins can always edit models (spec §5b)
     const model = rows[0] as any;
-    const [catRow] = await tenantDb
-      .select({ eventId: categoriesTable.eventId })
-      .from(categoriesTable)
-      .where(eq(categoriesTable.id, model.categoryId as any))
-      .limit(1);
-
-    if (!catRow) {
-      set.status = 422;
-      return { error: "Model has no valid category" };
-    }
-
-    const campaigns = await tenantDb
-      .select({ enrollmentCloseDate: eventCampaignsTable.enrollmentCloseDate })
-      .from(eventCampaignsTable)
-      .where(eq(eventCampaignsTable.eventId, catRow.eventId as any));
-
-    const now = new Date();
-    const isClosed = campaigns.length > 0 && campaigns.some((c: any) => {
-      if (!c.enrollmentCloseDate) return false; // null = no close date = open
-      const closeDate = new Date(c.enrollmentCloseDate);
-      if (isNaN(closeDate.getTime())) return false; // malformed date = treat as open
-      return closeDate < now;
-    });
-
-    if (isClosed) {
-      set.status = 403;
-      return { error: "Enrollment period is closed" };
+    if (user?.role !== "manager" && user?.role !== "admin") {
+      const guard = await checkEnrollmentOpen(tenantDb, model.categoryId, set);
+      if (guard.blocked) return (set as any).body;
     }
 
     const updateData: Record<string, unknown> = {};
@@ -373,6 +371,11 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       .from(modelsTable)
       .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user!.id as any)));
     if (!rows.length) { set.status = 404; return { error: "Not found" }; }
+    const existingModel = rows[0] as any;
+    if (user?.role !== "manager" && user?.role !== "admin") {
+      const guard = await checkEnrollmentOpen(tenantDb, existingModel.categoryId, set);
+      if (guard.blocked) return (set as any).body;
+    }
     const imageId = crypto.randomUUID();
     await tenantDb.insert(modelImagesTable).values({ id: imageId, modelId: params.modelId, url: body.url });
     return { id: imageId };
@@ -391,6 +394,11 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       .from(modelsTable)
       .where(and(eq(modelsTable.id, params.modelId as any), eq(modelsTable.userId, user!.id as any)));
     if (!rows.length) { set.status = 404; return { error: "Not found" }; }
+    const existingModel = rows[0] as any;
+    if (user?.role !== "manager" && user?.role !== "admin") {
+      const guard = await checkEnrollmentOpen(tenantDb, existingModel.categoryId, set);
+      if (guard.blocked) return (set as any).body;
+    }
     await tenantDb.delete(modelImagesTable).where(and(
       eq(modelImagesTable.id, params.imageId as any),
       eq(modelImagesTable.modelId, params.modelId as any)
