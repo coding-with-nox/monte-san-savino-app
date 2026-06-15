@@ -170,16 +170,23 @@ export async function ensureTenantSchema() {
       ALTER TABLE model_team_members ADD COLUMN IF NOT EXISTS email text;
     `);
 
-    // Remove stale role names and insert correct ones idempotently
-    await pool.query(`
-      DELETE FROM member_roles WHERE name IN ('Pilota', 'Co-pilota', 'Meccanico', 'Navigatore');
-    `);
-    await pool.query(`
-      INSERT INTO member_roles (id, name)
-      SELECT gen_random_uuid(), name
-      FROM (VALUES ('Scultore'), ('Pittore'), ('Concept Artist'), ('Art Director')) AS t(name)
-      WHERE NOT EXISTS (SELECT 1 FROM member_roles WHERE member_roles.name = t.name);
-    `);
+    // Remove stale role names and insert correct ones idempotently (atomic)
+    await pool.query('BEGIN');
+    try {
+      await pool.query(`
+        DELETE FROM member_roles WHERE name IN ('Pilota', 'Co-pilota', 'Meccanico', 'Navigatore');
+      `);
+      await pool.query(`
+        INSERT INTO member_roles (id, name)
+        SELECT gen_random_uuid(), name
+        FROM (VALUES ('Scultore'), ('Pittore'), ('Concept Artist'), ('Art Director')) AS t(name)
+        WHERE NOT EXISTS (SELECT 1 FROM member_roles WHERE member_roles.name = t.name);
+      `);
+      await pool.query('COMMIT');
+    } catch (err) {
+      await pool.query('ROLLBACK');
+      throw err;
+    }
   } finally {
     await pool.end();
   }
