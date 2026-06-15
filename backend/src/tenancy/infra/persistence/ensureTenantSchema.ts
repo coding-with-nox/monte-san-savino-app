@@ -164,6 +164,16 @@ export async function ensureTenantSchema() {
       ALTER TABLE IF EXISTS models
         DROP COLUMN IF EXISTS team_id;
     `);
+
+    // Re-seed member_roles with correct values
+    await pool.query(`
+      DELETE FROM member_roles;
+      INSERT INTO member_roles (id, name) VALUES
+        (gen_random_uuid(), 'Scultore'),
+        (gen_random_uuid(), 'Pittore'),
+        (gen_random_uuid(), 'Concept Artist'),
+        (gen_random_uuid(), 'Art Director');
+    `);
   } finally {
     await pool.end();
   }
