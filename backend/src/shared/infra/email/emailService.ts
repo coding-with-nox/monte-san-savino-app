@@ -45,4 +45,34 @@ export class EmailService {
       return false;
     }
   }
+
+  // TODO: called by scheduler or admin endpoint, 7 days before enrollment close date
+  async sendIncompleteRegistrationReminder(params: {
+    to: string;
+    userName: string;
+    enrollmentCloseDate: string;
+    frontendUrl: string;
+  }): Promise<boolean> {
+    if (!process.env.RESEND_API_KEY) {
+      logger.warn({ to: params.to }, "Reminder email skipped (no API key)");
+      return false;
+    }
+    try {
+      await this.resend.emails.send({
+        from: this.fromEmail,
+        to: params.to,
+        subject: "Scheda di iscrizione incompleta / Incomplete registration — Miniatures Contest",
+        html: `<!-- TODO: replace with proper bilingual HTML template -->
+        <p><strong>IT:</strong> La tua scheda di iscrizione è incompleta: non hai ancora registrato modelli.</p>
+        <p><strong>EN:</strong> Your registration form is incomplete: no models registered yet.</p>
+        <p>Chiusura iscrizioni / Enrollment closes: ${params.enrollmentCloseDate}</p>
+        <a href="${params.frontendUrl}/models">Completa iscrizione / Complete registration</a>`
+      });
+      logger.info({ to: params.to }, "Incomplete registration reminder sent");
+      return true;
+    } catch (err) {
+      logger.error({ err, to: params.to }, "Failed to send incomplete registration reminder");
+      return false;
+    }
+  }
 }

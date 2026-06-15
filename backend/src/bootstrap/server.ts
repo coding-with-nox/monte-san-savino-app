@@ -2,6 +2,17 @@ import { buildApp } from "./app";
 import { seedDatabase } from "./seed";
 import { logger } from "../shared/infra/logger/logger";
 import { ensureTenantSchema } from "../tenancy/infra/persistence/ensureTenantSchema";
+import { scheduler } from "../shared/infra/scheduler/scheduler";
+
+scheduler.register({
+  name: "incomplete-registration-reminder",
+  cronExpression: "0 8 * * *", // daily at 08:00
+  handler: async () => {
+    // TODO: for each tenant, find campaigns with enrollmentCloseDate in [now+6d, now+8d],
+    // find enrolled users with no models, send reminder via emailService
+    logger.info("incomplete-registration-reminder: TODO — not yet implemented");
+  },
+});
 
 async function start() {
   await ensureTenantSchema();

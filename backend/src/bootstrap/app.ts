@@ -27,6 +27,7 @@ import { judgeModificationRoutes, adminModificationRoutes } from "../contest/inf
 import { publicCategoryRoutes } from "../contest/infra/http/public-categories.routes";
 import { settingsRoutes, adminSettingsRoutes } from "../contest/infra/http/settings.routes";
 import { eventCampaignsRoutes } from "../contest/infra/http/event-campaigns.routes";
+import { reminderRoutes } from "../contest/infra/http/reminder.routes";
 import { adminMemberRolesRoutes, publicMemberRolesRoutes } from "../contest/infra/http/member-roles.routes";
 
 export function buildApp() {
@@ -128,5 +129,6 @@ export function buildApp() {
     .use(publicCategoryRoutes)
     .use(settingsRoutes)
     .use(adminSettingsRoutes)
-    .use(eventCampaignsRoutes);
+    .use(eventCampaignsRoutes)
+    .use(reminderRoutes);
 }
