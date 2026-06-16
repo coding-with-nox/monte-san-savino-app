@@ -181,6 +181,10 @@ export default function Models({ language }: ModelsProps) {
 
   async function saveModelChanges() {
     if (!detail?.model) return;
+    if (editCategoryId !== detail.model.categoryId) {
+      const ok = window.confirm(t(language, "modelsCategoryChangeWarning"));
+      if (!ok) return;
+    }
     setSavingModel(true);
     try {
       await api(`/models/${detail.model.id}`, {
@@ -318,6 +322,11 @@ export default function Models({ language }: ModelsProps) {
                 {openCategories.map((cat) => <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>)}
               </Select>
             </FormControl>
+            {!isCreating && detail?.model && editCategoryId && editCategoryId !== detail.model.categoryId && (
+              <Alert severity="warning" sx={{ py: 0.5 }}>
+                {t(language, "modelsCategoryChangeWarning")}
+              </Alert>
+            )}
             <FormControl fullWidth size="small">
               <InputLabel>{t(language, "modelsLevelPlaceholder")}</InputLabel>
               <Select value={editLevelId} label={t(language, "modelsLevelPlaceholder")} onChange={(e) => setEditLevelId(e.target.value)}>
