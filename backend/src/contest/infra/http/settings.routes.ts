@@ -13,7 +13,9 @@ const DEFAULTS: Record<string, string> = {
   exportIncludeModelDescription: "true",
   exportIncludeParticipantEmail: "true",
   excelSheetName: "Export",
-  excelFilePrefix: "contest-export"
+  excelFilePrefix: "contest-export",
+  maxVotesPerExhibitor: "3",
+  maxVoteDifferent: "2"
 };
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })
