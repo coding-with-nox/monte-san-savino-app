@@ -13,6 +13,11 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
   .use(tenantMiddleware)
   .use(requireRole("judge"))
   .get("/events", async ({ tenantDb, user }) => {
+    const isPrivileged = user!.role === "admin" || user!.role === "manager";
+    if (isPrivileged) {
+      const rows = await tenantDb.select({ eventId: eventsTable.id, eventName: eventsTable.name }).from(eventsTable);
+      return rows;
+    }
     return await tenantDb
       .select({ eventId: judgeAssignmentsTable.eventId, eventName: eventsTable.name })
       .from(judgeAssignmentsTable)
