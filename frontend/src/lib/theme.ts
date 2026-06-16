@@ -11,13 +11,14 @@ declare module "@mui/material/styles" {
   }
 }
 
-export type ThemePreset = "violet" | "ocean" | "forest";
+export type ThemePreset = "violet" | "ocean" | "forest" | "mss";
 export type ThemeMode = "light" | "dark";
 
 const presetPrimary: Record<ThemePreset, { light: string; dark: string }> = {
   violet: { light: "#6750a4", dark: "#d0bcff" },
   ocean:  { light: "#006d77", dark: "#83c5be" },
   forest: { light: "#2d6a4f", dark: "#95d5b2" },
+  mss:    { light: "#8B1C2B", dark: "#F4A0B0" },
 };
 
 const surfaceTokens: Record<ThemePreset, Record<ThemeMode, { default: string; paper: string; container: string; variant: string }>> = {
@@ -33,12 +34,17 @@ const surfaceTokens: Record<ThemePreset, Record<ThemeMode, { default: string; pa
     dark:  { default: "#101a14", paper: "#16201a", container: "#1e2d22", variant: "#2d4233" },
     light: { default: "#f2faf4", paper: "#ffffff",  container: "#e6f4ea", variant: "#c8e6ce" },
   },
+  mss: {
+    dark:  { default: "#1A0D0F", paper: "#22111A", container: "#2E1620", variant: "#4A2030" },
+    light: { default: "#FFF5F6", paper: "#ffffff",  container: "#F9EAEC", variant: "#F0D0D5" },
+  },
 };
 
 const secondaryMain: Record<ThemePreset, { light: string; dark: string }> = {
   violet: { light: "#625b71", dark: "#ccc2dc" },
   ocean:  { light: "#4a6267", dark: "#a0cdd2" },
   forest: { light: "#52634f", dark: "#b4ccb0" },
+  mss:    { light: "#7A4520", dark: "#D4A070" },
 };
 
 export function buildTheme(mode: ThemeMode, preset: ThemePreset): Theme {

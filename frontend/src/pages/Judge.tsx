@@ -139,7 +139,7 @@ export default function Judge({ language }: JudgeProps) {
     try {
       const res = await api<JudgeEvent[]>("/judge/events");
       setEvents(res);
-      if (res.length === 1) setEventId(res[0].eventId);
+      if (res.length > 0) setEventId(res[0].eventId);
     } catch (err: any) {
       toast.error(err.message || "Error");
     }

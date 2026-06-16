@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, Link as RouterLink, useLocation } from "react-router-dom";
 import {
   AppBar,
@@ -60,7 +60,7 @@ import Admin from "./pages/Admin";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Labels from "./pages/Labels";
-import { api } from "./lib/api";
+import { api, API_BASE } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
 import { buildTheme } from "./lib/theme";
@@ -79,10 +79,10 @@ export default function App() {
     if (typeof window === "undefined") return "light";
     return (window.localStorage.getItem("theme") as "light" | "dark") || "light";
   });
-  const [themePreset, setThemePreset] = useState<"violet" | "ocean" | "forest">(() => {
+  const [themePreset, setThemePreset] = useState<"violet" | "ocean" | "forest" | "mss">(() => {
     if (typeof window === "undefined") return "violet";
     const stored = window.localStorage.getItem("themePreset");
-    if (stored === "ocean" || stored === "forest") return stored;
+    if (stored === "ocean" || stored === "forest" || stored === "mss") return stored;
     return "violet";
   });
   const [language, setLanguage] = useState<Language>(() => {
@@ -90,6 +90,7 @@ export default function App() {
     return (window.localStorage.getItem("language") as Language) || "it";
   });
   const [appName, setAppName] = useState("Miniatures Contest");
+  const [backendDown, setBackendDown] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
 
@@ -112,10 +113,12 @@ export default function App() {
       const storedMode = window.localStorage.getItem("theme");
       const storedPreset = window.localStorage.getItem("themePreset");
       if (storedMode === "light" || storedMode === "dark") setThemeMode(storedMode);
-      if (storedPreset === "violet" || storedPreset === "ocean" || storedPreset === "forest") {
+      if (storedPreset === "violet" || storedPreset === "ocean" || storedPreset === "forest" || storedPreset === "mss") {
         setThemePreset(storedPreset);
       }
     };
+
+    fetch(API_BASE + "/health").catch(() => setBackendDown(true));
 
     api<Record<string, string>>("/settings")
       .then((settings) => {
@@ -123,7 +126,7 @@ export default function App() {
           setThemeMode(settings.appTheme);
           window.localStorage.setItem("theme", settings.appTheme);
         }
-        if (settings.themePreset === "violet" || settings.themePreset === "ocean" || settings.themePreset === "forest") {
+        if (settings.themePreset === "violet" || settings.themePreset === "ocean" || settings.themePreset === "forest" || settings.themePreset === "mss") {
           setThemePreset(settings.themePreset);
           window.localStorage.setItem("themePreset", settings.themePreset);
         }
@@ -234,6 +237,19 @@ export default function App() {
     </Box>
   );
 
+  if (backendDown) {
+    return (
+      <ThemeProvider theme={muiTheme}>
+        <CssBaseline />
+        <Box sx={{ minHeight: "100vh", bgcolor: "background.default", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2, p: 4 }}>
+          <Typography variant="h4" sx={{ color: "error.main" }}>⚠ {t(language, "maintenanceTitle")}</Typography>
+          <Typography variant="body1" color="text.secondary" textAlign="center">{t(language, "maintenanceSubtitle")}</Typography>
+          <Button variant="outlined" onClick={() => { setBackendDown(false); window.location.reload(); }}>Riprova</Button>
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
@@ -269,8 +285,8 @@ export default function App() {
                 size="small"
                 value={language}
                 onChange={(event) => setLanguage(event.target.value as Language)}
-                renderValue={(val) => val === "it" ? "🇮🇹 IT" : "🇬🇧 EN"}
-                sx={{ bgcolor: "background.paper", borderRadius: 1, minWidth: 90 }}
+                renderValue={(val) => val === "it" ? "🇮🇹" : "🇬🇧"}
+                sx={{ bgcolor: "background.paper", borderRadius: 1, minWidth: 52 }}
               >
                 <MenuItem value="it">🇮🇹 Italiano</MenuItem>
                 <MenuItem value="en">🇬🇧 English</MenuItem>

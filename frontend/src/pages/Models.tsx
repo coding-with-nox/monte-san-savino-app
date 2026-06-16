@@ -37,7 +37,6 @@ import PrintIcon from "@mui/icons-material/Print";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import ImageIcon from "@mui/icons-material/Image";
-import HideImageIcon from "@mui/icons-material/HideImage";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
@@ -207,6 +206,7 @@ export default function Models({ language }: ModelsProps) {
   }
 
   async function deleteModel(modelId: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/models/${modelId}`, { method: "DELETE" });
     if (expandedId === modelId) closePanel();
     await load();
@@ -279,6 +279,7 @@ export default function Models({ language }: ModelsProps) {
 
   async function deleteImage(imageId: string) {
     if (!detail?.model) return;
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/models/${detail.model.id}/images/${imageId}`, { method: "DELETE" });
     const d = await api<ModelDetail>(`/models/${detail.model.id}`);
     setDetail(d);
@@ -304,13 +305,13 @@ export default function Models({ language }: ModelsProps) {
   };
 
   const showMediaPanel = !isCreating && Boolean(detail);
-  const tableColumnCount = 5;
+  const tableColumnCount = imagesEnabled ? 5 : 4;
   const atMaxModels = maxModelsPerUser !== null && models.length >= maxModelsPerUser;
 
   const editPanel = (
     <Box sx={{ p: 2 }}>
       <Grid container spacing={2} alignItems="flex-start">
-        <Grid item xs={12} md={showMediaPanel ? 7 : 12}>
+        <Grid item xs={12} md={showMediaPanel && imagesEnabled ? 7 : 12}>
           <Stack spacing={1.5}>
             <Typography variant="subtitle2">
               {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
@@ -355,12 +356,12 @@ export default function Models({ language }: ModelsProps) {
                 </Select>
               </FormControl>
             )}
-            <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || !editLevelId} fullWidth>
+            <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || (isCreating && !editLevelId)} fullWidth>
               {savingModel ? t(language, "modelsUploading") : isCreating ? t(language, "modelsCreateButton") : t(language, "modelsSaveButton")}
             </Button>
           </Stack>
         </Grid>
-        {showMediaPanel && (
+        {showMediaPanel && imagesEnabled && (
           <Grid item xs={12} md={5}>
             <Paper
               variant="outlined"
@@ -450,11 +451,6 @@ export default function Models({ language }: ModelsProps) {
             <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate} disabled={atMaxModels}>{t(language, "modelsCreateButton")}</Button>
           </Stack>
         </Stack>
-        {!imagesEnabled && (
-          <Alert severity="info" variant="outlined">
-            {t(language, "modelsImagesDisabledHint")}
-          </Alert>
-        )}
         <Collapse in={isCreating}>
           <Paper variant="outlined" sx={{ mb: 1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
@@ -473,7 +469,7 @@ export default function Models({ language }: ModelsProps) {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700, width: 72 }}>{t(language, "modelsPreviewColumn")}</TableCell>
+                    {imagesEnabled && <TableCell sx={{ fontWeight: 700, width: 72 }}>{t(language, "modelsPreviewColumn")}</TableCell>}
                     <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCodeColumn")}</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
@@ -492,26 +488,17 @@ export default function Models({ language }: ModelsProps) {
                         onClick={() => openModel(model.id)}
                         selected={expandedId === model.id}
                       >
-                        <TableCell sx={{ width: 72, p: 1 }}>
-                          {model.imageUrl ? (
-                            <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
-                          ) : (
-                            <Avatar
-                              variant="rounded"
-                              sx={{
-                                width: 40,
-                                height: 40,
-                                bgcolor: imagesEnabled ? "action.hover" : "action.disabledBackground"
-                              }}
-                            >
-                              {imagesEnabled ? (
+                        {imagesEnabled && (
+                          <TableCell sx={{ width: 72, p: 1 }}>
+                            {model.imageUrl ? (
+                              <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
+                            ) : (
+                              <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: "action.hover" }}>
                                 <ImageIcon fontSize="small" color="disabled" />
-                              ) : (
-                                <HideImageIcon fontSize="small" color="disabled" />
-                              )}
-                            </Avatar>
-                          )}
-                        </TableCell>
+                              </Avatar>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
                         <TableCell>
                           <Chip

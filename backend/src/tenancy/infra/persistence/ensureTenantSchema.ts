@@ -159,6 +159,11 @@ export async function ensureTenantSchema() {
         ADD COLUMN IF NOT EXISTS display_number integer,
         ADD COLUMN IF NOT EXISTS is_team boolean NOT NULL DEFAULT false;
     `);
+    // Backfill display_number from code for models that have code but no display_number
+    await pool.query(`
+      UPDATE models SET display_number = code
+      WHERE display_number IS NULL AND code IS NOT NULL;
+    `);
     // Add email to model_team_members
     await pool.query(`
       ALTER TABLE model_team_members ADD COLUMN IF NOT EXISTS email text;
@@ -193,9 +198,24 @@ export async function ensureTenantSchema() {
       )
     `);
 
-    // idempotent backfill: table may have been created before display_number was added
+    // idempotent backfills: columns added after initial table creation
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS display_number text`);
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS category_id uuid`);
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now()`);
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS user_id uuid`);
+    // owner_id = old name for user_id; drop NOT NULL so inserts don't fail
     await pool.query(`
-      ALTER TABLE teams ADD COLUMN IF NOT EXISTS display_number text
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_catalog.pg_attribute a
+          JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+          WHERE c.relname = 'teams' AND a.attname = 'owner_id'
+            AND a.attnum > 0 AND NOT a.attisdropped AND a.attnotnull
+        ) THEN
+          ALTER TABLE teams ALTER COLUMN owner_id DROP NOT NULL;
+        END IF;
+      END $$
     `);
 
     await pool.query(`

@@ -149,6 +149,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteCategory(categoryId: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/categories/${categoryId}`, { method: "DELETE" });
     await load();
   }
@@ -180,6 +181,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteJudgeAssignment(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/admin/judges/assignments/${id}`, { method: "DELETE" });
     await load();
   }
@@ -219,6 +221,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteSponsor(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/sponsors/${id}`, { method: "DELETE" });
     await load();
   }
@@ -238,6 +241,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteMention(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/awards/mentions/${id}`, { method: "DELETE" });
     await load();
   }
@@ -274,6 +278,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteCampaign(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/admin/event-campaigns/${id}`, { method: "DELETE" });
     await load();
   }
@@ -290,6 +295,7 @@ export default function Admin({ language }: AdminProps) {
     await loadAwardBrackets(bracketEventId);
   }
   async function deleteAwardBracket(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/admin/award-brackets/${id}`, { method: "DELETE" });
     await loadAwardBrackets(bracketEventId);
   }
@@ -308,6 +314,7 @@ export default function Admin({ language }: AdminProps) {
     await loadLevels();
   }
   async function deleteLevel(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/admin/levels/${id}`, { method: "DELETE" });
     await loadLevels();
   }
@@ -323,6 +330,7 @@ export default function Admin({ language }: AdminProps) {
     await loadMemberRoles();
   }
   async function deleteMemberRole(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/admin/member-roles/${id}`, { method: "DELETE" });
     await loadMemberRoles();
   }

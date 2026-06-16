@@ -252,57 +252,57 @@ ON CONFLICT (id) DO NOTHING;
 -- MODELLI
 -- code è auto-incrementale: impostiamo valori distinti
 -- ===========================================================================
-INSERT INTO models (id, user_id, team_id, category_id, name, description, code, image_url)
+INSERT INTO models (id, user_id, team_id, category_id, name, description, code, display_number, image_url)
 VALUES
   -- user1 — solo — Aerei 1:72 (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000001',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
    'cccccccc-1111-0000-0000-000000000001',
-   'Spitfire Mk.IX', 'Replica 1:72 con decal originali', 1, NULL),
+   'Spitfire Mk.IX', 'Replica 1:72 con decal originali', 1, 1, NULL),
 
   -- user1 — solo — Navi (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000002',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
    'cccccccc-1111-0000-0000-000000000002',
-   'HMS Victory 1:350', 'Modello del veliero famoso', 2, NULL),
+   'HMS Victory 1:350', 'Modello del veliero famoso', 2, 1, NULL),
 
   -- user2 — team Aquile Blu — Aerei 1:72 (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000003',
    'aaaaaaaa-0000-0000-0000-000000000007',
    'd1d1d1d1-0000-0000-0000-000000000001',
    'cccccccc-1111-0000-0000-000000000001',
-   'B-17 Flying Fortress', 'Bombariere USA WWII in team', 3, NULL),
+   'B-17 Flying Fortress', 'Bombariere USA WWII in team', 3, 2, NULL),
 
   -- user2 — solo — Armature (categoria CHIUSA, evento 2026)
   ('a2a2a2a2-0000-0000-0000-000000000004',
    'aaaaaaaa-0000-0000-0000-000000000007', NULL,
    'cccccccc-1111-0000-0000-000000000003',
-   'Cavaliere Medievale', 'Armatura 1:6 dipinta a mano', 4, NULL),
+   'Cavaliere Medievale', 'Armatura 1:6 dipinta a mano', 4, 2, NULL),
 
   -- user3 — solo — Fantasy (evento 2025 chiuso)
   ('a2a2a2a2-0000-0000-0000-000000000005',
    'aaaaaaaa-0000-0000-0000-000000000008', NULL,
    'cccccccc-2222-0000-0000-000000000001',
-   'Drago Antico', 'Figura fantasy con base diorama', 5, NULL),
+   'Drago Antico', 'Figura fantasy con base diorama', 5, 3, NULL),
 
   -- user3 — solo — Sci-Fi (evento 2025 chiuso)
   ('a2a2a2a2-0000-0000-0000-000000000006',
    'aaaaaaaa-0000-0000-0000-000000000008', NULL,
    'cccccccc-2222-0000-0000-000000000002',
-   'Space Marine', 'Warhammer 40k custom paintjob', 6, NULL),
+   'Space Marine', 'Warhammer 40k custom paintjob', 6, 3, NULL),
 
   -- user1 — solo — Figurini (evento 2027 futuro)
   ('a2a2a2a2-0000-0000-0000-000000000007',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
    'cccccccc-3333-0000-0000-000000000001',
-   'Guerriero Romano', 'Centurione 1:12', 7, NULL),
+   'Guerriero Romano', 'Centurione 1:12', 7, 1, NULL),
 
   -- user2 — team Dragoni Verdi — Veicoli (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000008',
    'aaaaaaaa-0000-0000-0000-000000000007',
    'd1d1d1d1-0000-0000-0000-000000000002',
    'cccccccc-1111-0000-0000-000000000004',
-   'Tiger I Ausf. E', 'Carro armato tedesco WWII', 8, NULL)
+   'Tiger I Ausf. E', 'Carro armato tedesco WWII', 8, 2, NULL)
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
@@ -633,64 +633,64 @@ ON CONFLICT (id) DO NOTHING;
 -- 15 MODELLI ADMIN
 -- code 9–23, distribuiti su eventi e categorie esistenti
 -- ===========================================================================
-INSERT INTO models (id, user_id, team_id, category_id, name, description, code, image_url)
+INSERT INTO models (id, user_id, team_id, category_id, name, description, code, display_number, image_url)
 VALUES
   -- Solo — MSS 2026
   ('a2a2a2a2-0001-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000001', 'Messerschmitt Bf 109', 'Caccia tedesco WWII 1:72', 9, NULL),
+   'cccccccc-1111-0000-0000-000000000001', 'Messerschmitt Bf 109', 'Caccia tedesco WWII 1:72', 9, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000002', 'USS Enterprise CV-6', 'Portaerei USA 1:700', 10, NULL),
+   'cccccccc-1111-0000-0000-000000000002', 'USS Enterprise CV-6', 'Portaerei USA 1:700', 10, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000003', 'Samurai Takeda', 'Armatura full-plate periodo Sengoku', 11, NULL),
+   'cccccccc-1111-0000-0000-000000000003', 'Samurai Takeda', 'Armatura full-plate periodo Sengoku', 11, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000004', 'M4 Sherman', 'Carro medio USA WWII 1:35', 12, NULL),
+   'cccccccc-1111-0000-0000-000000000004', 'M4 Sherman', 'Carro medio USA WWII 1:35', 12, 10, NULL),
 
   -- Team Falchi Rossi — MSS 2026
   ('a2a2a2a2-0001-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000001',
-   'cccccccc-1111-0000-0000-000000000001', 'P-51 Mustang', 'Caccia USA WWII in team', 13, NULL),
+   'cccccccc-1111-0000-0000-000000000001', 'P-51 Mustang', 'Caccia USA WWII in team', 13, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000006', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000001',
-   'cccccccc-1111-0000-0000-000000000004', 'Panzer IV Ausf. H', 'Carro tedesco WWII in team', 14, NULL),
+   'cccccccc-1111-0000-0000-000000000004', 'Panzer IV Ausf. H', 'Carro tedesco WWII in team', 14, 10, NULL),
 
   -- Solo — MSS 2025
   ('a2a2a2a2-0001-0000-0000-000000000007', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-2222-0000-0000-000000000001', 'Lich King', 'Figura fantasy non-morta', 15, NULL),
+   'cccccccc-2222-0000-0000-000000000001', 'Lich King', 'Figura fantasy non-morta', 15, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000008', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-2222-0000-0000-000000000002', 'Tau Commander', 'Warhammer 40k xenos', 16, NULL),
+   'cccccccc-2222-0000-0000-000000000002', 'Tau Commander', 'Warhammer 40k xenos', 16, 10, NULL),
 
   -- Solo — MSS 2027
   ('a2a2a2a2-0001-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-3333-0000-0000-000000000001', 'Legionario Romano', 'Fanteria pesante I sec.', 17, NULL),
+   'cccccccc-3333-0000-0000-000000000001', 'Legionario Romano', 'Fanteria pesante I sec.', 17, 10, NULL),
 
   -- Team Leoni d'Argento — MSS 2026
   ('a2a2a2a2-0001-0000-0000-000000000010', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000002',
-   'cccccccc-1111-0000-0000-000000000002', 'Yamato 1:350', 'Corazzata giapponese WWII', 18, NULL),
+   'cccccccc-1111-0000-0000-000000000002', 'Yamato 1:350', 'Corazzata giapponese WWII', 18, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000002',
-   'cccccccc-1111-0000-0000-000000000003', 'Cavaliere Templare', 'Armatura medievale in team', 19, NULL),
+   'cccccccc-1111-0000-0000-000000000003', 'Cavaliere Templare', 'Armatura medievale in team', 19, 10, NULL),
 
   -- Solo — MSS 2026 (ulteriori)
   ('a2a2a2a2-0001-0000-0000-000000000012', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000001', 'Zero A6M2', 'Caccia navale giapponese 1:72', 20, NULL),
+   'cccccccc-1111-0000-0000-000000000001', 'Zero A6M2', 'Caccia navale giapponese 1:72', 20, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000013', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000004', 'Leopard 2A6', 'MBT tedesco moderno 1:35', 21, NULL),
+   'cccccccc-1111-0000-0000-000000000004', 'Leopard 2A6', 'MBT tedesco moderno 1:35', 21, 10, NULL),
 
   -- Solo — MSS 2025 (ulteriori)
   ('a2a2a2a2-0001-0000-0000-000000000014', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-2222-0000-0000-000000000001', 'Goblin Shaman', 'Figura fantasy con effetti magici', 22, NULL),
+   'cccccccc-2222-0000-0000-000000000001', 'Goblin Shaman', 'Figura fantasy con effetti magici', 22, 10, NULL),
 
   -- Solo — MSS 2027 (ulteriore)
   ('a2a2a2a2-0001-0000-0000-000000000015', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-3333-0000-0000-000000000001', 'Gladiatore Reziario', 'Figura 1:12 con rete e tridente', 23, NULL)
+   'cccccccc-3333-0000-0000-000000000001', 'Gladiatore Reziario', 'Figura 1:12 con rete e tridente', 23, 10, NULL)
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================

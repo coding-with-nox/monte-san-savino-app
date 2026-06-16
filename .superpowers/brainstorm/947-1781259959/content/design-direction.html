@@ -1,0 +1,97 @@
+<h2>Which design direction fits the app?</h2>
+<p class="subtitle">Pick the visual style for the modernization. All options keep MUI v5 as the base.</p>
+
+<div class="cards">
+
+  <!-- Option A: Glassmorphism / Premium Dark -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d0d14;padding:20px;border-radius:8px;min-height:200px;position:relative;overflow:hidden;">
+      <!-- bg glow -->
+      <div style="position:absolute;top:-40px;right:-40px;width:160px;height:160px;background:radial-gradient(circle,rgba(103,80,164,0.4),transparent 70%);border-radius:50%;"></div>
+      <!-- frosted card -->
+      <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:16px;backdrop-filter:blur(8px);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6750a4,#9c7fdb);"></div>
+          <span style="color:#e8def8;font-size:13px;font-weight:600;">Dati personali</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div style="color:rgba(255,255,255,0.4);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Nome</div>
+            <div style="color:#e8def8;font-size:13px;">Mario</div>
+          </div>
+          <div>
+            <div style="color:rgba(255,255,255,0.4);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Cognome</div>
+            <div style="color:#e8def8;font-size:13px;">Rossi</div>
+          </div>
+        </div>
+      </div>
+      <!-- button -->
+      <div style="margin-top:12px;display:inline-block;background:linear-gradient(135deg,#6750a4,#9c7fdb);color:#fff;font-size:11px;padding:6px 14px;border-radius:20px;font-weight:600;">Modifica</div>
+    </div>
+    <div class="card-body">
+      <h3>A — Glassmorphism / Premium Dark</h3>
+      <p>Frosted-glass cards, glow accents, gradient buttons. Feels like Vercel or Linear. Bold, modern, memorable. Best for a contest app that wants to impress.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Clean Minimal Light -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f5f5f7;padding:20px;border-radius:8px;min-height:200px;">
+      <div style="background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:#6750a4;display:flex;align-items:center;justify-content:center;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#fff;"></div>
+          </div>
+          <span style="color:#1a1a2e;font-size:13px;font-weight:600;">Dati personali</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div style="color:#9e9e9e;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Nome</div>
+            <div style="color:#1a1a2e;font-size:13px;font-weight:500;">Mario</div>
+          </div>
+          <div>
+            <div style="color:#9e9e9e;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Cognome</div>
+            <div style="color:#1a1a2e;font-size:13px;font-weight:500;">Rossi</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:inline-block;background:#1a1a2e;color:#fff;font-size:11px;padding:6px 14px;border-radius:6px;font-weight:600;">Modifica</div>
+    </div>
+    <div class="card-body">
+      <h3>B — Clean Minimal (Light)</h3>
+      <p>White cards, subtle shadows, strong typography contrast. Feels like Stripe or Linear in light mode. Professional, readable, timeless. Better for long-session admin users.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Material 3 / Expressive -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#1c1b1f;padding:20px;border-radius:8px;min-height:200px;">
+      <div style="background:#2b2930;border:1px solid rgba(208,188,255,0.15);border-radius:16px;padding:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div style="width:32px;height:32px;border-radius:50%;background:#4a4458;display:flex;align-items:center;justify-content:center;">
+            <div style="color:#d0bcff;font-size:14px;">👤</div>
+          </div>
+          <span style="color:#d0bcff;font-size:13px;font-weight:600;">Dati personali</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div style="background:#1c1b1f;border-radius:8px;padding:8px;">
+            <div style="color:#cab3fd;font-size:10px;font-weight:500;margin-bottom:2px;">Nome</div>
+            <div style="color:#e6e1e5;font-size:13px;">Mario</div>
+          </div>
+          <div style="background:#1c1b1f;border-radius:8px;padding:8px;">
+            <div style="color:#cab3fd;font-size:10px;font-weight:500;margin-bottom:2px;">Cognome</div>
+            <div style="color:#e6e1e5;font-size:13px;">Rossi</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:inline-flex;align-items:center;gap:6px;background:#4a4458;color:#d0bcff;font-size:11px;padding:8px 16px;border-radius:20px;font-weight:600;">
+        <span>✏️</span> Modifica
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Material 3 / Expressive Dark</h3>
+      <p>Material You design system: tonal surfaces, rounded containers, color-expressive tokens. Keeps MUI but upgrades to M3 patterns. Cohesive, accessible, modern Google feel.</p>
+    </div>
+  </div>
+
+</div>
