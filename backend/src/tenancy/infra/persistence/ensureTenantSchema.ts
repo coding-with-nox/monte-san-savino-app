@@ -193,6 +193,11 @@ export async function ensureTenantSchema() {
       )
     `);
 
+    // idempotent backfill: table may have been created before display_number was added
+    await pool.query(`
+      ALTER TABLE teams ADD COLUMN IF NOT EXISTS display_number text
+    `);
+
     await pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ux_teams_display_number ON teams (display_number)
     `);
