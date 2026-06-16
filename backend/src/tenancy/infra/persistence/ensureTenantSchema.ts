@@ -107,7 +107,6 @@ export async function ensureTenantSchema() {
 
     // Remove old team tables
     await pool.query(`DROP TABLE IF EXISTS team_members CASCADE;`);
-    await pool.query(`DROP TABLE IF EXISTS teams CASCADE;`);
     await pool.query(`DROP TABLE IF EXISTS team_roles CASCADE;`);
 
     // Add levels table
@@ -160,11 +159,6 @@ export async function ensureTenantSchema() {
         ADD COLUMN IF NOT EXISTS display_number integer,
         ADD COLUMN IF NOT EXISTS is_team boolean NOT NULL DEFAULT false;
     `);
-    await pool.query(`
-      ALTER TABLE IF EXISTS models
-        DROP COLUMN IF EXISTS team_id;
-    `);
-
     // Add email to model_team_members
     await pool.query(`
       ALTER TABLE model_team_members ADD COLUMN IF NOT EXISTS email text;
@@ -187,6 +181,36 @@ export async function ensureTenantSchema() {
       await pool.query('ROLLBACK');
       throw err;
     }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS teams (
+        id uuid PRIMARY KEY,
+        user_id uuid NOT NULL,
+        name text NOT NULL,
+        display_number text NOT NULL,
+        category_id uuid NOT NULL,
+        created_at timestamptz DEFAULT now()
+      )
+    `);
+
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_teams_display_number ON teams (display_number)
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_mates (
+        id uuid PRIMARY KEY,
+        team_id uuid NOT NULL,
+        name text NOT NULL,
+        surname text NOT NULL,
+        role text NOT NULL,
+        email text
+      )
+    `);
+
+    await pool.query(`
+      ALTER TABLE models ADD COLUMN IF NOT EXISTS team_id uuid
+    `);
   } finally {
     await pool.end();
   }
