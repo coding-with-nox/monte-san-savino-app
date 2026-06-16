@@ -476,6 +476,14 @@ VALUES
    'a2a2a2a2-0000-0000-0000-000000000002',
    2, NOW() - INTERVAL '30 minutes'),
 
+  -- *** CASISTICA: modello con voti esistenti → spostato di categoria ***
+  -- user3 — Guerriero Romano (Figurini, MSS 2027) — judge1 ha già votato rank=2
+  -- Questo modello può essere spostato in altra categoria per testare il clear dei voti
+  ('e1e1e1e1-0000-0000-0000-000000000012',
+   'aaaaaaaa-0000-0000-0000-000000000003',
+   'a2a2a2a2-0000-0000-0000-000000000007',
+   2, NOW() - INTERVAL '10 minutes'),
+
   -- judge1 su Drago Antico (MSS 2025): rank=3
   ('e1e1e1e1-0000-0000-0000-000000000010',
    'aaaaaaaa-0000-0000-0000-000000000003',

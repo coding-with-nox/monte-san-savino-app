@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
-import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable } from "../persistence/schema";
+import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable, votesTable, judgeCompletionsTable } from "../persistence/schema";
 
 async function getCategorySeqId(tenantDb: any, categoryId: string): Promise<number | null> {
   const [row] = await tenantDb
@@ -330,6 +330,14 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         set.status = 422;
         return { error: "teamId not found or not owned by user" };
       }
+    }
+
+    // If category changes: clear all votes for this model so new judges re-vote
+    const categoryChanged = body.categoryId !== undefined && body.categoryId !== model.categoryId;
+    if (categoryChanged) {
+      await tenantDb.delete(votesTable).where(eq(votesTable.modelId, params.modelId as any));
+      // Also invalidate judge completions for the old category (it may no longer be fully judged)
+      await tenantDb.delete(judgeCompletionsTable).where(eq(judgeCompletionsTable.categoryId, model.categoryId as any));
     }
 
     const updateData: Record<string, unknown> = {};
