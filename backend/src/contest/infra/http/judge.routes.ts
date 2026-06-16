@@ -34,6 +34,9 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     const queryBuilder = tenantDb
       .select({
         id: modelsTable.id,
+        userId: modelsTable.userId,
+        name: modelsTable.name,
+        description: modelsTable.description,
         code: modelsTable.code,
         displayNumber: modelsTable.displayNumber,
         categoryId: modelsTable.categoryId,
