@@ -260,8 +260,20 @@ export default function Judge({ language }: JudgeProps) {
         )
       );
       toast.success(t(language, "judgeVoteSuccess"));
-      await loadModels();
-      goHome();
+      // Reload models and refresh active exhibitor in place (don't navigate home)
+      const query = new URLSearchParams();
+      if (eventId) query.set("eventId", eventId);
+      if (categoryId) query.set("categoryId", categoryId);
+      const fresh = await api<JudgeModel[]>(`/judge/models?${query.toString()}`);
+      setModels(fresh);
+      const grouped = groupByExhibitor(fresh);
+      const updated = grouped.find((ex) => ex.userId === activeExhibitor.userId);
+      if (updated) {
+        setActiveExhibitor(updated);
+      }
+      setSelectedModels(new Set());
+      setSelectedScore(null);
+      setDisplayMode(true);
     } catch (err: any) {
       toast.error(err.message || "Error");
     } finally {
