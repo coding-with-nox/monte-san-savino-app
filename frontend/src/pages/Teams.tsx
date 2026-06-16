@@ -13,6 +13,8 @@ import {
   Paper,
   Select,
   Stack,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -58,6 +60,8 @@ export default function Teams({ language }: TeamsProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
+
+  const [tab, setTab] = useState<"teams" | "settings">("teams");
 
   const [editName, setEditName] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
@@ -245,23 +249,6 @@ export default function Teams({ language }: TeamsProps) {
   const editPanel = (
     <Box sx={{ p: 2 }}>
       <Stack spacing={1.5}>
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Typography variant="body2">{t(language, "teamsNameLabel")}:</Typography>
-          <ButtonGroup size="small" variant="outlined">
-            <Button
-              onClick={() => setTeamNameMode("manual")}
-              variant={teamNameMode === "manual" ? "contained" : "outlined"}
-            >
-              {t(language, "teamsNameManual")}
-            </Button>
-            <Button
-              onClick={() => setTeamNameMode("auto")}
-              variant={teamNameMode === "auto" ? "contained" : "outlined"}
-            >
-              {t(language, "teamsNameAuto")}
-            </Button>
-          </ButtonGroup>
-        </Stack>
         <TextField
           label={t(language, "teamsNameLabel")}
           value={editName}
@@ -361,24 +348,59 @@ export default function Teams({ language }: TeamsProps) {
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">{t(language, "teamsTitle")}</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
-            {t(language, "teamsCreateButton")}
-          </Button>
+          {tab === "teams" && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
+              {t(language, "teamsCreateButton")}
+            </Button>
+          )}
         </Stack>
 
-        <Collapse in={isCreating}>
-          <Paper variant="outlined" sx={{ mb: 1 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
-              <Typography variant="subtitle2">{t(language, "teamsCreateButton")}</Typography>
-              <IconButton size="small" onClick={() => setIsCreating(false)}>
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Stack>
-            {editPanel}
-          </Paper>
-        </Collapse>
+        <Paper variant="outlined">
+          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+            <Tab value="teams" label="Squadre" />
+            <Tab value="settings" label="Impostazioni" />
+          </Tabs>
+        </Paper>
 
-        <SectionCard title={t(language, "teamsTitle")}>
+        {tab === "settings" && (
+          <SectionCard title="Impostazioni">
+            <Stack spacing={2}>
+              <Stack direction="row" alignItems="center" spacing={2}>
+                <Typography variant="body2">{t(language, "teamsNameLabel")}:</Typography>
+                <ButtonGroup size="small" variant="outlined">
+                  <Button
+                    onClick={() => setTeamNameMode("manual")}
+                    variant={teamNameMode === "manual" ? "contained" : "outlined"}
+                  >
+                    {t(language, "teamsNameManual")}
+                  </Button>
+                  <Button
+                    onClick={() => setTeamNameMode("auto")}
+                    variant={teamNameMode === "auto" ? "contained" : "outlined"}
+                  >
+                    {t(language, "teamsNameAuto")}
+                  </Button>
+                </ButtonGroup>
+              </Stack>
+            </Stack>
+          </SectionCard>
+        )}
+
+        {tab === "teams" && (
+          <>
+          <Collapse in={isCreating}>
+            <Paper variant="outlined" sx={{ mb: 1 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
+                <Typography variant="subtitle2">{t(language, "teamsCreateButton")}</Typography>
+                <IconButton size="small" onClick={() => setIsCreating(false)}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+              {editPanel}
+            </Paper>
+          </Collapse>
+
+          <SectionCard title={t(language, "teamsTitle")}>
           {teams.length === 0 && (
             <EmptyState title={t(language, "teamsNoTeams")} description="" />
           )}
@@ -456,7 +478,9 @@ export default function Teams({ language }: TeamsProps) {
               </Table>
             </TableContainer>
           )}
-        </SectionCard>
+          </SectionCard>
+          </>
+        )}
       </Stack>
     </PageContainer>
   );
