@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
-import { and, desc, eq, ilike, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { VoteRepositoryDrizzle } from "../persistence/voteRepository.drizzle";
 import { ModelReadRepositoryDrizzle } from "../persistence/modelReadRepository.drizzle";
 import { VoteModel } from "../../application/VoteModel";
@@ -27,20 +27,15 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
   })
   .get("/models", async ({ tenantDb, query, user }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
-    const search = query?.search ? String(query.search) : null;
     let whereClause: any = undefined;
     if (eventId) {
       whereClause = eq(categoriesTable.eventId, eventId as any);
     }
-    if (search) {
-      whereClause = whereClause
-        ? and(whereClause, ilike(modelsTable.name, `%${search}%`))
-        : ilike(modelsTable.name, `%${search}%`);
-    }
     const queryBuilder = tenantDb
       .select({
         id: modelsTable.id,
-        name: modelsTable.name,
+        code: modelsTable.code,
+        displayNumber: modelsTable.displayNumber,
         categoryId: modelsTable.categoryId,
         categoryName: categoriesTable.name,
         imageUrl: modelsTable.imageUrl
@@ -123,10 +118,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     const rows = await tenantDb
       .select({
         id: modelsTable.id,
-        userId: modelsTable.userId,
         categoryId: modelsTable.categoryId,
-        name: modelsTable.name,
-        description: modelsTable.description,
         code: modelsTable.code,
         imageUrl: modelsTable.imageUrl,
         displayNumber: modelsTable.displayNumber,
