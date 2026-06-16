@@ -536,6 +536,14 @@ export default function Judge({ language }: JudgeProps) {
                       disabled={displayMode}
                       size="small"
                       sx={{ p: 0, mr: 1 }}
+                      onChange={() => {
+                        if (displayMode) {
+                          setDisplayMode(false);
+                          setSelectedModels(new Set([model.id]));
+                        } else {
+                          toggleModel(model.id);
+                        }
+                      }}
                       onClick={(e) => e.stopPropagation()}
                     />
                     <Typography variant="body2">{label}</Typography>
