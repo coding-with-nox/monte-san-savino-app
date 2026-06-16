@@ -65,6 +65,11 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const res = await fetch(API_BASE + path, { ...options, headers });
   if (res.status === 401 || res.status === 403) {
     const refreshed = await refreshSession();
+    if (!refreshed && res.status === 401) {
+      clearToken();
+      window.location.href = "/login";
+      throw new ApiError(401, "Session expired");
+    }
     if (refreshed) {
       const retryHeaders = new Headers(options.headers ?? {});
       const retryToken = getToken();
