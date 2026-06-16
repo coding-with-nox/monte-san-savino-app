@@ -216,6 +216,49 @@ export async function ensureTenantSchema() {
     await pool.query(`
       ALTER TABLE models ADD COLUMN IF NOT EXISTS team_id uuid
     `);
+
+    // Add award_brackets table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS award_brackets (
+        id uuid PRIMARY KEY,
+        event_id uuid NOT NULL,
+        medal_label text NOT NULL,
+        medal_rank integer NOT NULL,
+        low_limit integer NOT NULL,
+        high_limit integer NOT NULL,
+        created_at timestamptz DEFAULT now()
+      )
+    `);
+
+    // Add judge_completions table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS judge_completions (
+        id uuid PRIMARY KEY,
+        judge_id uuid NOT NULL,
+        category_id uuid NOT NULL,
+        completed_at timestamptz DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_judge_completions ON judge_completions (judge_id, category_id)
+    `);
+
+    // Add awards table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS awards (
+        id uuid PRIMARY KEY,
+        category_id uuid NOT NULL,
+        model_id uuid NOT NULL,
+        total_score integer NOT NULL,
+        medal_label text NOT NULL,
+        medal_rank integer NOT NULL,
+        source text NOT NULL DEFAULT 'aggregate',
+        frozen_at timestamptz DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_awards_category_model ON awards (category_id, model_id)
+    `);
   } finally {
     await pool.end();
   }

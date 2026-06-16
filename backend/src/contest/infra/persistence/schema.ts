@@ -164,3 +164,35 @@ export const teamMatesTable = pgTable("team_mates", {
   role: text("role").notNull(),
   email: text("email"),
 });
+
+export const awardBracketsTable = pgTable("award_brackets", {
+  id: uuid("id").primaryKey(),
+  eventId: uuid("event_id").notNull(),
+  medalLabel: text("medal_label").notNull(),   // "None", "Highly Commended", "Bronze", "Silver", "Gold"
+  medalRank: integer("medal_rank").notNull(),  // 0,1,2,3,4 (for ordering)
+  lowLimit: integer("low_limit").notNull(),
+  highLimit: integer("high_limit").notNull(),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+export const judgeCompletionsTable = pgTable("judge_completions", {
+  id: uuid("id").primaryKey(),
+  judgeId: uuid("judge_id").notNull(),
+  categoryId: uuid("category_id").notNull(),
+  completedAt: timestamp("completed_at").defaultNow()
+}, (table) => ({
+  uxJudgeCategory: uniqueIndex("ux_judge_completions").on(table.judgeId, table.categoryId)
+}));
+
+export const awardsTable = pgTable("awards", {
+  id: uuid("id").primaryKey(),
+  categoryId: uuid("category_id").notNull(),
+  modelId: uuid("model_id").notNull(),
+  totalScore: integer("total_score").notNull(),
+  medalLabel: text("medal_label").notNull(),
+  medalRank: integer("medal_rank").notNull(),
+  source: text("source").notNull().default("aggregate"),  // 'aggregate' | 'override'
+  frozenAt: timestamp("frozen_at").defaultNow()
+}, (table) => ({
+  uxCategoryModel: uniqueIndex("ux_awards_category_model").on(table.categoryId, table.modelId)
+}));
