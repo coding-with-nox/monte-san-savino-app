@@ -49,11 +49,19 @@ type Screen = "home" | "score";
 
 // ---- Rank colours (Emperor palette) ----
 const RANK_COLOR: Record<number, string> = {
-  4: "#C8860A",
-  3: "#9E9E9E",
-  2: "#8D5524",
-  1: "#B0BEC5",
-  0: "#616161",
+  4: "#C8860A",  // Gold
+  3: "#7B7B7B",  // Silver
+  2: "#7C4A1E",  // Bronze
+  1: "#1565C0",  // Highly Commended (blue, distinct from 0)
+  0: "#B71C1C",  // None (red — clearly "no award")
+};
+
+const RANK_KEY: Record<number, string> = {
+  0: "rankName0",
+  1: "rankName1",
+  2: "rankName2",
+  3: "rankName3",
+  4: "rankName4",
 };
 
 function rankColor(maxRank: number): string {
@@ -472,23 +480,30 @@ export default function Judge({ language }: JudgeProps) {
               {t(language, "judgeCurrentVoteColumn")}
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap">
-              {[0, 1, 2, 3, 4].map((score) => (
-                <Button
-                  key={score}
-                  variant={selectedScore === score ? "contained" : "outlined"}
-                  size="small"
-                  onClick={() => setSelectedScore(score)}
-                  sx={{
-                    minWidth: 44,
-                    fontWeight: 700,
-                    ...(selectedScore === score && score in RANK_COLOR
-                      ? { bgcolor: RANK_COLOR[score], "&:hover": { bgcolor: RANK_COLOR[score] } }
-                      : {}),
-                  }}
-                >
-                  {score}
-                </Button>
-              ))}
+              {[0, 1, 2, 3, 4].map((score) => {
+                const isSelected = selectedScore === score;
+                const color = RANK_COLOR[score];
+                const name = t(language, RANK_KEY[score] as any);
+                return (
+                  <Button
+                    key={score}
+                    variant={isSelected ? "contained" : "outlined"}
+                    size="small"
+                    onClick={() => setSelectedScore(score)}
+                    sx={{
+                      minWidth: isSelected ? "auto" : 44,
+                      fontWeight: 700,
+                      transition: "all 0.15s ease",
+                      whiteSpace: "nowrap",
+                      ...(isSelected
+                        ? { bgcolor: color, "&:hover": { bgcolor: color }, color: "#fff" }
+                        : { borderColor: color, color: color }),
+                    }}
+                  >
+                    {isSelected ? `${score} ${name}` : score}
+                  </Button>
+                );
+              })}
             </Stack>
           </Stack>
 
