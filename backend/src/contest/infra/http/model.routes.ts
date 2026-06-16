@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
-import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable } from "../persistence/schema";
+import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable, votesTable, judgeCompletionsTable } from "../persistence/schema";
 
 async function getCategorySeqId(tenantDb: any, categoryId: string): Promise<number | null> {
   const [row] = await tenantDb
@@ -137,6 +137,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         levelId: modelsTable.levelId,
         imageUrl: modelsTable.imageUrl,
         isTeam: modelsTable.isTeam,
+        teamId: modelsTable.teamId,
         displayNumber: modelsTable.displayNumber,
         categorySeqId: categoriesTable.seqId
       })
@@ -165,6 +166,23 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       if (guard.blocked) return (set as any).body;
     }
 
+    if (body.isTeam) {
+      if (!body.teamId) {
+        set.status = 422;
+        return { error: "teamId required for team models" };
+      }
+      // verify team belongs to user
+      const [teamRow] = await tenantDb
+        .select({ id: teamsTable.id })
+        .from(teamsTable)
+        .where(and(eq(teamsTable.id, body.teamId as any), eq(teamsTable.userId, user!.id as any)))
+        .limit(1);
+      if (!teamRow) {
+        set.status = 422;
+        return { error: "teamId not found or not owned by user" };
+      }
+    }
+
     const modelId = crypto.randomUUID();
     let lastError: unknown = null;
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
@@ -184,6 +202,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
           code,
           imageUrl: body.imageUrl ?? null,
           isTeam: body.isTeam ?? false,
+          teamId: body.teamId ?? null,
           displayNumber
         });
 
@@ -219,6 +238,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       description: t.Optional(t.String()),
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
+      teamId: t.Optional(t.String()),
       teamMembers: t.Optional(t.Array(t.Object({
         name: t.String(),
         surname: t.String(),
@@ -243,6 +263,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         levelId: modelsTable.levelId,
         imageUrl: modelsTable.imageUrl,
         isTeam: modelsTable.isTeam,
+        teamId: modelsTable.teamId,
         displayNumber: modelsTable.displayNumber,
         categorySeqId: categoriesTable.seqId
       })
@@ -295,6 +316,30 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       if (guard.blocked) return (set as any).body;
     }
 
+    if (body.isTeam === true && !body.teamId) {
+      set.status = 422;
+      return { error: "teamId required for team models" };
+    }
+    if (body.teamId) {
+      const [teamRow] = await tenantDb
+        .select({ id: teamsTable.id })
+        .from(teamsTable)
+        .where(and(eq(teamsTable.id, body.teamId as any), eq(teamsTable.userId, user!.id as any)))
+        .limit(1);
+      if (!teamRow) {
+        set.status = 422;
+        return { error: "teamId not found or not owned by user" };
+      }
+    }
+
+    // If category changes: clear all votes for this model so new judges re-vote
+    const categoryChanged = body.categoryId !== undefined && body.categoryId !== model.categoryId;
+    if (categoryChanged) {
+      await tenantDb.delete(votesTable).where(eq(votesTable.modelId, params.modelId as any));
+      // Also invalidate judge completions for the old category (it may no longer be fully judged)
+      await tenantDb.delete(judgeCompletionsTable).where(eq(judgeCompletionsTable.categoryId, model.categoryId as any));
+    }
+
     const updateData: Record<string, unknown> = {};
     if (body.name !== undefined) updateData.name = body.name;
     if (body.categoryId !== undefined) updateData.categoryId = body.categoryId;
@@ -302,6 +347,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (body.description !== undefined) updateData.description = body.description;
     if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
     if (body.isTeam !== undefined) updateData.isTeam = body.isTeam;
+    if ("teamId" in body) updateData.teamId = body.teamId ?? null;
 
     await tenantDb.update(modelsTable).set(updateData).where(eq(modelsTable.id, params.modelId as any));
 
@@ -331,6 +377,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       description: t.Optional(t.String()),
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
+      teamId: t.Optional(t.String()),
       teamMembers: t.Optional(t.Array(t.Object({
         name: t.String(),
         surname: t.String(),

@@ -1,4 +1,4 @@
-export type VoteRank = 0 | 1 | 2 | 3;
+export type VoteRank = 0 | 1 | 2 | 3 | 4;
 export class Vote {
   constructor(
     public readonly id: string,

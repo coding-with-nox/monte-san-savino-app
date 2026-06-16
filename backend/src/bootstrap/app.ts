@@ -29,6 +29,8 @@ import { settingsRoutes, adminSettingsRoutes } from "../contest/infra/http/setti
 import { eventCampaignsRoutes } from "../contest/infra/http/event-campaigns.routes";
 import { reminderRoutes } from "../contest/infra/http/reminder.routes";
 import { adminMemberRolesRoutes, publicMemberRolesRoutes } from "../contest/infra/http/member-roles.routes";
+import { teamRoutes } from "../contest/infra/http/team.routes";
+import { awardBracketsRoutes } from "../contest/infra/http/award-brackets.routes";
 
 export function buildApp() {
   const rawCorsOrigin = process.env.CORS_ORIGIN ?? "";
@@ -71,7 +73,8 @@ export function buildApp() {
           { name: "Staff", description: "Check-in e stampa." },
           { name: "Public", description: "Endpoint pubblici." },
           { name: "Admin", description: "Funzionalità amministrative." },
-          { name: "Sponsors", description: "Gestione sponsor." }
+          { name: "Sponsors", description: "Gestione sponsor." },
+          { name: "Teams", description: "Gestione team e componenti." }
         ],
         servers: [
           { url: "http://localhost:3000", description: "Local dev" },
@@ -130,5 +133,7 @@ export function buildApp() {
     .use(settingsRoutes)
     .use(adminSettingsRoutes)
     .use(eventCampaignsRoutes)
-    .use(reminderRoutes);
+    .use(reminderRoutes)
+    .use(teamRoutes)
+    .use(awardBracketsRoutes);
 }

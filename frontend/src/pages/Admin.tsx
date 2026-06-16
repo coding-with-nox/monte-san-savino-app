@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Box,
   Button,
   Chip,
   Dialog,
@@ -14,14 +15,17 @@ import {
   ListItem,
   ListItemText,
   MenuItem,
+  Paper,
   Select,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Typography
 } from "@mui/material";
@@ -62,9 +66,14 @@ export default function Admin({ language }: AdminProps) {
   const [sponsorForm, setSponsorForm] = useState({ eventId: "", name: "", tier: "bronze" });
   const [mentionForm, setMentionForm] = useState({ eventId: "", modelId: "", title: "" });
   const toast = useToast();
+  const [tab, setTab] = useState<"events" | "judges" | "awards" | "sponsors" | "catalog">("events");
   // Task 10: event campaigns
   const [eventCampaigns, setEventCampaigns] = useState<EventCampaign[]>([]);
   const [campaignForm, setCampaignForm] = useState({ eventId: "", name: "", enrollmentOpenDate: "", enrollmentCloseDate: "" });
+
+  const [awardBrackets, setAwardBrackets] = useState<{ id: string; eventId: string; medalLabel: string; medalRank: number; lowLimit: number; highLimit: number }[]>([]);
+  const [bracketEventId, setBracketEventId] = useState("");
+  const [bracketForm, setBracketForm] = useState({ medalLabel: "", medalRank: 0, lowLimit: 0, highLimit: 0 });
 
   // Task 14: levels
   const [levels, setLevels] = useState<{ id: string; name: string; sortOrder?: number | null }[]>([]);
@@ -73,6 +82,27 @@ export default function Admin({ language }: AdminProps) {
   // Task 14: member roles
   const [memberRoles, setMemberRoles] = useState<{ id: string; name: string }[]>([]);
   const [newMemberRoleName, setNewMemberRoleName] = useState("");
+
+  // D4: monitoring state
+  const [monitoringEventId, setMonitoringEventId] = useState("");
+  const [monitoringData, setMonitoringData] = useState<{
+    categoryId: string; categoryName: string; status: string;
+    totalModels: number; scoredModels: number; percentComplete: number;
+    totalJudges: number; completedJudges: number;
+  }[]>([]);
+  const [monitoringTimer, setMonitoringTimer] = useState<ReturnType<typeof setInterval> | null>(null);
+
+  // D5: corrections state
+  const [correctionsEventId, setCorrectionsEventId] = useState("");
+  const [correctionsData, setCorrectionsData] = useState<{
+    id?: string; modelId: string; categoryId: string; totalScore: number | null;
+    medalLabel: string | null; medalRank: number | null;
+    votes: number; source: string; averageRank: number | null;
+  }[]>([]);
+  const [overrideDialog, setOverrideDialog] = useState(false);
+  const [overridingAward, setOverridingAward] = useState<string | null>(null);
+  const [overrideMedalLabel, setOverrideMedalLabel] = useState("");
+  const [overrideMedalRank, setOverrideMedalRank] = useState(0);
 
   // Category edit dialog state
   const [categoryEditDialog, setCategoryEditDialog] = useState(false);
@@ -119,6 +149,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteCategory(categoryId: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/categories/${categoryId}`, { method: "DELETE" });
     await load();
   }
@@ -150,6 +181,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteJudgeAssignment(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/admin/judges/assignments/${id}`, { method: "DELETE" });
     await load();
   }
@@ -189,6 +221,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteSponsor(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/sponsors/${id}`, { method: "DELETE" });
     await load();
   }
@@ -208,6 +241,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteMention(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/awards/mentions/${id}`, { method: "DELETE" });
     await load();
   }
@@ -244,8 +278,26 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteCampaign(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/admin/event-campaigns/${id}`, { method: "DELETE" });
     await load();
+  }
+
+  async function loadAwardBrackets(eventId: string) {
+    if (!eventId) { setAwardBrackets([]); return; }
+    try { setAwardBrackets(await api<any[]>(`/admin/award-brackets?eventId=${encodeURIComponent(eventId)}`)); }
+    catch { setAwardBrackets([]); }
+  }
+  async function createAwardBracket() {
+    if (!bracketEventId || !bracketForm.medalLabel.trim()) return;
+    await api("/admin/award-brackets", { method: "POST", body: JSON.stringify({ eventId: bracketEventId, ...bracketForm }) });
+    setBracketForm({ medalLabel: "", medalRank: 0, lowLimit: 0, highLimit: 0 });
+    await loadAwardBrackets(bracketEventId);
+  }
+  async function deleteAwardBracket(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
+    await api(`/admin/award-brackets/${id}`, { method: "DELETE" });
+    await loadAwardBrackets(bracketEventId);
   }
 
   // Task 14: levels CRUD
@@ -262,6 +314,7 @@ export default function Admin({ language }: AdminProps) {
     await loadLevels();
   }
   async function deleteLevel(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/admin/levels/${id}`, { method: "DELETE" });
     await loadLevels();
   }
@@ -277,8 +330,38 @@ export default function Admin({ language }: AdminProps) {
     await loadMemberRoles();
   }
   async function deleteMemberRole(id: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/admin/member-roles/${id}`, { method: "DELETE" });
     await loadMemberRoles();
+  }
+
+  async function loadMonitoring(eventId: string) {
+    if (!eventId) { setMonitoringData([]); return; }
+    try {
+      setMonitoringData(await api<any[]>(`/awards/monitoring/${encodeURIComponent(eventId)}`));
+    } catch { setMonitoringData([]); }
+  }
+
+  async function loadCorrections(eventId: string) {
+    if (!eventId) { setCorrectionsData([]); return; }
+    try {
+      setCorrectionsData(await api<any[]>(`/awards/events/${encodeURIComponent(eventId)}`));
+    } catch { setCorrectionsData([]); }
+  }
+
+  async function saveOverride() {
+    if (!overridingAward) return;
+    try {
+      await api(`/awards/${overridingAward}`, {
+        method: "PATCH",
+        body: JSON.stringify({ medalLabel: overrideMedalLabel, medalRank: overrideMedalRank })
+      });
+      toast.success(t(language, "profileSaveButton"));
+      setOverrideDialog(false);
+      await loadCorrections(correctionsEventId);
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   useEffect(() => {
@@ -307,444 +390,617 @@ export default function Admin({ language }: AdminProps) {
   return (
     <PageContainer maxWidth="lg">
       {toast.node}
-      <Stack spacing={3}>
+      <Stack spacing={2}>
         <Typography variant="h4">{t(language, "adminTitle")}</Typography>
-        <Grid container spacing={2}>
-          {/* Events */}
-          <Grid item xs={12}>
+
+        <Paper variant="outlined">
+          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+            <Tab value="events" label="Gara" />
+            <Tab value="judges" label="Giudici" />
+            <Tab value="awards" label="Premi" />
+            <Tab value="sponsors" label="Sponsor" />
+            <Tab value="catalog" label="Catalogo" />
+          </Tabs>
+        </Paper>
+
+        {tab === "events" && (
+          <Stack spacing={2}>
             <SectionCard title={t(language, "adminEventsTitle")}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} md={4}>
-                    <TextField
-                      label={t(language, "adminEventNamePlaceholder")}
-                      value={eventForm.name}
-                      onChange={(event) => setEventForm({ ...eventForm, name: event.target.value })}
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <FormControl fullWidth>
-                      <InputLabel>{t(language, "adminEventStatusPlaceholder")}</InputLabel>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    label={t(language, "adminEventNamePlaceholder")}
+                    value={eventForm.name}
+                    onChange={(event) => setEventForm({ ...eventForm, name: event.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t(language, "adminEventStatusPlaceholder")}</InputLabel>
+                    <Select
+                      value={eventForm.status}
+                      label={t(language, "adminEventStatusPlaceholder")}
+                      onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })}
+                    >
+                      {eventStatuses.map((s) => (
+                        <MenuItem key={s} value={s}>{s}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Button variant="contained" onClick={createEvent} fullWidth>
+                    {t(language, "adminEventCreateButton")}
+                  </Button>
+                </Grid>
+              </Grid>
+              <List dense sx={{ mt: 2 }}>
+                {events.map((event) => (
+                  <ListItem key={event.id} disableGutters>
+                    <ListItemText primary={event.name} />
+                    <FormControl size="small" sx={{ minWidth: 110, ml: 1 }}>
                       <Select
-                        value={eventForm.status}
-                        label={t(language, "adminEventStatusPlaceholder")}
-                        onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })}
+                        value={event.status || "draft"}
+                        onChange={(e) => updateEventStatus(event.id, e.target.value)}
+                        size="small"
                       >
                         {eventStatuses.map((s) => (
                           <MenuItem key={s} value={s}>{s}</MenuItem>
                         ))}
                       </Select>
                     </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <Button variant="contained" onClick={createEvent} fullWidth>
-                      {t(language, "adminEventCreateButton")}
-                    </Button>
-                  </Grid>
-                </Grid>
-                <List dense sx={{ mt: 2 }}>
-                  {events.map((event) => (
-                    <ListItem key={event.id} disableGutters>
-                      <ListItemText primary={event.name} />
-                      <FormControl size="small" sx={{ minWidth: 110, ml: 1 }}>
-                        <Select
-                          value={event.status || "draft"}
-                          onChange={(e) => updateEventStatus(event.id, e.target.value)}
-                          size="small"
-                        >
-                          {eventStatuses.map((s) => (
-                            <MenuItem key={s} value={s}>{s}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </ListItem>
-                  ))}
-                </List>
+                  </ListItem>
+                ))}
+              </List>
             </SectionCard>
-          </Grid>
 
-          {/* Categories with Status */}
-          <Grid item xs={12}>
             <SectionCard title={t(language, "adminCategoriesTitle")}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} md={4}>
-                    <FormControl fullWidth>
-                      <InputLabel>{t(language, "adminCategoryEventPlaceholder")}</InputLabel>
-                      <Select
-                        value={categoryForm.eventId}
-                        label={t(language, "adminCategoryEventPlaceholder")}
-                        onChange={(e) => setCategoryForm({ ...categoryForm, eventId: e.target.value })}
-                      >
-                        {events.map((ev) => (
-                          <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <TextField
-                      label={t(language, "adminCategoryNamePlaceholder")}
-                      value={categoryForm.name}
-                      onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })}
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <Button variant="contained" onClick={createCategory} fullWidth disabled={!categoryForm.eventId || !categoryForm.name}>
-                      {t(language, "adminCategoryCreateButton")}
-                    </Button>
-                  </Grid>
-                </Grid>
-                <List dense sx={{ mt: 2 }}>
-                  {categories.map((category) => (
-                    <ListItem key={category.id} disableGutters>
-                      <ListItemText primary={category.name} secondary={getEventName(category.eventId)} />
-                      <Chip
-                        label={category.status === "open" ? t(language, "adminCategoryOpen") : t(language, "adminCategoryClosed")}
-                        color={category.status === "open" ? "success" : "default"}
-                        size="small"
-                        sx={{ mr: 1 }}
-                      />
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => toggleCategoryStatus(category)}
-                        sx={{ mr: 1 }}
-                      >
-                        {category.status === "open" ? t(language, "adminCategoryClose") : t(language, "adminCategoryReopen")}
-                      </Button>
-                      <IconButton size="small" onClick={() => openCategoryEdit(category)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" color="error" onClick={() => deleteCategory(category.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </ListItem>
-                  ))}
-                </List>
-            </SectionCard>
-          </Grid>
-
-          {/* Judge Assignments (with optional category) */}
-          <Grid item xs={12}>
-            <SectionCard title={t(language, "adminJudgeAssignTitle")}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth>
-                      <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
-                      <Select
-                        value={judgeAssignment.eventId}
-                        label={t(language, "adminJudgeEventPlaceholder")}
-                        onChange={(e) => setJudgeAssignment({ ...judgeAssignment, eventId: e.target.value })}
-                      >
-                        {events.map((ev) => (
-                          <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth>
-                      <InputLabel>{t(language, "adminJudgeIdPlaceholder")}</InputLabel>
-                      <Select
-                        value={judgeAssignment.judgeId}
-                        label={t(language, "adminJudgeIdPlaceholder")}
-                        onChange={(e) => setJudgeAssignment({ ...judgeAssignment, judgeId: e.target.value })}
-                      >
-                        {users.filter((u) => u.role === "judge" || u.role === "manager" || u.role === "admin").map((u) => (
-                          <MenuItem key={u.id} value={u.id}>{u.email}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth>
-                      <InputLabel>{t(language, "adminJudgeCategoryPlaceholder")}</InputLabel>
-                      <Select
-                        value={judgeAssignment.categoryId}
-                        label={t(language, "adminJudgeCategoryPlaceholder")}
-                        onChange={(e) => setJudgeAssignment({ ...judgeAssignment, categoryId: e.target.value })}
-                      >
-                        <MenuItem value="">{t(language, "adminJudgeAllCategories")}</MenuItem>
-                        {categories
-                          .filter((c) => !judgeAssignment.eventId || c.eventId === judgeAssignment.eventId)
-                          .map((c) => (
-                            <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                          ))
-                        }
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <Button
-                      variant="contained"
-                      onClick={assignJudge}
-                      fullWidth
-                      disabled={!judgeAssignment.eventId || !judgeAssignment.judgeId}
-                    >
-                      {t(language, "adminJudgeAssignButton")}
-                    </Button>
-                  </Grid>
-                </Grid>
-                {judgeAssignments.length > 0 && (
-                  <>
-                    <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-                      {t(language, "adminJudgeAssignments")}
-                    </Typography>
-                    <List dense>
-                      {judgeAssignments.map((ja) => (
-                        <ListItem key={ja.id} disableGutters>
-                          <ListItemText
-                            primary={getUserEmail(ja.judgeId)}
-                            secondary={`${getEventName(ja.eventId)} - ${getCategoryName(ja.categoryId)}`}
-                          />
-                          <IconButton size="small" onClick={() => openJudgeEdit(ja)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton size="small" color="error" onClick={() => deleteJudgeAssignment(ja.id)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </ListItem>
-                      ))}
-                    </List>
-                  </>
-                )}
-            </SectionCard>
-          </Grid>
-
-          {/* Sponsors */}
-          <Grid item xs={12}>
-            <SectionCard title={t(language, "adminSponsorsTitle")}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth>
-                      <InputLabel>{t(language, "adminSponsorEvent")}</InputLabel>
-                      <Select
-                        value={sponsorForm.eventId}
-                        label={t(language, "adminSponsorEvent")}
-                        onChange={(e) => setSponsorForm({ ...sponsorForm, eventId: e.target.value })}
-                      >
-                        {events.map((ev) => (
-                          <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      label={t(language, "adminSponsorName")}
-                      value={sponsorForm.name}
-                      onChange={(e) => setSponsorForm({ ...sponsorForm, name: e.target.value })}
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={3}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t(language, "adminCategoryEventPlaceholder")}</InputLabel>
                     <Select
-                      value={sponsorForm.tier}
-                      onChange={(e) => setSponsorForm({ ...sponsorForm, tier: e.target.value })}
-                      fullWidth
-                      size="small"
+                      value={categoryForm.eventId}
+                      label={t(language, "adminCategoryEventPlaceholder")}
+                      onChange={(e) => setCategoryForm({ ...categoryForm, eventId: e.target.value })}
                     >
-                      <MenuItem value="bronze">Bronze</MenuItem>
-                      <MenuItem value="silver">Silver</MenuItem>
-                      <MenuItem value="gold">Gold</MenuItem>
-                      <MenuItem value="platinum">Platinum</MenuItem>
+                      {events.map((ev) => (
+                        <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                      ))}
                     </Select>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <Button variant="contained" onClick={createSponsor} fullWidth>
-                      {t(language, "adminSponsorCreate")}
-                    </Button>
-                  </Grid>
+                  </FormControl>
                 </Grid>
-                <List dense sx={{ mt: 2 }}>
-                  {sponsors.map((s) => (
-                    <ListItem key={s.id} disableGutters>
-                      <ListItemText primary={s.name} secondary={`${s.tier} - ${getEventName(s.eventId)}`} />
-                      <IconButton size="small" color="error" onClick={() => deleteSponsor(s.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </ListItem>
-                  ))}
-                </List>
-            </SectionCard>
-          </Grid>
-
-          {/* Special Mentions */}
-          <Grid item xs={12}>
-            <SectionCard title={t(language, "adminSpecialMentionsTitle")}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth>
-                      <InputLabel>{t(language, "adminMentionEvent")}</InputLabel>
-                      <Select
-                        value={mentionForm.eventId}
-                        label={t(language, "adminMentionEvent")}
-                        onChange={(e) => setMentionForm({ ...mentionForm, eventId: e.target.value })}
-                      >
-                        {events.map((ev) => (
-                          <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      label={t(language, "adminMentionModel")}
-                      value={mentionForm.modelId}
-                      onChange={(e) => setMentionForm({ ...mentionForm, modelId: e.target.value })}
-                      fullWidth
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    label={t(language, "adminCategoryNamePlaceholder")}
+                    value={categoryForm.name}
+                    onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Button variant="contained" onClick={createCategory} fullWidth disabled={!categoryForm.eventId || !categoryForm.name}>
+                    {t(language, "adminCategoryCreateButton")}
+                  </Button>
+                </Grid>
+              </Grid>
+              <List dense sx={{ mt: 2 }}>
+                {categories.map((category) => (
+                  <ListItem key={category.id} disableGutters>
+                    <ListItemText primary={category.name} secondary={getEventName(category.eventId)} />
+                    <Chip
+                      label={category.status === "open" ? t(language, "adminCategoryOpen") : t(language, "adminCategoryClosed")}
+                      color={category.status === "open" ? "success" : "default"}
+                      size="small"
+                      sx={{ mr: 1 }}
                     />
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      label={t(language, "adminMentionTitle")}
-                      value={mentionForm.title}
-                      onChange={(e) => setMentionForm({ ...mentionForm, title: e.target.value })}
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={3}>
                     <Button
-                      variant="contained"
-                      onClick={createMention}
-                      fullWidth
-                      disabled={!mentionForm.eventId || !mentionForm.modelId.trim() || !mentionForm.title.trim()}
+                      variant="outlined"
+                      size="small"
+                      onClick={() => toggleCategoryStatus(category)}
+                      sx={{ mr: 1 }}
                     >
-                      {t(language, "adminMentionCreate")}
+                      {category.status === "open" ? t(language, "adminCategoryClose") : t(language, "adminCategoryReopen")}
                     </Button>
-                  </Grid>
+                    <IconButton size="small" onClick={() => openCategoryEdit(category)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" color="error" onClick={() => deleteCategory(category.id)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </ListItem>
+                ))}
+              </List>
+            </SectionCard>
+
+            <SectionCard title={t(language, "adminEventCampaignsTitle")}>
+              <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                    <Select
+                      value={campaignForm.eventId}
+                      label={t(language, "adminJudgeEventPlaceholder")}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, eventId: e.target.value })}
+                    >
+                      {events.map((ev) => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
+                    </Select>
+                  </FormControl>
                 </Grid>
-                {specialMentions.length > 0 && (
-                  <>
-                    <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-                      {t(language, "adminMentionsList")}
-                    </Typography>
-                    <List dense>
-                      {specialMentions.map((m) => (
-                        <ListItem key={m.id} disableGutters>
-                          <ListItemText
-                            primary={m.title}
-                            secondary={`${getEventName(m.eventId)} - Model: ${m.modelId.slice(0, 8)}`}
-                          />
-                          <IconButton size="small" color="error" onClick={() => deleteMention(m.id)}>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    label={t(language, "adminCampaignNamePlaceholder")}
+                    value={campaignForm.name}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
+                    size="small"
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <TextField
+                    label={t(language, "adminCampaignOpenDate")}
+                    value={campaignForm.enrollmentOpenDate}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, enrollmentOpenDate: e.target.value })}
+                    size="small"
+                    type="date"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <TextField
+                    label={t(language, "adminCampaignCloseDate")}
+                    value={campaignForm.enrollmentCloseDate}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, enrollmentCloseDate: e.target.value })}
+                    size="small"
+                    type="date"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <Button variant="contained" onClick={createCampaign} disabled={!campaignForm.eventId || !campaignForm.name.trim()} fullWidth>
+                    {t(language, "adminCreateButton")}
+                  </Button>
+                </Grid>
+              </Grid>
+              <List dense>
+                {eventCampaigns.map((c) => (
+                  <ListItem key={c.id} disableGutters secondaryAction={
+                    <IconButton size="small" color="error" onClick={() => deleteCampaign(c.id)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  }>
+                    <ListItemText
+                      primary={`${c.name} — ${getEventName(c.eventId)}`}
+                      secondary={`${c.enrollmentOpenDate ?? "—"} → ${c.enrollmentCloseDate ?? "—"}`}
+                    />
+                  </ListItem>
+                ))}
+                {eventCampaigns.length === 0 && (
+                  <ListItem><ListItemText secondary={t(language, "adminNoData")} /></ListItem>
+                )}
+              </List>
+            </SectionCard>
+
+            <SectionCard title={t(language, "judgeAwardBracketsTitle")}>
+              <Stack spacing={1} sx={{ mb: 2 }}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                  <Select
+                    value={bracketEventId}
+                    label={t(language, "adminJudgeEventPlaceholder")}
+                    onChange={(e) => { setBracketEventId(e.target.value); loadAwardBrackets(e.target.value); }}
+                  >
+                    {events.map(ev => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <TextField size="small" label={t(language, "judgeAwardBracketMedal")} value={bracketForm.medalLabel}
+                    onChange={e => setBracketForm({ ...bracketForm, medalLabel: e.target.value })} sx={{ minWidth: 160 }} />
+                  <TextField size="small" label={t(language, "judgeAwardBracketRank")} type="number" value={bracketForm.medalRank}
+                    onChange={e => setBracketForm({ ...bracketForm, medalRank: Number(e.target.value) })} sx={{ width: 80 }} />
+                  <TextField size="small" label={t(language, "judgeAwardBracketLow")} type="number" value={bracketForm.lowLimit}
+                    onChange={e => setBracketForm({ ...bracketForm, lowLimit: Number(e.target.value) })} sx={{ width: 90 }} />
+                  <TextField size="small" label={t(language, "judgeAwardBracketHigh")} type="number" value={bracketForm.highLimit}
+                    onChange={e => setBracketForm({ ...bracketForm, highLimit: Number(e.target.value) })} sx={{ width: 90 }} />
+                  <Button variant="contained" size="small" onClick={createAwardBracket}
+                    disabled={!bracketEventId || !bracketForm.medalLabel.trim()}>
+                    {t(language, "judgeAwardBracketAdd")}
+                  </Button>
+                </Stack>
+              </Stack>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "judgeAwardBracketMedal")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "judgeAwardBracketRank")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "judgeAwardBracketLow")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "judgeAwardBracketHigh")}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {awardBrackets.sort((a, b) => a.medalRank - b.medalRank).map(br => (
+                      <TableRow key={br.id}>
+                        <TableCell>{br.medalLabel}</TableCell>
+                        <TableCell>{br.medalRank}</TableCell>
+                        <TableCell>{br.lowLimit}</TableCell>
+                        <TableCell>{br.highLimit}</TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" color="error" onClick={() => deleteAwardBracket(br.id)}>
                             <DeleteIcon fontSize="small" />
                           </IconButton>
-                        </ListItem>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {awardBrackets.length === 0 && bracketEventId && (
+                      <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">{t(language, "adminNoData")}</Typography></TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </SectionCard>
+          </Stack>
+        )}
+
+        {tab === "judges" && (
+          <Stack spacing={2}>
+            <SectionCard title={t(language, "adminJudgeAssignTitle")}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                    <Select
+                      value={judgeAssignment.eventId}
+                      label={t(language, "adminJudgeEventPlaceholder")}
+                      onChange={(e) => setJudgeAssignment({ ...judgeAssignment, eventId: e.target.value })}
+                    >
+                      {events.map((ev) => (
+                        <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
                       ))}
-                    </List>
-                  </>
-                )}
-            </SectionCard>
-          </Grid>
-
-          {/* Modification Requests */}
-          <Grid item xs={12}>
-            <SectionCard title={t(language, "adminModRequestsTitle")}>
-                <Stack spacing={1}>
-                  {modRequests.map((req) => (
-                    <Stack key={req.id} spacing={1}>
-                      <Typography variant="body2">
-                        Model: {req.modelId.slice(0, 8)} - {req.reason}
-                      </Typography>
-                      <Stack direction="row" spacing={1}>
-                        <Chip
-                          label={req.status}
-                          size="small"
-                          color={req.status === "pending" ? "warning" : req.status === "resolved" ? "success" : "default"}
-                        />
-                        {req.status === "pending" && (
-                          <>
-                            <Button size="small" variant="outlined" onClick={() => updateModRequestStatus(req.id, "resolved")}>
-                              {t(language, "adminModRequestResolved")}
-                            </Button>
-                            <Button size="small" variant="outlined" color="error" onClick={() => updateModRequestStatus(req.id, "rejected")}>
-                              {t(language, "adminModRequestRejected")}
-                            </Button>
-                          </>
-                        )}
-                      </Stack>
-                    </Stack>
-                  ))}
-                </Stack>
-            </SectionCard>
-          </Grid>
-
-          {/* Task 10: Event Campaigns */}
-          <Grid item xs={12}>
-            <SectionCard title={t(language, "adminEventCampaignsTitle")}>
-                <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
-                      <Select
-                        value={campaignForm.eventId}
-                        label={t(language, "adminJudgeEventPlaceholder")}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, eventId: e.target.value })}
-                      >
-                        {events.map((ev) => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      label={t(language, "adminCampaignNamePlaceholder")}
-                      value={campaignForm.name}
-                      onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
-                      size="small"
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={2}>
-                    <TextField
-                      label={t(language, "adminCampaignOpenDate")}
-                      value={campaignForm.enrollmentOpenDate}
-                      onChange={(e) => setCampaignForm({ ...campaignForm, enrollmentOpenDate: e.target.value })}
-                      size="small"
-                      type="date"
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={2}>
-                    <TextField
-                      label={t(language, "adminCampaignCloseDate")}
-                      value={campaignForm.enrollmentCloseDate}
-                      onChange={(e) => setCampaignForm({ ...campaignForm, enrollmentCloseDate: e.target.value })}
-                      size="small"
-                      type="date"
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={2}>
-                    <Button variant="contained" onClick={createCampaign} disabled={!campaignForm.eventId || !campaignForm.name.trim()} fullWidth>
-                      {t(language, "adminCreateButton")}
-                    </Button>
-                  </Grid>
+                    </Select>
+                  </FormControl>
                 </Grid>
-                <List dense>
-                  {eventCampaigns.map((c) => (
-                    <ListItem key={c.id} disableGutters secondaryAction={
-                      <IconButton size="small" color="error" onClick={() => deleteCampaign(c.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    }>
-                      <ListItemText
-                        primary={`${c.name} — ${getEventName(c.eventId)}`}
-                        secondary={`${c.enrollmentOpenDate ?? "—"} → ${c.enrollmentCloseDate ?? "—"}`}
-                      />
-                    </ListItem>
-                  ))}
-                  {eventCampaigns.length === 0 && (
-                    <ListItem><ListItemText secondary={t(language, "adminNoData")} /></ListItem>
-                  )}
-                </List>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t(language, "adminJudgeIdPlaceholder")}</InputLabel>
+                    <Select
+                      value={judgeAssignment.judgeId}
+                      label={t(language, "adminJudgeIdPlaceholder")}
+                      onChange={(e) => setJudgeAssignment({ ...judgeAssignment, judgeId: e.target.value })}
+                    >
+                      {users.filter((u) => u.role === "judge" || u.role === "manager" || u.role === "admin").map((u) => (
+                        <MenuItem key={u.id} value={u.id}>{u.email}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t(language, "adminJudgeCategoryPlaceholder")}</InputLabel>
+                    <Select
+                      value={judgeAssignment.categoryId}
+                      label={t(language, "adminJudgeCategoryPlaceholder")}
+                      onChange={(e) => setJudgeAssignment({ ...judgeAssignment, categoryId: e.target.value })}
+                    >
+                      <MenuItem value="">{t(language, "adminJudgeAllCategories")}</MenuItem>
+                      {categories
+                        .filter((c) => !judgeAssignment.eventId || c.eventId === judgeAssignment.eventId)
+                        .map((c) => (
+                          <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                        ))
+                      }
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Button
+                    variant="contained"
+                    onClick={assignJudge}
+                    fullWidth
+                    disabled={!judgeAssignment.eventId || !judgeAssignment.judgeId}
+                  >
+                    {t(language, "adminJudgeAssignButton")}
+                  </Button>
+                </Grid>
+              </Grid>
+              {judgeAssignments.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+                    {t(language, "adminJudgeAssignments")}
+                  </Typography>
+                  <List dense>
+                    {judgeAssignments.map((ja) => (
+                      <ListItem key={ja.id} disableGutters>
+                        <ListItemText
+                          primary={getUserEmail(ja.judgeId)}
+                          secondary={`${getEventName(ja.eventId)} - ${getCategoryName(ja.categoryId)}`}
+                        />
+                        <IconButton size="small" onClick={() => openJudgeEdit(ja)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" color="error" onClick={() => deleteJudgeAssignment(ja.id)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                </>
+              )}
             </SectionCard>
-          </Grid>
 
-          {/* Task 14: Levels */}
-          <Grid item xs={12}>
+            <SectionCard title={t(language, "judgeMonitorTitle")}>
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <FormControl size="small" sx={{ minWidth: 220 }}>
+                    <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                    <Select
+                      value={monitoringEventId}
+                      label={t(language, "adminJudgeEventPlaceholder")}
+                      onChange={(e) => { setMonitoringEventId(e.target.value); loadMonitoring(e.target.value); }}
+                    >
+                      {events.map(ev => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                  <Button size="small" variant="outlined" onClick={() => loadMonitoring(monitoringEventId)} disabled={!monitoringEventId}>
+                    Aggiorna
+                  </Button>
+                </Stack>
+
+                {monitoringData.map(cat => (
+                  <Box key={cat.categoryId} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1.5 }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                      <Typography variant="subtitle2">{cat.categoryName}</Typography>
+                      <Chip
+                        size="small"
+                        label={cat.status === "closed" ? "Chiusa" : "Aperta"}
+                        color={cat.status === "closed" ? "default" : "success"}
+                      />
+                    </Stack>
+                    <Stack direction="row" spacing={2}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t(language, "judgePercentComplete")}: {cat.percentComplete}% ({cat.scoredModels}/{cat.totalModels})
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {t(language, "judgeCompletedCount")}: {cat.completedJudges}/{cat.totalJudges}
+                      </Typography>
+                    </Stack>
+                    <Box sx={{ mt: 0.5, height: 6, bgcolor: "grey.200", borderRadius: 3 }}>
+                      <Box sx={{ height: 6, bgcolor: cat.status === "closed" ? "grey.500" : "primary.main", borderRadius: 3, width: `${cat.percentComplete}%` }} />
+                    </Box>
+                  </Box>
+                ))}
+                {monitoringData.length === 0 && monitoringEventId && (
+                  <Typography variant="body2" color="text.secondary">{t(language, "adminNoData")}</Typography>
+                )}
+              </Stack>
+            </SectionCard>
+          </Stack>
+        )}
+
+        {tab === "awards" && (
+          <Stack spacing={2}>
+            <SectionCard title={t(language, "adminSpecialMentionsTitle")}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t(language, "adminMentionEvent")}</InputLabel>
+                    <Select
+                      value={mentionForm.eventId}
+                      label={t(language, "adminMentionEvent")}
+                      onChange={(e) => setMentionForm({ ...mentionForm, eventId: e.target.value })}
+                    >
+                      {events.map((ev) => (
+                        <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    label={t(language, "adminMentionModel")}
+                    value={mentionForm.modelId}
+                    onChange={(e) => setMentionForm({ ...mentionForm, modelId: e.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    label={t(language, "adminMentionTitle")}
+                    value={mentionForm.title}
+                    onChange={(e) => setMentionForm({ ...mentionForm, title: e.target.value })}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Button
+                    variant="contained"
+                    onClick={createMention}
+                    fullWidth
+                    disabled={!mentionForm.eventId || !mentionForm.modelId.trim() || !mentionForm.title.trim()}
+                  >
+                    {t(language, "adminMentionCreate")}
+                  </Button>
+                </Grid>
+              </Grid>
+              {specialMentions.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+                    {t(language, "adminMentionsList")}
+                  </Typography>
+                  <List dense>
+                    {specialMentions.map((m) => (
+                      <ListItem key={m.id} disableGutters>
+                        <ListItemText
+                          primary={m.title}
+                          secondary={`${getEventName(m.eventId)} - Model: ${m.modelId.slice(0, 8)}`}
+                        />
+                        <IconButton size="small" color="error" onClick={() => deleteMention(m.id)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                </>
+              )}
+            </SectionCard>
+
+            <SectionCard title={t(language, "adminModRequestsTitle")}>
+              <Stack spacing={1}>
+                {modRequests.map((req) => (
+                  <Stack key={req.id} spacing={1}>
+                    <Typography variant="body2">
+                      Model: {req.modelId.slice(0, 8)} - {req.reason}
+                    </Typography>
+                    <Stack direction="row" spacing={1}>
+                      <Chip
+                        label={req.status}
+                        size="small"
+                        color={req.status === "pending" ? "warning" : req.status === "resolved" ? "success" : "default"}
+                      />
+                      {req.status === "pending" && (
+                        <>
+                          <Button size="small" variant="outlined" onClick={() => updateModRequestStatus(req.id, "resolved")}>
+                            {t(language, "adminModRequestResolved")}
+                          </Button>
+                          <Button size="small" variant="outlined" color="error" onClick={() => updateModRequestStatus(req.id, "rejected")}>
+                            {t(language, "adminModRequestRejected")}
+                          </Button>
+                        </>
+                      )}
+                    </Stack>
+                  </Stack>
+                ))}
+              </Stack>
+            </SectionCard>
+
+            <SectionCard title={t(language, "judgeCorrectionsTitle")}>
+              <Stack spacing={2}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                  <Select
+                    value={correctionsEventId}
+                    label={t(language, "adminJudgeEventPlaceholder")}
+                    onChange={(e) => { setCorrectionsEventId(e.target.value); loadCorrections(e.target.value); }}
+                  >
+                    {events.map(ev => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700 }}>Modello</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Categoria</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Score</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Premio</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Fonte</TableCell>
+                        <TableCell />
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {correctionsData.map(row => (
+                        <TableRow key={row.modelId} sx={{ bgcolor: row.source === "frozen" && !row.medalLabel ? "error.light" : undefined }}>
+                          <TableCell>{row.modelId.slice(0, 8)}</TableCell>
+                          <TableCell>{getCategoryName(row.categoryId)}</TableCell>
+                          <TableCell>{row.totalScore ?? (row.averageRank != null ? row.averageRank.toFixed(2) : "-")}</TableCell>
+                          <TableCell>
+                            {row.medalLabel
+                              ? <Chip size="small" label={row.medalLabel} color={row.source === "override" ? "warning" : "default"} />
+                              : <Chip size="small" label="live" variant="outlined" />
+                            }
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={t(language, row.source === "frozen" || row.source === "override" ? "judgeFrozenAward" : "judgeMonitorTitle")} variant="outlined" />
+                          </TableCell>
+                          <TableCell align="right">
+                            {(row.source === "frozen" || row.source === "override") && (
+                              <IconButton size="small" color="warning" onClick={() => {
+                                // TODO: needs awardId from backend, using row.id (frozen) or modelId as placeholder
+                                setOverridingAward(row.id ?? row.modelId);
+                                setOverrideMedalLabel(row.medalLabel ?? "");
+                                setOverrideMedalRank(row.medalRank ?? 0);
+                                setOverrideDialog(true);
+                              }}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {correctionsData.length === 0 && correctionsEventId && (
+                        <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">{t(language, "adminNoData")}</Typography></TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Stack>
+            </SectionCard>
+          </Stack>
+        )}
+
+        {tab === "sponsors" && (
+          <SectionCard title={t(language, "adminSponsorsTitle")}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>{t(language, "adminSponsorEvent")}</InputLabel>
+                  <Select
+                    value={sponsorForm.eventId}
+                    label={t(language, "adminSponsorEvent")}
+                    onChange={(e) => setSponsorForm({ ...sponsorForm, eventId: e.target.value })}
+                  >
+                    {events.map((ev) => (
+                      <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  label={t(language, "adminSponsorName")}
+                  value={sponsorForm.name}
+                  onChange={(e) => setSponsorForm({ ...sponsorForm, name: e.target.value })}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Select
+                  value={sponsorForm.tier}
+                  onChange={(e) => setSponsorForm({ ...sponsorForm, tier: e.target.value })}
+                  fullWidth
+                  size="small"
+                >
+                  <MenuItem value="bronze">Bronze</MenuItem>
+                  <MenuItem value="silver">Silver</MenuItem>
+                  <MenuItem value="gold">Gold</MenuItem>
+                  <MenuItem value="platinum">Platinum</MenuItem>
+                </Select>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Button variant="contained" onClick={createSponsor} fullWidth>
+                  {t(language, "adminSponsorCreate")}
+                </Button>
+              </Grid>
+            </Grid>
+            <List dense sx={{ mt: 2 }}>
+              {sponsors.map((s) => (
+                <ListItem key={s.id} disableGutters>
+                  <ListItemText primary={s.name} secondary={`${s.tier} - ${getEventName(s.eventId)}`} />
+                  <IconButton size="small" color="error" onClick={() => deleteSponsor(s.id)}>
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </ListItem>
+              ))}
+            </List>
+          </SectionCard>
+        )}
+
+        {tab === "catalog" && (
+          <Stack spacing={2}>
             <SectionCard title={t(language, "adminLevelsTitle")}>
               <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
                 <TextField size="small" label={t(language, "adminLevelName")} value={newLevelName} onChange={(e) => setNewLevelName(e.target.value)} />
@@ -778,10 +1034,7 @@ export default function Admin({ language }: AdminProps) {
                 </Table>
               </TableContainer>
             </SectionCard>
-          </Grid>
 
-          {/* Task 14: Member Roles */}
-          <Grid item xs={12}>
             <SectionCard title={t(language, "adminMemberRolesTitle")}>
               <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
                 <TextField size="small" label={t(language, "adminMemberRoleName")} value={newMemberRoleName} onChange={(e) => setNewMemberRoleName(e.target.value)} />
@@ -812,9 +1065,8 @@ export default function Admin({ language }: AdminProps) {
                 </Table>
               </TableContainer>
             </SectionCard>
-          </Grid>
-
-        </Grid>
+          </Stack>
+        )}
       </Stack>
 
       {/* Dialogs */}
@@ -833,6 +1085,22 @@ export default function Admin({ language }: AdminProps) {
         <DialogActions>
           <Button onClick={saveCategoryEdit} variant="contained">{t(language, "profileSaveButton")}</Button>
           <Button onClick={() => setCategoryEditDialog(false)}>{t(language, "profileCancelButton")}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={overrideDialog} onClose={() => setOverrideDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t(language, "judgeOverrideLabel")}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField size="small" label={t(language, "judgeAwardBracketMedal")} value={overrideMedalLabel}
+              onChange={e => setOverrideMedalLabel(e.target.value)} fullWidth />
+            <TextField size="small" label={t(language, "judgeAwardBracketRank")} type="number" value={overrideMedalRank}
+              onChange={e => setOverrideMedalRank(Number(e.target.value))} fullWidth />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={saveOverride} variant="contained">{t(language, "profileSaveButton")}</Button>
+          <Button onClick={() => setOverrideDialog(false)}>{t(language, "profileCancelButton")}</Button>
         </DialogActions>
       </Dialog>
 

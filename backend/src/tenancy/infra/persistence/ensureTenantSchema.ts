@@ -107,7 +107,6 @@ export async function ensureTenantSchema() {
 
     // Remove old team tables
     await pool.query(`DROP TABLE IF EXISTS team_members CASCADE;`);
-    await pool.query(`DROP TABLE IF EXISTS teams CASCADE;`);
     await pool.query(`DROP TABLE IF EXISTS team_roles CASCADE;`);
 
     // Add levels table
@@ -160,11 +159,11 @@ export async function ensureTenantSchema() {
         ADD COLUMN IF NOT EXISTS display_number integer,
         ADD COLUMN IF NOT EXISTS is_team boolean NOT NULL DEFAULT false;
     `);
+    // Backfill display_number from code for models that have code but no display_number
     await pool.query(`
-      ALTER TABLE IF EXISTS models
-        DROP COLUMN IF EXISTS team_id;
+      UPDATE models SET display_number = code
+      WHERE display_number IS NULL AND code IS NOT NULL;
     `);
-
     // Add email to model_team_members
     await pool.query(`
       ALTER TABLE model_team_members ADD COLUMN IF NOT EXISTS email text;
@@ -187,6 +186,99 @@ export async function ensureTenantSchema() {
       await pool.query('ROLLBACK');
       throw err;
     }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS teams (
+        id uuid PRIMARY KEY,
+        user_id uuid NOT NULL,
+        name text NOT NULL,
+        display_number text NOT NULL,
+        category_id uuid NOT NULL,
+        created_at timestamptz DEFAULT now()
+      )
+    `);
+
+    // idempotent backfills: columns added after initial table creation
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS display_number text`);
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS category_id uuid`);
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now()`);
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS user_id uuid`);
+    // owner_id = old name for user_id; drop NOT NULL so inserts don't fail
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_catalog.pg_attribute a
+          JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+          WHERE c.relname = 'teams' AND a.attname = 'owner_id'
+            AND a.attnum > 0 AND NOT a.attisdropped AND a.attnotnull
+        ) THEN
+          ALTER TABLE teams ALTER COLUMN owner_id DROP NOT NULL;
+        END IF;
+      END $$
+    `);
+
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_teams_display_number ON teams (display_number)
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_mates (
+        id uuid PRIMARY KEY,
+        team_id uuid NOT NULL,
+        name text NOT NULL,
+        surname text NOT NULL,
+        role text NOT NULL,
+        email text
+      )
+    `);
+
+    await pool.query(`
+      ALTER TABLE models ADD COLUMN IF NOT EXISTS team_id uuid
+    `);
+
+    // Add award_brackets table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS award_brackets (
+        id uuid PRIMARY KEY,
+        event_id uuid NOT NULL,
+        medal_label text NOT NULL,
+        medal_rank integer NOT NULL,
+        low_limit integer NOT NULL,
+        high_limit integer NOT NULL,
+        created_at timestamptz DEFAULT now()
+      )
+    `);
+
+    // Add judge_completions table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS judge_completions (
+        id uuid PRIMARY KEY,
+        judge_id uuid NOT NULL,
+        category_id uuid NOT NULL,
+        completed_at timestamptz DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_judge_completions ON judge_completions (judge_id, category_id)
+    `);
+
+    // Add awards table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS awards (
+        id uuid PRIMARY KEY,
+        category_id uuid NOT NULL,
+        model_id uuid NOT NULL,
+        total_score integer NOT NULL,
+        medal_label text NOT NULL,
+        medal_rank integer NOT NULL,
+        source text NOT NULL DEFAULT 'aggregate',
+        frozen_at timestamptz DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_awards_category_model ON awards (category_id, model_id)
+    `);
   } finally {
     await pool.end();
   }

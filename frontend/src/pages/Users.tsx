@@ -175,7 +175,7 @@ export default function Users({ language }: UsersProps) {
     if (editProfile && editProfile.id === userId) {
       setEditProfile({ ...editProfile, isActive: newActive });
     }
-    await load();
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: newActive } : u));
   }
 
   async function resetPassword() {

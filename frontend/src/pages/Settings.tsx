@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Button,
+  ButtonGroup,
   FormControl,
   InputLabel,
   MenuItem,
@@ -29,7 +30,7 @@ interface SettingsProps {
   language: Language;
 }
 
-type SettingsTab = "general" | "theme" | "export";
+type SettingsTab = "general" | "theme" | "export" | "team";
 
 export default function Settings({ language }: SettingsProps) {
   const toast = useToast();
@@ -41,9 +42,16 @@ export default function Settings({ language }: SettingsProps) {
   const [sheetNameDraft, setSheetNameDraft] = useState("");
   const [filePrefixDraft, setFilePrefixDraft] = useState("");
   const [themeModeDraft, setThemeModeDraft] = useState<"light" | "dark">("light");
-  const [themePresetDraft, setThemePresetDraft] = useState<"violet" | "ocean" | "forest">("violet");
+  const [themePresetDraft, setThemePresetDraft] = useState<"violet" | "ocean" | "forest" | "mss">("violet");
 
   const [maxModelsDraft, setMaxModelsDraft] = useState("5");
+
+  const [teamNameMode, setTeamNameMode] = useState<"auto" | "manual">(
+    () => (localStorage.getItem("teamNameMode") as "auto" | "manual") ?? "manual"
+  );
+
+  const [appNameDraft, setAppNameDraft] = useState("Miniatures Contest");
+  const [savingAppName, setSavingAppName] = useState(false);
 
   const [savingPrefix, setSavingPrefix] = useState(false);
   const [savingDigits, setSavingDigits] = useState(false);
@@ -55,6 +63,7 @@ export default function Settings({ language }: SettingsProps) {
     const res = await api<Record<string, string>>("/settings");
     setSettings(res);
 
+    setAppNameDraft(res.app_name ?? "Miniatures Contest");
     setPrefixDraft(res.printCodePrefix ?? "MSS");
     setDigitsDraft(res.printCodeDigits ?? "5");
     setMaxModelsDraft(res.maxModelsPerUser ?? "5");
@@ -62,7 +71,7 @@ export default function Settings({ language }: SettingsProps) {
     setFilePrefixDraft(res.excelFilePrefix ?? "contest-export");
     setThemeModeDraft(res.appTheme === "dark" ? "dark" : "light");
     setThemePresetDraft(
-      res.themePreset === "ocean" || res.themePreset === "forest" ? res.themePreset : "violet"
+      res.themePreset === "ocean" || res.themePreset === "forest" || res.themePreset === "mss" ? res.themePreset : "violet"
     );
   }
 
@@ -79,6 +88,26 @@ export default function Settings({ language }: SettingsProps) {
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
       setSettings(prev);
+    }
+  }
+
+  async function saveAppName() {
+    const next = appNameDraft.trim();
+    if (!next) return;
+    const prev = { ...settings };
+    setSavingAppName(true);
+    setSettings({ ...settings, app_name: next });
+    try {
+      await api("/admin/settings", {
+        method: "PUT",
+        body: JSON.stringify({ app_name: next })
+      });
+      toast.success(t(language, "profileSaveButton"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+      setSettings(prev);
+    } finally {
+      setSavingAppName(false);
     }
   }
 
@@ -219,6 +248,7 @@ export default function Settings({ language }: SettingsProps) {
             <Tab value="general" label={t(language, "settingsTabGeneral")} />
             <Tab value="theme" label={t(language, "settingsTabTheme")} />
             <Tab value="export" label={t(language, "settingsTabExport")} />
+            <Tab value="team" label="Team" />
           </Tabs>
         </Paper>
 
@@ -233,6 +263,22 @@ export default function Settings({ language }: SettingsProps) {
                   </TableRow>
                 </TableHead>
                 <TableBody>
+                  <TableRow>
+                    <TableCell><Typography>{t(language, "settingsAppName")}</Typography></TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <TextField
+                          size="small"
+                          value={appNameDraft}
+                          onChange={(event) => setAppNameDraft(event.target.value)}
+                          sx={{ minWidth: 220 }}
+                        />
+                        <Button variant="contained" onClick={saveAppName} disabled={savingAppName || !appNameDraft.trim()}>
+                          {savingAppName ? "..." : t(language, "profileSaveButton")}
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
                   <TableRow>
                     <TableCell><Typography>{t(language, "settingsModelImages")}</Typography></TableCell>
                     <TableCell align="right">
@@ -322,11 +368,12 @@ export default function Settings({ language }: SettingsProps) {
                 <Select
                   value={themePresetDraft}
                   label={t(language, "settingsThemePreset")}
-                  onChange={(event) => setThemePresetDraft(event.target.value as "violet" | "ocean" | "forest")}
+                  onChange={(event) => setThemePresetDraft(event.target.value as "violet" | "ocean" | "forest" | "mss")}
                 >
                   <MenuItem value="violet">{t(language, "settingsThemePresetViolet")}</MenuItem>
                   <MenuItem value="ocean">{t(language, "settingsThemePresetOcean")}</MenuItem>
                   <MenuItem value="forest">{t(language, "settingsThemePresetForest")}</MenuItem>
+                  <MenuItem value="mss">{t(language, "settingsThemePresetMss")}</MenuItem>
                 </Select>
               </FormControl>
 
@@ -417,6 +464,34 @@ export default function Settings({ language }: SettingsProps) {
                 </TableBody>
               </Table>
             </TableContainer>
+          </SectionCard>
+        )}
+
+        {tab === "team" && (
+          <SectionCard title="Team">
+            <Table>
+              <TableBody>
+                <TableRow>
+                  <TableCell><Typography>{t(language, "teamsNameLabel")}</Typography></TableCell>
+                  <TableCell align="right">
+                    <ButtonGroup size="small" variant="outlined">
+                      <Button
+                        onClick={() => { setTeamNameMode("manual"); localStorage.setItem("teamNameMode", "manual"); }}
+                        variant={teamNameMode === "manual" ? "contained" : "outlined"}
+                      >
+                        {t(language, "teamsNameManual")}
+                      </Button>
+                      <Button
+                        onClick={() => { setTeamNameMode("auto"); localStorage.setItem("teamNameMode", "auto"); }}
+                        variant={teamNameMode === "auto" ? "contained" : "outlined"}
+                      >
+                        {t(language, "teamsNameAuto")}
+                      </Button>
+                    </ButtonGroup>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </SectionCard>
         )}
       </Stack>

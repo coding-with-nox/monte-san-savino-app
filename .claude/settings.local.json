@@ -9,7 +9,9 @@
       "Bash(\"C:\\\\Users\\\\tommaso.nocentini\\\\.bun\\\\bin\\\\bun.exe\" add -d pino-pretty --cwd \"c:\\\\Users\\\\tommaso.nocentini\\\\OneDrive - Skynet Technology\\\\Desktop\\\\Progetti\\\\nox\\\\projects\\\\monte-san-savino-app\\\\backend\")",
       "Bash(git config:*)",
       "Bash(del \"\\\\?\\\\c:\\\\Users\\\\tommaso.nocentini\\\\OneDrive - Skynet Technology\\\\Desktop\\\\Progetti\\\\nox\\\\projects\\\\monte-san-savino-app\\\\nul\")",
-      "Bash(git -C \"c:\\\\Users\\\\tommaso.nocentini\\\\OneDrive - Skynet Technology\\\\Desktop\\\\Progetti\\\\nox\\\\projects\\\\monte-san-savino-app\" status --short)"
+      "Bash(git -C \"c:\\\\Users\\\\tommaso.nocentini\\\\OneDrive - Skynet Technology\\\\Desktop\\\\Progetti\\\\nox\\\\projects\\\\monte-san-savino-app\" status --short)",
+      "Bash(Get-ChildItem *)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\tommaso.nocentini\\\\OneDrive - Skynet Technology\\\\Desktop\\\\Progetti\\\\nox\\\\projects\\\\monte-san-savino-app\" -Directory | ForEach-Object { \"$\\($_.Name\\) \\($\\(Get-ChildItem -Path $_.FullName -Recurse -File | Measure-Object\\).Count files\\)\" })"
     ]
   }
 }

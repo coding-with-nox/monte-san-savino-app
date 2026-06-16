@@ -7,7 +7,7 @@
 #   • eventi (aperto, chiuso/passato, futuro/draft)
 #   • campagne evento (aperta, chiusa)
 #   • categorie (aperta, chiusa)
-#   • team + ruoli team
+#   • team + team_mates + award_brackets
 #   • modelli (singolo, team, varie categorie)
 #   • iscrizioni (con/senza modello, checked-in, non checked-in)
 #   • assegnazioni giudici
@@ -40,12 +40,14 @@ TRUNCATE TABLE
   sponsors,
   modification_requests,
   votes,
+  judge_completions,
   judge_assignments,
   registrations,
   models,
-  team_members,
+  team_mates,
   teams,
-  team_roles,
+  awards,
+  award_brackets,
   categories,
   event_campaigns,
   events,
@@ -224,93 +226,83 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
--- RUOLI TEAM (Task 08)
--- ===========================================================================
-INSERT INTO team_roles (id, name)
-VALUES
-  ('b1b1b1b1-0000-0000-0000-000000000001', 'Capogruppo'),
-  ('b1b1b1b1-0000-0000-0000-000000000002', 'Vice'),
-  ('b1b1b1b1-0000-0000-0000-000000000003', 'Membro')
-ON CONFLICT (id) DO NOTHING;
-
--- ===========================================================================
 -- TEAM
 -- ===========================================================================
-INSERT INTO teams (id, name, owner_id)
+INSERT INTO teams (id, user_id, name, display_number, category_id)
 VALUES
-  ('d1d1d1d1-0000-0000-0000-000000000001', 'Aquile Blu',    'aaaaaaaa-0000-0000-0000-000000000006'),
-  ('d1d1d1d1-0000-0000-0000-000000000002', 'Dragoni Verdi', 'aaaaaaaa-0000-0000-0000-000000000007')
+  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Aquile Blu',    'T001', 'cccccccc-1111-0000-0000-000000000001'),
+  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000007', 'Dragoni Verdi', 'T002', 'cccccccc-1111-0000-0000-000000000001')
 ON CONFLICT (id) DO NOTHING;
 
--- Membri team Aquile Blu: user1 (capogruppo) + user2 (vice)
-INSERT INTO team_members (team_id, user_id, role)
+-- team_mates Aquile Blu
+INSERT INTO team_mates (id, team_id, name, surname, role, email)
 VALUES
-  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Capogruppo'),
-  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000007', 'Vice')
-ON CONFLICT (team_id, user_id) DO NOTHING;
+  ('e2e2e2e2-0000-0000-0000-000000000001', 'd1d1d1d1-0000-0000-0000-000000000001', 'Mario',  'Rossi',   'Capogruppo', 'user1@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000002', 'd1d1d1d1-0000-0000-0000-000000000001', 'Luigi',  'Bianchi', 'Vice',       'user2@test.com')
+ON CONFLICT (id) DO NOTHING;
 
--- Membri team Dragoni Verdi: user2 (capogruppo) + user3 (membro)
-INSERT INTO team_members (team_id, user_id, role)
+-- team_mates Dragoni Verdi
+INSERT INTO team_mates (id, team_id, name, surname, role, email)
 VALUES
-  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000007', 'Capogruppo'),
-  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000008', 'Membro')
-ON CONFLICT (team_id, user_id) DO NOTHING;
+  ('e2e2e2e2-0000-0000-0000-000000000003', 'd1d1d1d1-0000-0000-0000-000000000002', 'Luigi',  'Bianchi', 'Capogruppo', 'user2@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000004', 'd1d1d1d1-0000-0000-0000-000000000002', 'Anna',   'Verdi',   'Membro',     'user3@test.com')
+ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
 -- MODELLI
 -- code è auto-incrementale: impostiamo valori distinti
 -- ===========================================================================
-INSERT INTO models (id, user_id, team_id, category_id, name, description, code, image_url)
+INSERT INTO models (id, user_id, team_id, category_id, name, description, code, display_number, image_url)
 VALUES
   -- user1 — solo — Aerei 1:72 (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000001',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
    'cccccccc-1111-0000-0000-000000000001',
-   'Spitfire Mk.IX', 'Replica 1:72 con decal originali', 1, NULL),
+   'Spitfire Mk.IX', 'Replica 1:72 con decal originali', 1, 1, NULL),
 
   -- user1 — solo — Navi (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000002',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
    'cccccccc-1111-0000-0000-000000000002',
-   'HMS Victory 1:350', 'Modello del veliero famoso', 2, NULL),
+   'HMS Victory 1:350', 'Modello del veliero famoso', 2, 1, NULL),
 
   -- user2 — team Aquile Blu — Aerei 1:72 (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000003',
    'aaaaaaaa-0000-0000-0000-000000000007',
    'd1d1d1d1-0000-0000-0000-000000000001',
    'cccccccc-1111-0000-0000-000000000001',
-   'B-17 Flying Fortress', 'Bombariere USA WWII in team', 3, NULL),
+   'B-17 Flying Fortress', 'Bombariere USA WWII in team', 3, 2, NULL),
 
   -- user2 — solo — Armature (categoria CHIUSA, evento 2026)
   ('a2a2a2a2-0000-0000-0000-000000000004',
    'aaaaaaaa-0000-0000-0000-000000000007', NULL,
    'cccccccc-1111-0000-0000-000000000003',
-   'Cavaliere Medievale', 'Armatura 1:6 dipinta a mano', 4, NULL),
+   'Cavaliere Medievale', 'Armatura 1:6 dipinta a mano', 4, 2, NULL),
 
   -- user3 — solo — Fantasy (evento 2025 chiuso)
   ('a2a2a2a2-0000-0000-0000-000000000005',
    'aaaaaaaa-0000-0000-0000-000000000008', NULL,
    'cccccccc-2222-0000-0000-000000000001',
-   'Drago Antico', 'Figura fantasy con base diorama', 5, NULL),
+   'Drago Antico', 'Figura fantasy con base diorama', 5, 3, NULL),
 
   -- user3 — solo — Sci-Fi (evento 2025 chiuso)
   ('a2a2a2a2-0000-0000-0000-000000000006',
    'aaaaaaaa-0000-0000-0000-000000000008', NULL,
    'cccccccc-2222-0000-0000-000000000002',
-   'Space Marine', 'Warhammer 40k custom paintjob', 6, NULL),
+   'Space Marine', 'Warhammer 40k custom paintjob', 6, 3, NULL),
 
   -- user1 — solo — Figurini (evento 2027 futuro)
   ('a2a2a2a2-0000-0000-0000-000000000007',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
    'cccccccc-3333-0000-0000-000000000001',
-   'Guerriero Romano', 'Centurione 1:12', 7, NULL),
+   'Guerriero Romano', 'Centurione 1:12', 7, 1, NULL),
 
   -- user2 — team Dragoni Verdi — Veicoli (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000008',
    'aaaaaaaa-0000-0000-0000-000000000007',
    'd1d1d1d1-0000-0000-0000-000000000002',
    'cccccccc-1111-0000-0000-000000000004',
-   'Tiger I Ausf. E', 'Carro armato tedesco WWII', 8, NULL)
+   'Tiger I Ausf. E', 'Carro armato tedesco WWII', 8, 2, NULL)
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
@@ -416,7 +408,12 @@ VALUES
   -- judge1 → MSS 2025 (tutte le categorie, evento passato)
   ('a1a1a1a1-0000-0000-0000-000000000003',
    'eeeeeeee-0000-0000-0000-000000000002',
-   'aaaaaaaa-0000-0000-0000-000000000003', NULL)
+   'aaaaaaaa-0000-0000-0000-000000000003', NULL),
+
+  -- judge2 → MSS 2025 (tutte le categorie, evento passato)
+  ('a1a1a1a1-0000-0000-0000-000000000004',
+   'eeeeeeee-0000-0000-0000-000000000002',
+   'aaaaaaaa-0000-0000-0000-000000000004', NULL)
 ON CONFLICT (event_id, judge_id) DO NOTHING;
 
 -- ===========================================================================
@@ -478,6 +475,14 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000004',
    'a2a2a2a2-0000-0000-0000-000000000002',
    2, NOW() - INTERVAL '30 minutes'),
+
+  -- *** CASISTICA: modello con voti esistenti → spostato di categoria ***
+  -- user3 — Guerriero Romano (Figurini, MSS 2027) — judge1 ha già votato rank=2
+  -- Questo modello può essere spostato in altra categoria per testare il clear dei voti
+  ('e1e1e1e1-0000-0000-0000-000000000012',
+   'aaaaaaaa-0000-0000-0000-000000000003',
+   'a2a2a2a2-0000-0000-0000-000000000007',
+   2, NOW() - INTERVAL '10 minutes'),
 
   -- judge1 su Drago Antico (MSS 2025): rank=3
   ('e1e1e1e1-0000-0000-0000-000000000010',
@@ -603,89 +608,101 @@ ON CONFLICT (key) DO UPDATE
 -- ===========================================================================
 -- TEAM ADMIN
 -- ===========================================================================
-INSERT INTO teams (id, name, owner_id)
+INSERT INTO teams (id, user_id, name, display_number, category_id)
 VALUES
-  ('d2d2d2d2-0000-0000-0000-000000000001', 'Falchi Rossi',    'aaaaaaaa-0000-0000-0000-000000000001'),
-  ('d2d2d2d2-0000-0000-0000-000000000002', 'Leoni d''Argento', 'aaaaaaaa-0000-0000-0000-000000000001')
+  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'Falchi Rossi',    'T003', 'cccccccc-1111-0000-0000-000000000001'),
+  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'Leoni d''Argento', 'T004', 'cccccccc-1111-0000-0000-000000000002')
 ON CONFLICT (id) DO NOTHING;
 
--- Falchi Rossi: admin (Capogruppo), user1 (Vice), user2 (Membro)
-INSERT INTO team_members (team_id, user_id, role)
+-- team_mates Falchi Rossi: admin (Capogruppo), user1 (Vice), user2 (Membro)
+INSERT INTO team_mates (id, team_id, name, surname, role, email)
 VALUES
-  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'Capogruppo'),
-  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Vice'),
-  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000007', 'Membro')
-ON CONFLICT (team_id, user_id) DO NOTHING;
+  ('e2e2e2e2-0000-0000-0000-000000000005', 'd2d2d2d2-0000-0000-0000-000000000001', 'Admin',  'Sistema', 'Capogruppo', 'admin@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000006', 'd2d2d2d2-0000-0000-0000-000000000001', 'Mario',  'Rossi',   'Vice',       'user1@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000007', 'd2d2d2d2-0000-0000-0000-000000000001', 'Luigi',  'Bianchi', 'Membro',     'user2@test.com')
+ON CONFLICT (id) DO NOTHING;
 
--- Leoni d'Argento: admin (Capogruppo), user3 (Vice)
-INSERT INTO team_members (team_id, user_id, role)
+-- team_mates Leoni d'Argento: admin (Capogruppo), user3 (Vice)
+INSERT INTO team_mates (id, team_id, name, surname, role, email)
 VALUES
-  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'Capogruppo'),
-  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000008', 'Vice')
-ON CONFLICT (team_id, user_id) DO NOTHING;
+  ('e2e2e2e2-0000-0000-0000-000000000008', 'd2d2d2d2-0000-0000-0000-000000000002', 'Admin',  'Sistema', 'Capogruppo', 'admin@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000009', 'd2d2d2d2-0000-0000-0000-000000000002', 'Anna',   'Verdi',   'Vice',       'user3@test.com')
+ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
 -- 15 MODELLI ADMIN
 -- code 9–23, distribuiti su eventi e categorie esistenti
 -- ===========================================================================
-INSERT INTO models (id, user_id, team_id, category_id, name, description, code, image_url)
+INSERT INTO models (id, user_id, team_id, category_id, name, description, code, display_number, image_url)
 VALUES
   -- Solo — MSS 2026
   ('a2a2a2a2-0001-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000001', 'Messerschmitt Bf 109', 'Caccia tedesco WWII 1:72', 9, NULL),
+   'cccccccc-1111-0000-0000-000000000001', 'Messerschmitt Bf 109', 'Caccia tedesco WWII 1:72', 9, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000002', 'USS Enterprise CV-6', 'Portaerei USA 1:700', 10, NULL),
+   'cccccccc-1111-0000-0000-000000000002', 'USS Enterprise CV-6', 'Portaerei USA 1:700', 10, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000003', 'Samurai Takeda', 'Armatura full-plate periodo Sengoku', 11, NULL),
+   'cccccccc-1111-0000-0000-000000000003', 'Samurai Takeda', 'Armatura full-plate periodo Sengoku', 11, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000004', 'M4 Sherman', 'Carro medio USA WWII 1:35', 12, NULL),
+   'cccccccc-1111-0000-0000-000000000004', 'M4 Sherman', 'Carro medio USA WWII 1:35', 12, 10, NULL),
 
   -- Team Falchi Rossi — MSS 2026
   ('a2a2a2a2-0001-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000001',
-   'cccccccc-1111-0000-0000-000000000001', 'P-51 Mustang', 'Caccia USA WWII in team', 13, NULL),
+   'cccccccc-1111-0000-0000-000000000001', 'P-51 Mustang', 'Caccia USA WWII in team', 13, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000006', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000001',
-   'cccccccc-1111-0000-0000-000000000004', 'Panzer IV Ausf. H', 'Carro tedesco WWII in team', 14, NULL),
+   'cccccccc-1111-0000-0000-000000000004', 'Panzer IV Ausf. H', 'Carro tedesco WWII in team', 14, 10, NULL),
 
   -- Solo — MSS 2025
   ('a2a2a2a2-0001-0000-0000-000000000007', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-2222-0000-0000-000000000001', 'Lich King', 'Figura fantasy non-morta', 15, NULL),
+   'cccccccc-2222-0000-0000-000000000001', 'Lich King', 'Figura fantasy non-morta', 15, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000008', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-2222-0000-0000-000000000002', 'Tau Commander', 'Warhammer 40k xenos', 16, NULL),
+   'cccccccc-2222-0000-0000-000000000002', 'Tau Commander', 'Warhammer 40k xenos', 16, 10, NULL),
 
   -- Solo — MSS 2027
   ('a2a2a2a2-0001-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-3333-0000-0000-000000000001', 'Legionario Romano', 'Fanteria pesante I sec.', 17, NULL),
+   'cccccccc-3333-0000-0000-000000000001', 'Legionario Romano', 'Fanteria pesante I sec.', 17, 10, NULL),
 
   -- Team Leoni d'Argento — MSS 2026
   ('a2a2a2a2-0001-0000-0000-000000000010', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000002',
-   'cccccccc-1111-0000-0000-000000000002', 'Yamato 1:350', 'Corazzata giapponese WWII', 18, NULL),
+   'cccccccc-1111-0000-0000-000000000002', 'Yamato 1:350', 'Corazzata giapponese WWII', 18, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000002',
-   'cccccccc-1111-0000-0000-000000000003', 'Cavaliere Templare', 'Armatura medievale in team', 19, NULL),
+   'cccccccc-1111-0000-0000-000000000003', 'Cavaliere Templare', 'Armatura medievale in team', 19, 10, NULL),
 
   -- Solo — MSS 2026 (ulteriori)
   ('a2a2a2a2-0001-0000-0000-000000000012', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000001', 'Zero A6M2', 'Caccia navale giapponese 1:72', 20, NULL),
+   'cccccccc-1111-0000-0000-000000000001', 'Zero A6M2', 'Caccia navale giapponese 1:72', 20, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000013', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000004', 'Leopard 2A6', 'MBT tedesco moderno 1:35', 21, NULL),
+   'cccccccc-1111-0000-0000-000000000004', 'Leopard 2A6', 'MBT tedesco moderno 1:35', 21, 10, NULL),
 
   -- Solo — MSS 2025 (ulteriori)
   ('a2a2a2a2-0001-0000-0000-000000000014', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-2222-0000-0000-000000000001', 'Goblin Shaman', 'Figura fantasy con effetti magici', 22, NULL),
+   'cccccccc-2222-0000-0000-000000000001', 'Goblin Shaman', 'Figura fantasy con effetti magici', 22, 10, NULL),
 
   -- Solo — MSS 2027 (ulteriore)
   ('a2a2a2a2-0001-0000-0000-000000000015', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-3333-0000-0000-000000000001', 'Gladiatore Reziario', 'Figura 1:12 con rete e tridente', 23, NULL)
+   'cccccccc-3333-0000-0000-000000000001', 'Gladiatore Reziario', 'Figura 1:12 con rete e tridente', 23, 10, NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- ===========================================================================
+-- AWARD BRACKETS — MSS 2026
+-- ===========================================================================
+INSERT INTO award_brackets (id, event_id, medal_label, medal_rank, low_limit, high_limit)
+VALUES
+  ('bbbbbbbb-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000001', 'None',             0,  0,  0),
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'eeeeeeee-0000-0000-0000-000000000001', 'Highly Commended', 1,  1,  4),
+  ('bbbbbbbb-0000-0000-0000-000000000003', 'eeeeeeee-0000-0000-0000-000000000001', 'Bronze',           2,  5,  7),
+  ('bbbbbbbb-0000-0000-0000-000000000004', 'eeeeeeee-0000-0000-0000-000000000001', 'Silver',           3,  8, 10),
+  ('bbbbbbbb-0000-0000-0000-000000000005', 'eeeeeeee-0000-0000-0000-000000000001', 'Gold',             4, 11, 12)
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================

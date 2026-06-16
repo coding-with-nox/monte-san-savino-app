@@ -4,7 +4,6 @@ import {
   Avatar,
   Box,
   Button,
-  ButtonGroup,
   Chip,
   CircularProgress,
   Collapse,
@@ -38,7 +37,6 @@ import PrintIcon from "@mui/icons-material/Print";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import ImageIcon from "@mui/icons-material/Image";
-import HideImageIcon from "@mui/icons-material/HideImage";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
@@ -58,9 +56,7 @@ type Model = {
   displayNumber?: number | null;
 };
 type Level = { id: string; name: string; sortOrder?: number | null };
-type MemberRole = { id: string; name: string };
-type TeamMember = { name: string; surname: string; role: string; email?: string };
-type ModelDetail = { model: Model; images: { id: string; url: string }[]; teamMembers: TeamMember[] };
+type ModelDetail = { model: Model & { teamId?: string | null }; images: { id: string; url: string }[] };
 type Category = { id: string; eventId: string; name: string; status: string };
 
 interface ModelsProps {
@@ -81,16 +77,10 @@ export default function Models({ language }: ModelsProps) {
   const [editName, setEditName] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [levels, setLevels] = useState<Level[]>([]);
-  const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
+  const [teams, setTeams] = useState<{ id: string; name: string; displayNumber: string }[]>([]);
   const [editLevelId, setEditLevelId] = useState("");
   const [editIsTeam, setEditIsTeam] = useState(false);
-  const [editTeamMembers, setEditTeamMembers] = useState<TeamMember[]>([]);
-  const [teamNameMode, setTeamNameMode] = useState<"auto" | "manual">("manual");
-  const [newMemberName, setNewMemberName] = useState("");
-  const [newMemberSurname, setNewMemberSurname] = useState("");
-  const [newMemberRole, setNewMemberRole] = useState("");
-  const [newMemberEmail, setNewMemberEmail] = useState("");
-  const [emailError, setEmailError] = useState(false);
+  const [editTeamId, setEditTeamId] = useState("");
   const [attachName, setAttachName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -122,8 +112,12 @@ export default function Models({ language }: ModelsProps) {
   async function loadLevels() {
     try { setLevels(await api<Level[]>("/public/levels")); } catch { setLevels([]); }
   }
-  async function loadMemberRoles() {
-    try { setMemberRoles(await api<MemberRole[]>("/public/member-roles")); } catch { setMemberRoles([]); }
+
+  async function loadTeams() {
+    try {
+      const data = await api<{ id: string; name: string; displayNumber: string }[]>("/teams");
+      setTeams(data);
+    } catch {}
   }
 
   async function openModel(modelId: string) {
@@ -138,9 +132,7 @@ export default function Models({ language }: ModelsProps) {
     setEditCategoryId(d.model.categoryId);
     setEditLevelId(d.model.levelId || "");
     setEditIsTeam(d.model.isTeam || false);
-    setEditTeamMembers(d.teamMembers || []);
-    setTeamNameMode("manual");
-    setEmailError(false);
+    setEditTeamId(d.model.teamId ?? "");
     setExpandedId(modelId);
     setIsCreating(false);
     setAttachName("");
@@ -159,13 +151,7 @@ export default function Models({ language }: ModelsProps) {
     setEditCategoryId("");
     setEditLevelId("");
     setEditIsTeam(false);
-    setEditTeamMembers([]);
-    setTeamNameMode("manual");
-    setNewMemberName("");
-    setNewMemberSurname("");
-    setNewMemberRole("");
-    setNewMemberEmail("");
-    setEmailError(false);
+    setEditTeamId("");
     setIsCreating(true);
     setAttachName("");
   }
@@ -180,7 +166,7 @@ export default function Models({ language }: ModelsProps) {
           categoryId: editCategoryId,
           levelId: editLevelId,
           isTeam: editIsTeam,
-          teamMembers: editIsTeam ? editTeamMembers : []
+          teamId: editIsTeam ? editTeamId : null
         })
       });
       setIsCreating(false);
@@ -194,6 +180,10 @@ export default function Models({ language }: ModelsProps) {
 
   async function saveModelChanges() {
     if (!detail?.model) return;
+    if (editCategoryId !== detail.model.categoryId) {
+      const ok = window.confirm(t(language, "modelsCategoryChangeWarning"));
+      if (!ok) return;
+    }
     setSavingModel(true);
     try {
       await api(`/models/${detail.model.id}`, {
@@ -203,7 +193,7 @@ export default function Models({ language }: ModelsProps) {
           categoryId: editCategoryId,
           levelId: editLevelId,
           isTeam: editIsTeam,
-          teamMembers: editTeamMembers
+          teamId: editIsTeam ? editTeamId : null
         })
       });
       closePanel();
@@ -216,6 +206,7 @@ export default function Models({ language }: ModelsProps) {
   }
 
   async function deleteModel(modelId: string) {
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/models/${modelId}`, { method: "DELETE" });
     if (expandedId === modelId) closePanel();
     await load();
@@ -288,6 +279,7 @@ export default function Models({ language }: ModelsProps) {
 
   async function deleteImage(imageId: string) {
     if (!detail?.model) return;
+    if (!window.confirm(t(language, "confirmDelete"))) return;
     await api(`/models/${detail.model.id}/images/${imageId}`, { method: "DELETE" });
     const d = await api<ModelDetail>(`/models/${detail.model.id}`);
     setDetail(d);
@@ -304,35 +296,7 @@ export default function Models({ language }: ModelsProps) {
     }
   }
 
-  function addTeamMember() {
-    if (!newMemberName.trim() || !newMemberSurname.trim() || !newMemberRole) return;
-    if (newMemberEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newMemberEmail.trim())) {
-      setEmailError(true);
-      return;
-    }
-    setEmailError(false);
-    setEditTeamMembers(prev => [...prev, {
-      name: newMemberName.trim(),
-      surname: newMemberSurname.trim(),
-      role: newMemberRole,
-      ...(newMemberEmail.trim() ? { email: newMemberEmail.trim() } : {})
-    }]);
-    setNewMemberName("");
-    setNewMemberSurname("");
-    setNewMemberRole("");
-    setNewMemberEmail("");
-  }
-  function removeTeamMember(idx: number) {
-    setEditTeamMembers(prev => prev.filter((_, i) => i !== idx));
-  }
-
-  useEffect(() => {
-    if (teamNameMode === "auto") {
-      setEditName(editTeamMembers.map(m => m.surname).filter(Boolean).join(" / "));
-    }
-  }, [teamNameMode, editTeamMembers]);
-
-  useEffect(() => { load(); loadCategories(); loadSettings(); loadLevels(); loadMemberRoles(); }, []);
+  useEffect(() => { load(); loadCategories(); loadSettings(); loadLevels(); loadTeams(); }, []);
 
   const openCategories = categories.filter((c) => c.status === "open");
   const getCategoryName = (catId: string) => {
@@ -341,43 +305,29 @@ export default function Models({ language }: ModelsProps) {
   };
 
   const showMediaPanel = !isCreating && Boolean(detail);
-  const tableColumnCount = 5;
+  const tableColumnCount = imagesEnabled ? 5 : 4;
   const atMaxModels = maxModelsPerUser !== null && models.length >= maxModelsPerUser;
 
   const editPanel = (
     <Box sx={{ p: 2 }}>
       <Grid container spacing={2} alignItems="flex-start">
-        <Grid item xs={12} md={showMediaPanel ? 7 : 12}>
+        <Grid item xs={12} md={showMediaPanel && imagesEnabled ? 7 : 12}>
           <Stack spacing={1.5}>
             <Typography variant="subtitle2">
               {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
             </Typography>
-            {editIsTeam && (
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography variant="body2">{t(language, "modelsTeamNameLabel")}:</Typography>
-                <ButtonGroup size="small" variant="outlined">
-                  <Button
-                    onClick={() => setTeamNameMode("manual")}
-                    variant={teamNameMode === "manual" ? "contained" : "outlined"}
-                  >
-                    {t(language, "modelsTeamNameManual")}
-                  </Button>
-                  <Button
-                    onClick={() => setTeamNameMode("auto")}
-                    variant={teamNameMode === "auto" ? "contained" : "outlined"}
-                  >
-                    {t(language, "modelsTeamNameAuto")}
-                  </Button>
-                </ButtonGroup>
-              </Stack>
-            )}
-            <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" disabled={editIsTeam && teamNameMode === "auto"} />
+            <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" />
             <FormControl fullWidth size="small">
               <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
               <Select value={editCategoryId} label={t(language, "modelsCategoryPlaceholder")} onChange={(e) => setEditCategoryId(e.target.value)}>
                 {openCategories.map((cat) => <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>)}
               </Select>
             </FormControl>
+            {!isCreating && detail?.model && editCategoryId && editCategoryId !== detail.model.categoryId && (
+              <Alert severity="warning" sx={{ py: 0.5 }}>
+                {t(language, "modelsCategoryChangeWarning")}
+              </Alert>
+            )}
             <FormControl fullWidth size="small">
               <InputLabel>{t(language, "modelsLevelPlaceholder")}</InputLabel>
               <Select value={editLevelId} label={t(language, "modelsLevelPlaceholder")} onChange={(e) => setEditLevelId(e.target.value)}>
@@ -385,46 +335,33 @@ export default function Models({ language }: ModelsProps) {
               </Select>
             </FormControl>
             <Stack direction="row" alignItems="center" spacing={1}>
-              <input type="checkbox" id="isTeam" checked={editIsTeam} onChange={(e) => { setEditIsTeam(e.target.checked); if (!e.target.checked) setTeamNameMode("manual"); }} />
+              <input type="checkbox" id="isTeam" checked={editIsTeam} onChange={(e) => setEditIsTeam(e.target.checked)} />
               <Typography variant="body2" component="label" htmlFor="isTeam">
                 {t(language, "modelsIsTeamLabel")}
               </Typography>
             </Stack>
             {editIsTeam && (
-              <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1.5 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>{t(language, "modelsTeamMembersSection")}</Typography>
-                {editTeamMembers.map((m, idx) => (
-                  <Stack key={idx} direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                    <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                      {m.name} {m.surname} — {m.role}{m.email ? ` (${m.email})` : ""}
-                    </Typography>
-                    <IconButton size="small" color="error" onClick={() => removeTeamMember(idx)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Stack>
-                ))}
-                <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
-                  <TextField size="small" label={t(language, "modelsMemberName")} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
-                  <TextField size="small" label={t(language, "modelsMemberSurname")} value={newMemberSurname} onChange={(e) => setNewMemberSurname(e.target.value)} sx={{ flex: 1, minWidth: 100 }} />
-                  <TextField size="small" label="Email" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} sx={{ flex: 1, minWidth: 140 }} type="email" error={emailError} helperText={emailError ? t(language, "emailValidationInvalid") : ""} />
-                  <FormControl size="small" sx={{ minWidth: 120 }}>
-                    <InputLabel>{t(language, "modelsMemberRole")}</InputLabel>
-                    <Select value={newMemberRole} label={t(language, "modelsMemberRole")} onChange={(e) => setNewMemberRole(e.target.value)}>
-                      {memberRoles.map((r) => <MenuItem key={r.id} value={r.name}>{r.name}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                  <Button variant="outlined" size="small" onClick={addTeamMember} disabled={!newMemberName.trim() || !newMemberSurname.trim() || !newMemberRole}>
-                    {t(language, "modelsAddMemberButton")}
-                  </Button>
-                </Stack>
-              </Box>
+              <FormControl fullWidth size="small">
+                <InputLabel>{t(language, "teamsSelectTeamLabel")}</InputLabel>
+                <Select
+                  value={editTeamId}
+                  label={t(language, "teamsSelectTeamLabel")}
+                  onChange={(e) => setEditTeamId(e.target.value)}
+                >
+                  {teams.map((team) => (
+                    <MenuItem key={team.id} value={team.id}>
+                      {team.name} — {team.displayNumber}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             )}
-            <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || !editLevelId} fullWidth>
+            <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || (isCreating && !editLevelId)} fullWidth>
               {savingModel ? t(language, "modelsUploading") : isCreating ? t(language, "modelsCreateButton") : t(language, "modelsSaveButton")}
             </Button>
           </Stack>
         </Grid>
-        {showMediaPanel && (
+        {showMediaPanel && imagesEnabled && (
           <Grid item xs={12} md={5}>
             <Paper
               variant="outlined"
@@ -514,11 +451,6 @@ export default function Models({ language }: ModelsProps) {
             <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate} disabled={atMaxModels}>{t(language, "modelsCreateButton")}</Button>
           </Stack>
         </Stack>
-        {!imagesEnabled && (
-          <Alert severity="info" variant="outlined">
-            {t(language, "modelsImagesDisabledHint")}
-          </Alert>
-        )}
         <Collapse in={isCreating}>
           <Paper variant="outlined" sx={{ mb: 1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
@@ -537,7 +469,7 @@ export default function Models({ language }: ModelsProps) {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700, width: 72 }}>{t(language, "modelsPreviewColumn")}</TableCell>
+                    {imagesEnabled && <TableCell sx={{ fontWeight: 700, width: 72 }}>{t(language, "modelsPreviewColumn")}</TableCell>}
                     <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsNamePlaceholder")}</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCodeColumn")}</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>{t(language, "modelsCategoryPlaceholder")}</TableCell>
@@ -556,26 +488,17 @@ export default function Models({ language }: ModelsProps) {
                         onClick={() => openModel(model.id)}
                         selected={expandedId === model.id}
                       >
-                        <TableCell sx={{ width: 72, p: 1 }}>
-                          {model.imageUrl ? (
-                            <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
-                          ) : (
-                            <Avatar
-                              variant="rounded"
-                              sx={{
-                                width: 40,
-                                height: 40,
-                                bgcolor: imagesEnabled ? "action.hover" : "action.disabledBackground"
-                              }}
-                            >
-                              {imagesEnabled ? (
+                        {imagesEnabled && (
+                          <TableCell sx={{ width: 72, p: 1 }}>
+                            {model.imageUrl ? (
+                              <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
+                            ) : (
+                              <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: "action.hover" }}>
                                 <ImageIcon fontSize="small" color="disabled" />
-                              ) : (
-                                <HideImageIcon fontSize="small" color="disabled" />
-                              )}
-                            </Avatar>
-                          )}
-                        </TableCell>
+                              </Avatar>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell><Typography fontWeight={600}>{model.name}</Typography></TableCell>
                         <TableCell>
                           <Chip
