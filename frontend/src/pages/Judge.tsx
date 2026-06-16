@@ -483,7 +483,6 @@ export default function Judge({ language }: JudgeProps) {
               {[0, 1, 2, 3, 4].map((score) => {
                 const isSelected = selectedScore === score;
                 const color = RANK_COLOR[score];
-                const name = t(language, RANK_KEY[score] as any);
                 return (
                   <Button
                     key={score}
@@ -491,20 +490,27 @@ export default function Judge({ language }: JudgeProps) {
                     size="small"
                     onClick={() => setSelectedScore(score)}
                     sx={{
-                      minWidth: isSelected ? "auto" : 44,
+                      minWidth: 44,
+                      width: 44,
                       fontWeight: 700,
-                      transition: "all 0.15s ease",
-                      whiteSpace: "nowrap",
                       ...(isSelected
                         ? { bgcolor: color, "&:hover": { bgcolor: color }, color: "#fff" }
                         : { borderColor: color, color: color }),
                     }}
                   >
-                    {isSelected ? `${score} ${name}` : score}
+                    {score}
                   </Button>
                 );
               })}
             </Stack>
+            {selectedScore !== null && (
+              <Typography
+                variant="caption"
+                sx={{ fontWeight: 700, color: RANK_COLOR[selectedScore], mt: 0.5 }}
+              >
+                {t(language, RANK_KEY[selectedScore] as any)}
+              </Typography>
+            )}
           </Stack>
 
           <Divider />
