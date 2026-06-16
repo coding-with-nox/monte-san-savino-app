@@ -70,6 +70,10 @@ export default function Admin({ language }: AdminProps) {
   const [eventCampaigns, setEventCampaigns] = useState<EventCampaign[]>([]);
   const [campaignForm, setCampaignForm] = useState({ eventId: "", name: "", enrollmentOpenDate: "", enrollmentCloseDate: "" });
 
+  const [awardBrackets, setAwardBrackets] = useState<{ id: string; eventId: string; medalLabel: string; medalRank: number; lowLimit: number; highLimit: number }[]>([]);
+  const [bracketEventId, setBracketEventId] = useState("");
+  const [bracketForm, setBracketForm] = useState({ medalLabel: "", medalRank: 0, lowLimit: 0, highLimit: 0 });
+
   // Task 14: levels
   const [levels, setLevels] = useState<{ id: string; name: string; sortOrder?: number | null }[]>([]);
   const [newLevelName, setNewLevelName] = useState("");
@@ -250,6 +254,22 @@ export default function Admin({ language }: AdminProps) {
   async function deleteCampaign(id: string) {
     await api(`/admin/event-campaigns/${id}`, { method: "DELETE" });
     await load();
+  }
+
+  async function loadAwardBrackets(eventId: string) {
+    if (!eventId) { setAwardBrackets([]); return; }
+    try { setAwardBrackets(await api<any[]>(`/admin/award-brackets?eventId=${encodeURIComponent(eventId)}`)); }
+    catch { setAwardBrackets([]); }
+  }
+  async function createAwardBracket() {
+    if (!bracketEventId || !bracketForm.medalLabel.trim()) return;
+    await api("/admin/award-brackets", { method: "POST", body: JSON.stringify({ eventId: bracketEventId, ...bracketForm }) });
+    setBracketForm({ medalLabel: "", medalRank: 0, lowLimit: 0, highLimit: 0 });
+    await loadAwardBrackets(bracketEventId);
+  }
+  async function deleteAwardBracket(id: string) {
+    await api(`/admin/award-brackets/${id}`, { method: "DELETE" });
+    await loadAwardBrackets(bracketEventId);
   }
 
   // Task 14: levels CRUD
@@ -503,6 +523,66 @@ export default function Admin({ language }: AdminProps) {
                   <ListItem><ListItemText secondary={t(language, "adminNoData")} /></ListItem>
                 )}
               </List>
+            </SectionCard>
+
+            <SectionCard title={t(language, "judgeAwardBracketsTitle")}>
+              <Stack spacing={1} sx={{ mb: 2 }}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                  <Select
+                    value={bracketEventId}
+                    label={t(language, "adminJudgeEventPlaceholder")}
+                    onChange={(e) => { setBracketEventId(e.target.value); loadAwardBrackets(e.target.value); }}
+                  >
+                    {events.map(ev => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <TextField size="small" label={t(language, "judgeAwardBracketMedal")} value={bracketForm.medalLabel}
+                    onChange={e => setBracketForm({ ...bracketForm, medalLabel: e.target.value })} sx={{ minWidth: 160 }} />
+                  <TextField size="small" label={t(language, "judgeAwardBracketRank")} type="number" value={bracketForm.medalRank}
+                    onChange={e => setBracketForm({ ...bracketForm, medalRank: Number(e.target.value) })} sx={{ width: 80 }} />
+                  <TextField size="small" label={t(language, "judgeAwardBracketLow")} type="number" value={bracketForm.lowLimit}
+                    onChange={e => setBracketForm({ ...bracketForm, lowLimit: Number(e.target.value) })} sx={{ width: 90 }} />
+                  <TextField size="small" label={t(language, "judgeAwardBracketHigh")} type="number" value={bracketForm.highLimit}
+                    onChange={e => setBracketForm({ ...bracketForm, highLimit: Number(e.target.value) })} sx={{ width: 90 }} />
+                  <Button variant="contained" size="small" onClick={createAwardBracket}
+                    disabled={!bracketEventId || !bracketForm.medalLabel.trim()}>
+                    {t(language, "judgeAwardBracketAdd")}
+                  </Button>
+                </Stack>
+              </Stack>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "judgeAwardBracketMedal")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "judgeAwardBracketRank")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "judgeAwardBracketLow")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "judgeAwardBracketHigh")}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {awardBrackets.sort((a, b) => a.medalRank - b.medalRank).map(br => (
+                      <TableRow key={br.id}>
+                        <TableCell>{br.medalLabel}</TableCell>
+                        <TableCell>{br.medalRank}</TableCell>
+                        <TableCell>{br.lowLimit}</TableCell>
+                        <TableCell>{br.highLimit}</TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" color="error" onClick={() => deleteAwardBracket(br.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {awardBrackets.length === 0 && bracketEventId && (
+                      <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">{t(language, "adminNoData")}</Typography></TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </SectionCard>
           </Stack>
         )}
