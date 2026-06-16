@@ -7,7 +7,7 @@
 #   • eventi (aperto, chiuso/passato, futuro/draft)
 #   • campagne evento (aperta, chiusa)
 #   • categorie (aperta, chiusa)
-#   • team + ruoli team
+#   • team + team_mates + award_brackets
 #   • modelli (singolo, team, varie categorie)
 #   • iscrizioni (con/senza modello, checked-in, non checked-in)
 #   • assegnazioni giudici
@@ -40,12 +40,14 @@ TRUNCATE TABLE
   sponsors,
   modification_requests,
   votes,
+  judge_completions,
   judge_assignments,
   registrations,
   models,
-  team_members,
+  team_mates,
   teams,
-  team_roles,
+  awards,
+  award_brackets,
   categories,
   event_campaigns,
   events,
@@ -224,37 +226,27 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
--- RUOLI TEAM (Task 08)
--- ===========================================================================
-INSERT INTO team_roles (id, name)
-VALUES
-  ('b1b1b1b1-0000-0000-0000-000000000001', 'Capogruppo'),
-  ('b1b1b1b1-0000-0000-0000-000000000002', 'Vice'),
-  ('b1b1b1b1-0000-0000-0000-000000000003', 'Membro')
-ON CONFLICT (id) DO NOTHING;
-
--- ===========================================================================
 -- TEAM
 -- ===========================================================================
-INSERT INTO teams (id, name, owner_id)
+INSERT INTO teams (id, user_id, name, display_number, category_id)
 VALUES
-  ('d1d1d1d1-0000-0000-0000-000000000001', 'Aquile Blu',    'aaaaaaaa-0000-0000-0000-000000000006'),
-  ('d1d1d1d1-0000-0000-0000-000000000002', 'Dragoni Verdi', 'aaaaaaaa-0000-0000-0000-000000000007')
+  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Aquile Blu',    'T001', 'cccccccc-1111-0000-0000-000000000001'),
+  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000007', 'Dragoni Verdi', 'T002', 'cccccccc-1111-0000-0000-000000000001')
 ON CONFLICT (id) DO NOTHING;
 
--- Membri team Aquile Blu: user1 (capogruppo) + user2 (vice)
-INSERT INTO team_members (team_id, user_id, role)
+-- team_mates Aquile Blu
+INSERT INTO team_mates (id, team_id, name, surname, role, email)
 VALUES
-  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Capogruppo'),
-  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000007', 'Vice')
-ON CONFLICT (team_id, user_id) DO NOTHING;
+  ('e2e2e2e2-0000-0000-0000-000000000001', 'd1d1d1d1-0000-0000-0000-000000000001', 'Mario',  'Rossi',   'Capogruppo', 'user1@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000002', 'd1d1d1d1-0000-0000-0000-000000000001', 'Luigi',  'Bianchi', 'Vice',       'user2@test.com')
+ON CONFLICT (id) DO NOTHING;
 
--- Membri team Dragoni Verdi: user2 (capogruppo) + user3 (membro)
-INSERT INTO team_members (team_id, user_id, role)
+-- team_mates Dragoni Verdi
+INSERT INTO team_mates (id, team_id, name, surname, role, email)
 VALUES
-  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000007', 'Capogruppo'),
-  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000008', 'Membro')
-ON CONFLICT (team_id, user_id) DO NOTHING;
+  ('e2e2e2e2-0000-0000-0000-000000000003', 'd1d1d1d1-0000-0000-0000-000000000002', 'Luigi',  'Bianchi', 'Capogruppo', 'user2@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000004', 'd1d1d1d1-0000-0000-0000-000000000002', 'Anna',   'Verdi',   'Membro',     'user3@test.com')
+ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
 -- MODELLI
@@ -416,7 +408,12 @@ VALUES
   -- judge1 → MSS 2025 (tutte le categorie, evento passato)
   ('a1a1a1a1-0000-0000-0000-000000000003',
    'eeeeeeee-0000-0000-0000-000000000002',
-   'aaaaaaaa-0000-0000-0000-000000000003', NULL)
+   'aaaaaaaa-0000-0000-0000-000000000003', NULL),
+
+  -- judge2 → MSS 2025 (tutte le categorie, evento passato)
+  ('a1a1a1a1-0000-0000-0000-000000000004',
+   'eeeeeeee-0000-0000-0000-000000000002',
+   'aaaaaaaa-0000-0000-0000-000000000004', NULL)
 ON CONFLICT (event_id, judge_id) DO NOTHING;
 
 -- ===========================================================================
@@ -603,26 +600,26 @@ ON CONFLICT (key) DO UPDATE
 -- ===========================================================================
 -- TEAM ADMIN
 -- ===========================================================================
-INSERT INTO teams (id, name, owner_id)
+INSERT INTO teams (id, user_id, name, display_number, category_id)
 VALUES
-  ('d2d2d2d2-0000-0000-0000-000000000001', 'Falchi Rossi',    'aaaaaaaa-0000-0000-0000-000000000001'),
-  ('d2d2d2d2-0000-0000-0000-000000000002', 'Leoni d''Argento', 'aaaaaaaa-0000-0000-0000-000000000001')
+  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'Falchi Rossi',    'T003', 'cccccccc-1111-0000-0000-000000000001'),
+  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'Leoni d''Argento', 'T004', 'cccccccc-1111-0000-0000-000000000002')
 ON CONFLICT (id) DO NOTHING;
 
--- Falchi Rossi: admin (Capogruppo), user1 (Vice), user2 (Membro)
-INSERT INTO team_members (team_id, user_id, role)
+-- team_mates Falchi Rossi: admin (Capogruppo), user1 (Vice), user2 (Membro)
+INSERT INTO team_mates (id, team_id, name, surname, role, email)
 VALUES
-  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'Capogruppo'),
-  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Vice'),
-  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000007', 'Membro')
-ON CONFLICT (team_id, user_id) DO NOTHING;
+  ('e2e2e2e2-0000-0000-0000-000000000005', 'd2d2d2d2-0000-0000-0000-000000000001', 'Admin',  'Sistema', 'Capogruppo', 'admin@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000006', 'd2d2d2d2-0000-0000-0000-000000000001', 'Mario',  'Rossi',   'Vice',       'user1@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000007', 'd2d2d2d2-0000-0000-0000-000000000001', 'Luigi',  'Bianchi', 'Membro',     'user2@test.com')
+ON CONFLICT (id) DO NOTHING;
 
--- Leoni d'Argento: admin (Capogruppo), user3 (Vice)
-INSERT INTO team_members (team_id, user_id, role)
+-- team_mates Leoni d'Argento: admin (Capogruppo), user3 (Vice)
+INSERT INTO team_mates (id, team_id, name, surname, role, email)
 VALUES
-  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'Capogruppo'),
-  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000008', 'Vice')
-ON CONFLICT (team_id, user_id) DO NOTHING;
+  ('e2e2e2e2-0000-0000-0000-000000000008', 'd2d2d2d2-0000-0000-0000-000000000002', 'Admin',  'Sistema', 'Capogruppo', 'admin@test.com'),
+  ('e2e2e2e2-0000-0000-0000-000000000009', 'd2d2d2d2-0000-0000-0000-000000000002', 'Anna',   'Verdi',   'Vice',       'user3@test.com')
+ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
 -- 15 MODELLI ADMIN
@@ -686,6 +683,18 @@ VALUES
   -- Solo — MSS 2027 (ulteriore)
   ('a2a2a2a2-0001-0000-0000-000000000015', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
    'cccccccc-3333-0000-0000-000000000001', 'Gladiatore Reziario', 'Figura 1:12 con rete e tridente', 23, NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- ===========================================================================
+-- AWARD BRACKETS — MSS 2026
+-- ===========================================================================
+INSERT INTO award_brackets (id, event_id, medal_label, medal_rank, low_limit, high_limit)
+VALUES
+  ('bbbbbbbb-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000001', 'None',             0,  0,  0),
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'eeeeeeee-0000-0000-0000-000000000001', 'Highly Commended', 1,  1,  4),
+  ('bbbbbbbb-0000-0000-0000-000000000003', 'eeeeeeee-0000-0000-0000-000000000001', 'Bronze',           2,  5,  7),
+  ('bbbbbbbb-0000-0000-0000-000000000004', 'eeeeeeee-0000-0000-0000-000000000001', 'Silver',           3,  8, 10),
+  ('bbbbbbbb-0000-0000-0000-000000000005', 'eeeeeeee-0000-0000-0000-000000000001', 'Gold',             4, 11, 12)
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
