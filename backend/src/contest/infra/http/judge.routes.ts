@@ -199,7 +199,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     const uc = new VoteModel(new VoteRepositoryDrizzle(tenantDb), new ModelReadRepositoryDrizzle(tenantDb));
     return await uc.execute({ id: crypto.randomUUID(), judgeId: user!.id, modelId: body.modelId, rank: body.rank });
   }, {
-    body: t.Object({ modelId: t.String(), rank: t.Union([t.Literal(0), t.Literal(1), t.Literal(2), t.Literal(3)]) }),
+    body: t.Object({ modelId: t.String(), rank: t.Union([t.Literal(0), t.Literal(1), t.Literal(2), t.Literal(3), t.Literal(4)]) }),
     detail: {
       summary: "Vota un modello",
       description: "Crea o aggiorna il voto del giudice per un modello specifico.",

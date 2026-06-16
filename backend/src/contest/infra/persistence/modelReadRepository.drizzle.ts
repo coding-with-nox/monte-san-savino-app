@@ -1,11 +1,17 @@
 import { eq } from "drizzle-orm";
-import { modelsTable } from "./schema";
+import { modelsTable, categoriesTable } from "./schema";
 
 export class ModelReadRepositoryDrizzle {
   constructor(private readonly db: any) {}
   async getModelCategory(modelId: string) {
-    const rows = await this.db.select({ modelId: modelsTable.id, categoryId: modelsTable.categoryId })
+    const rows = await this.db
+      .select({
+        modelId: modelsTable.id,
+        categoryId: modelsTable.categoryId,
+        categoryStatus: categoriesTable.status
+      })
       .from(modelsTable)
+      .leftJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
       .where(eq(modelsTable.id, modelId as any));
     return rows[0] ?? null;
   }
