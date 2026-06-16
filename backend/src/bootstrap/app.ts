@@ -30,6 +30,7 @@ import { eventCampaignsRoutes } from "../contest/infra/http/event-campaigns.rout
 import { reminderRoutes } from "../contest/infra/http/reminder.routes";
 import { adminMemberRolesRoutes, publicMemberRolesRoutes } from "../contest/infra/http/member-roles.routes";
 import { teamRoutes } from "../contest/infra/http/team.routes";
+import { awardBracketsRoutes } from "../contest/infra/http/award-brackets.routes";
 
 export function buildApp() {
   const rawCorsOrigin = process.env.CORS_ORIGIN ?? "";
@@ -133,5 +134,6 @@ export function buildApp() {
     .use(adminSettingsRoutes)
     .use(eventCampaignsRoutes)
     .use(reminderRoutes)
-    .use(teamRoutes);
+    .use(teamRoutes)
+    .use(awardBracketsRoutes);
 }
