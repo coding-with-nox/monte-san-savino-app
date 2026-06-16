@@ -15,7 +15,8 @@ const DEFAULTS: Record<string, string> = {
   excelSheetName: "Export",
   excelFilePrefix: "contest-export",
   maxVotesPerExhibitor: "3",
-  maxVoteDifferent: "2"
+  maxVoteDifferent: "2",
+  app_name: "Miniatures Contest"
 };
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })

@@ -24,6 +24,7 @@ import {
   Typography,
   useMediaQuery
 } from "@mui/material";
+import SvgIcon from "@mui/material/SvgIcon";
 import BottomNavigation from "@mui/material/BottomNavigation";
 import BottomNavigationAction from "@mui/material/BottomNavigationAction";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -32,10 +33,23 @@ import Brightness7Icon from "@mui/icons-material/Brightness7";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PersonIcon from "@mui/icons-material/Person";
 import HomeIcon from "@mui/icons-material/Home";
-import CategoryIcon from "@mui/icons-material/Category";
 import EventIcon from "@mui/icons-material/Event";
 import GavelIcon from "@mui/icons-material/Gavel";
 import GroupsIcon from "@mui/icons-material/Groups";
+
+function FigurineIcon(props: React.ComponentProps<typeof SvgIcon>) {
+  return (
+    <SvgIcon {...props} viewBox="0 0 24 24">
+      <circle cx="12" cy="4" r="2" />
+      <path d="M9 8h6l1 5H8z" />
+      <rect x="8" y="19" width="8" height="2" rx="1" />
+      <line x1="10" y1="13" x2="9" y2="19" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="14" y1="13" x2="15" y2="19" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="9" y1="9" x2="7" y2="12" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="15" y1="9" x2="17" y2="12" stroke="currentColor" strokeWidth="1.5" />
+    </SvgIcon>
+  );
+}
 import Login from "./pages/Login";
 import Judge from "./pages/Judge";
 import Profile from "./pages/Profile";
@@ -75,6 +89,7 @@ export default function App() {
     if (typeof window === "undefined") return "it";
     return (window.localStorage.getItem("language") as Language) || "it";
   });
+  const [appName, setAppName] = useState("Miniatures Contest");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
 
@@ -112,6 +127,9 @@ export default function App() {
           setThemePreset(settings.themePreset);
           window.localStorage.setItem("themePreset", settings.themePreset);
         }
+        if (settings.app_name) {
+          setAppName(settings.app_name);
+        }
       })
       .catch(() => {
         applyThemeFromStorage();
@@ -125,9 +143,7 @@ export default function App() {
     themeToggle: t(language, "themeToggle"),
     themeLight: t(language, "themeLight"),
     themeDark: t(language, "themeDark"),
-    languageToggle: t(language, "languageToggle"),
-    languageIt: t(language, "languageIt"),
-    languageEn: t(language, "languageEn")
+    languageToggle: t(language, "languageToggle")
   };
 
   const muiTheme = useMemo(() => buildTheme(themeMode, themePreset), [themeMode, themePreset]);
@@ -173,7 +189,7 @@ export default function App() {
 
   const bottomNavItems = [
     { label: t(language, "navProfile"),      path: "/",              icon: <HomeIcon /> },
-    { label: t(language, "navModels"),       path: "/models",        icon: <CategoryIcon /> },
+    { label: t(language, "navModels"),       path: "/models",        icon: <FigurineIcon /> },
     { label: t(language, "navTeams"),        path: "/teams",         icon: <GroupsIcon /> },
     { label: t(language, "navPublicEvents"), path: "/public-events", icon: <EventIcon /> },
     ...(role && roleAtLeast(role, "judge") ? [{ label: t(language, "navJudge"), path: "/judge", icon: <GavelIcon /> }] : []),
@@ -191,7 +207,7 @@ export default function App() {
   const drawerContent = (
     <Box sx={{ width: 280 }} role="presentation" onClick={() => setDrawerOpen(false)}>
       <Typography variant="h6" sx={{ px: 2, py: 2 }}>
-        Miniatures Contest
+        {appName}
       </Typography>
       <Divider />
       <List>
@@ -230,7 +246,7 @@ export default function App() {
               </IconButton>
             )}
             <Typography variant="h6" sx={{ flexGrow: isMobile ? 1 : 0, color: "text.primary" }}>
-              Miniatures Contest
+              {appName}
             </Typography>
             {!isMobile && (
               <Stack direction="row" spacing={0.5} sx={{ flexGrow: 1, ml: 2, flexWrap: "wrap" }}>
@@ -257,8 +273,8 @@ export default function App() {
                   label={labels.languageToggle}
                   onChange={(event) => setLanguage(event.target.value as Language)}
                 >
-                  <MenuItem value="it">{labels.languageIt}</MenuItem>
-                  <MenuItem value="en">{labels.languageEn}</MenuItem>
+                  <MenuItem value="it">🇮🇹 IT</MenuItem>
+                  <MenuItem value="en">🇬🇧 EN</MenuItem>
                 </Select>
               </FormControl>
               <IconButton
@@ -326,7 +342,6 @@ export default function App() {
         {isMobile && role && (
           <BottomNavigation
             value={bottomNavValue === -1 ? false : bottomNavValue}
-            showLabels
             sx={{
               position: "fixed",
               bottom: 0,
