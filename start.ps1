@@ -16,7 +16,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Check bun is installed before starting the backend
-if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+$bunFound = (Get-Command bun -ErrorAction SilentlyContinue) -or (Test-Path "$env:USERPROFILE\.bun\bin\bun.exe")
+if (-not $bunFound) {
     Write-Host ""
     Write-Host "ERRORE: bun non e' installato o non e' nel PATH." -ForegroundColor Red
     Write-Host "Possibili cause:" -ForegroundColor Yellow
