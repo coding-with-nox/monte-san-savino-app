@@ -35,10 +35,12 @@ import HomeIcon from "@mui/icons-material/Home";
 import CategoryIcon from "@mui/icons-material/Category";
 import EventIcon from "@mui/icons-material/Event";
 import GavelIcon from "@mui/icons-material/Gavel";
+import GroupsIcon from "@mui/icons-material/Groups";
 import Login from "./pages/Login";
 import Judge from "./pages/Judge";
 import Profile from "./pages/Profile";
 import Models from "./pages/Models";
+import Teams from "./pages/Teams";
 import PublicEvents from "./pages/PublicEvents";
 import Admin from "./pages/Admin";
 import Users from "./pages/Users";
@@ -154,6 +156,7 @@ export default function App() {
   const allNavItems = [
     { label: t(language, "navProfile"), path: "/", minRole: "user" as Role },
 { label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
+    { label: t(language, "navTeams"), path: "/teams", minRole: "user" as Role },
     { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null },
     { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role },
     { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role },
@@ -171,6 +174,7 @@ export default function App() {
   const bottomNavItems = [
     { label: t(language, "navProfile"),      path: "/",              icon: <HomeIcon /> },
     { label: t(language, "navModels"),       path: "/models",        icon: <CategoryIcon /> },
+    { label: t(language, "navTeams"),        path: "/teams",         icon: <GroupsIcon /> },
     { label: t(language, "navPublicEvents"), path: "/public-events", icon: <EventIcon /> },
     ...(role && roleAtLeast(role, "judge") ? [{ label: t(language, "navJudge"), path: "/judge", icon: <GavelIcon /> }] : []),
   ];
@@ -309,6 +313,7 @@ export default function App() {
             />
             <Route path="/" element={<Protected><Profile language={language} /></Protected>} />
 <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
+            <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
             <Route path="/public-events" element={<PublicEvents language={language} />} />
             <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />
             <Route path="/users" element={<Protected><RequireRole min="manager"><Users language={language} /></RequireRole></Protected>} />
