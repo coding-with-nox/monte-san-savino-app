@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Button,
+  ButtonGroup,
   FormControl,
   InputLabel,
   MenuItem,
@@ -29,7 +30,7 @@ interface SettingsProps {
   language: Language;
 }
 
-type SettingsTab = "general" | "theme" | "export";
+type SettingsTab = "general" | "theme" | "export" | "team";
 
 export default function Settings({ language }: SettingsProps) {
   const toast = useToast();
@@ -44,6 +45,10 @@ export default function Settings({ language }: SettingsProps) {
   const [themePresetDraft, setThemePresetDraft] = useState<"violet" | "ocean" | "forest">("violet");
 
   const [maxModelsDraft, setMaxModelsDraft] = useState("5");
+
+  const [teamNameMode, setTeamNameMode] = useState<"auto" | "manual">(
+    () => (localStorage.getItem("teamNameMode") as "auto" | "manual") ?? "manual"
+  );
 
   const [savingPrefix, setSavingPrefix] = useState(false);
   const [savingDigits, setSavingDigits] = useState(false);
@@ -219,6 +224,7 @@ export default function Settings({ language }: SettingsProps) {
             <Tab value="general" label={t(language, "settingsTabGeneral")} />
             <Tab value="theme" label={t(language, "settingsTabTheme")} />
             <Tab value="export" label={t(language, "settingsTabExport")} />
+            <Tab value="team" label="Team" />
           </Tabs>
         </Paper>
 
@@ -417,6 +423,34 @@ export default function Settings({ language }: SettingsProps) {
                 </TableBody>
               </Table>
             </TableContainer>
+          </SectionCard>
+        )}
+
+        {tab === "team" && (
+          <SectionCard title="Team">
+            <Table>
+              <TableBody>
+                <TableRow>
+                  <TableCell><Typography>{t(language, "teamsNameLabel")}</Typography></TableCell>
+                  <TableCell align="right">
+                    <ButtonGroup size="small" variant="outlined">
+                      <Button
+                        onClick={() => { setTeamNameMode("manual"); localStorage.setItem("teamNameMode", "manual"); }}
+                        variant={teamNameMode === "manual" ? "contained" : "outlined"}
+                      >
+                        {t(language, "teamsNameManual")}
+                      </Button>
+                      <Button
+                        onClick={() => { setTeamNameMode("auto"); localStorage.setItem("teamNameMode", "auto"); }}
+                        variant={teamNameMode === "auto" ? "contained" : "outlined"}
+                      >
+                        {t(language, "teamsNameAuto")}
+                      </Button>
+                    </ButtonGroup>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </SectionCard>
         )}
       </Stack>
