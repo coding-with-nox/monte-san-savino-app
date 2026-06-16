@@ -265,18 +265,16 @@ export default function App() {
               </Stack>
             )}
             <Stack direction="row" spacing={1} alignItems="center">
-              <FormControl size="small" sx={{ minWidth: 140, bgcolor: "background.paper", borderRadius: 1 }}>
-                <InputLabel id="language-select-label">{labels.languageToggle}</InputLabel>
-                <Select
-                  labelId="language-select-label"
-                  value={language}
-                  label={labels.languageToggle}
-                  onChange={(event) => setLanguage(event.target.value as Language)}
-                >
-                  <MenuItem value="it">🇮🇹 IT</MenuItem>
-                  <MenuItem value="en">🇬🇧 EN</MenuItem>
-                </Select>
-              </FormControl>
+              <Select
+                size="small"
+                value={language}
+                onChange={(event) => setLanguage(event.target.value as Language)}
+                renderValue={(val) => val === "it" ? "🇮🇹 IT" : "🇬🇧 EN"}
+                sx={{ bgcolor: "background.paper", borderRadius: 1, minWidth: 90 }}
+              >
+                <MenuItem value="it">🇮🇹 Italiano</MenuItem>
+                <MenuItem value="en">🇬🇧 English</MenuItem>
+              </Select>
               <IconButton
                 color="default"
                 onClick={() => setThemeMode(themeMode === "light" ? "dark" : "light")}
