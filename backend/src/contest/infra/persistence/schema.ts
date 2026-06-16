@@ -55,7 +55,8 @@ export const modelsTable = pgTable("models", {
   code: integer("code"),
   imageUrl: text("image_url"),
   isTeam: boolean("is_team").default(false).notNull(),
-  displayNumber: integer("display_number")
+  displayNumber: integer("display_number"),
+  teamId: uuid("team_id")
 }, (t) => ({
   uniqCode: uniqueIndex("ux_models_code").on(t.code)
 }));
@@ -138,4 +139,28 @@ export const settingsTable = pgTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at").defaultNow()
+});
+
+export const teamsTable = pgTable(
+  "teams",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull(),
+    name: text("name").notNull(),
+    displayNumber: text("display_number").notNull(),
+    categoryId: uuid("category_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    uniqDisplayNumber: uniqueIndex("ux_teams_display_number").on(t.displayNumber),
+  })
+);
+
+export const teamMatesTable = pgTable("team_mates", {
+  id: uuid("id").primaryKey(),
+  teamId: uuid("team_id").notNull(),
+  name: text("name").notNull(),
+  surname: text("surname").notNull(),
+  role: text("role").notNull(),
+  email: text("email"),
 });
