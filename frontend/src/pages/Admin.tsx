@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Box,
   Button,
   Chip,
   Dialog,
@@ -81,6 +82,27 @@ export default function Admin({ language }: AdminProps) {
   // Task 14: member roles
   const [memberRoles, setMemberRoles] = useState<{ id: string; name: string }[]>([]);
   const [newMemberRoleName, setNewMemberRoleName] = useState("");
+
+  // D4: monitoring state
+  const [monitoringEventId, setMonitoringEventId] = useState("");
+  const [monitoringData, setMonitoringData] = useState<{
+    categoryId: string; categoryName: string; status: string;
+    totalModels: number; scoredModels: number; percentComplete: number;
+    totalJudges: number; completedJudges: number;
+  }[]>([]);
+  const [monitoringTimer, setMonitoringTimer] = useState<ReturnType<typeof setInterval> | null>(null);
+
+  // D5: corrections state
+  const [correctionsEventId, setCorrectionsEventId] = useState("");
+  const [correctionsData, setCorrectionsData] = useState<{
+    id?: string; modelId: string; categoryId: string; totalScore: number | null;
+    medalLabel: string | null; medalRank: number | null;
+    votes: number; source: string; averageRank: number | null;
+  }[]>([]);
+  const [overrideDialog, setOverrideDialog] = useState(false);
+  const [overridingAward, setOverridingAward] = useState<string | null>(null);
+  const [overrideMedalLabel, setOverrideMedalLabel] = useState("");
+  const [overrideMedalRank, setOverrideMedalRank] = useState(0);
 
   // Category edit dialog state
   const [categoryEditDialog, setCategoryEditDialog] = useState(false);
@@ -303,6 +325,35 @@ export default function Admin({ language }: AdminProps) {
   async function deleteMemberRole(id: string) {
     await api(`/admin/member-roles/${id}`, { method: "DELETE" });
     await loadMemberRoles();
+  }
+
+  async function loadMonitoring(eventId: string) {
+    if (!eventId) { setMonitoringData([]); return; }
+    try {
+      setMonitoringData(await api<any[]>(`/awards/monitoring/${encodeURIComponent(eventId)}`));
+    } catch { setMonitoringData([]); }
+  }
+
+  async function loadCorrections(eventId: string) {
+    if (!eventId) { setCorrectionsData([]); return; }
+    try {
+      setCorrectionsData(await api<any[]>(`/awards/events/${encodeURIComponent(eventId)}`));
+    } catch { setCorrectionsData([]); }
+  }
+
+  async function saveOverride() {
+    if (!overridingAward) return;
+    try {
+      await api(`/awards/${overridingAward}`, {
+        method: "PATCH",
+        body: JSON.stringify({ medalLabel: overrideMedalLabel, medalRank: overrideMedalRank })
+      });
+      toast.success(t(language, "profileSaveButton"));
+      setOverrideDialog(false);
+      await loadCorrections(correctionsEventId);
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   useEffect(() => {
@@ -588,89 +639,138 @@ export default function Admin({ language }: AdminProps) {
         )}
 
         {tab === "judges" && (
-          <SectionCard title={t(language, "adminJudgeAssignTitle")}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
-                  <Select
-                    value={judgeAssignment.eventId}
-                    label={t(language, "adminJudgeEventPlaceholder")}
-                    onChange={(e) => setJudgeAssignment({ ...judgeAssignment, eventId: e.target.value })}
+          <Stack spacing={2}>
+            <SectionCard title={t(language, "adminJudgeAssignTitle")}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                    <Select
+                      value={judgeAssignment.eventId}
+                      label={t(language, "adminJudgeEventPlaceholder")}
+                      onChange={(e) => setJudgeAssignment({ ...judgeAssignment, eventId: e.target.value })}
+                    >
+                      {events.map((ev) => (
+                        <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t(language, "adminJudgeIdPlaceholder")}</InputLabel>
+                    <Select
+                      value={judgeAssignment.judgeId}
+                      label={t(language, "adminJudgeIdPlaceholder")}
+                      onChange={(e) => setJudgeAssignment({ ...judgeAssignment, judgeId: e.target.value })}
+                    >
+                      {users.filter((u) => u.role === "judge" || u.role === "manager" || u.role === "admin").map((u) => (
+                        <MenuItem key={u.id} value={u.id}>{u.email}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t(language, "adminJudgeCategoryPlaceholder")}</InputLabel>
+                    <Select
+                      value={judgeAssignment.categoryId}
+                      label={t(language, "adminJudgeCategoryPlaceholder")}
+                      onChange={(e) => setJudgeAssignment({ ...judgeAssignment, categoryId: e.target.value })}
+                    >
+                      <MenuItem value="">{t(language, "adminJudgeAllCategories")}</MenuItem>
+                      {categories
+                        .filter((c) => !judgeAssignment.eventId || c.eventId === judgeAssignment.eventId)
+                        .map((c) => (
+                          <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                        ))
+                      }
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Button
+                    variant="contained"
+                    onClick={assignJudge}
+                    fullWidth
+                    disabled={!judgeAssignment.eventId || !judgeAssignment.judgeId}
                   >
-                    {events.map((ev) => (
-                      <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
+                    {t(language, "adminJudgeAssignButton")}
+                  </Button>
+                </Grid>
+              </Grid>
+              {judgeAssignments.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+                    {t(language, "adminJudgeAssignments")}
+                  </Typography>
+                  <List dense>
+                    {judgeAssignments.map((ja) => (
+                      <ListItem key={ja.id} disableGutters>
+                        <ListItemText
+                          primary={getUserEmail(ja.judgeId)}
+                          secondary={`${getEventName(ja.eventId)} - ${getCategoryName(ja.categoryId)}`}
+                        />
+                        <IconButton size="small" onClick={() => openJudgeEdit(ja)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" color="error" onClick={() => deleteJudgeAssignment(ja.id)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </ListItem>
                     ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>{t(language, "adminJudgeIdPlaceholder")}</InputLabel>
-                  <Select
-                    value={judgeAssignment.judgeId}
-                    label={t(language, "adminJudgeIdPlaceholder")}
-                    onChange={(e) => setJudgeAssignment({ ...judgeAssignment, judgeId: e.target.value })}
-                  >
-                    {users.filter((u) => u.role === "judge" || u.role === "manager" || u.role === "admin").map((u) => (
-                      <MenuItem key={u.id} value={u.id}>{u.email}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>{t(language, "adminJudgeCategoryPlaceholder")}</InputLabel>
-                  <Select
-                    value={judgeAssignment.categoryId}
-                    label={t(language, "adminJudgeCategoryPlaceholder")}
-                    onChange={(e) => setJudgeAssignment({ ...judgeAssignment, categoryId: e.target.value })}
-                  >
-                    <MenuItem value="">{t(language, "adminJudgeAllCategories")}</MenuItem>
-                    {categories
-                      .filter((c) => !judgeAssignment.eventId || c.eventId === judgeAssignment.eventId)
-                      .map((c) => (
-                        <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                      ))
-                    }
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Button
-                  variant="contained"
-                  onClick={assignJudge}
-                  fullWidth
-                  disabled={!judgeAssignment.eventId || !judgeAssignment.judgeId}
-                >
-                  {t(language, "adminJudgeAssignButton")}
-                </Button>
-              </Grid>
-            </Grid>
-            {judgeAssignments.length > 0 && (
-              <>
-                <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-                  {t(language, "adminJudgeAssignments")}
-                </Typography>
-                <List dense>
-                  {judgeAssignments.map((ja) => (
-                    <ListItem key={ja.id} disableGutters>
-                      <ListItemText
-                        primary={getUserEmail(ja.judgeId)}
-                        secondary={`${getEventName(ja.eventId)} - ${getCategoryName(ja.categoryId)}`}
+                  </List>
+                </>
+              )}
+            </SectionCard>
+
+            <SectionCard title={t(language, "judgeMonitorTitle")}>
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <FormControl size="small" sx={{ minWidth: 220 }}>
+                    <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                    <Select
+                      value={monitoringEventId}
+                      label={t(language, "adminJudgeEventPlaceholder")}
+                      onChange={(e) => { setMonitoringEventId(e.target.value); loadMonitoring(e.target.value); }}
+                    >
+                      {events.map(ev => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                  <Button size="small" variant="outlined" onClick={() => loadMonitoring(monitoringEventId)} disabled={!monitoringEventId}>
+                    Aggiorna
+                  </Button>
+                </Stack>
+
+                {monitoringData.map(cat => (
+                  <Box key={cat.categoryId} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1.5 }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                      <Typography variant="subtitle2">{cat.categoryName}</Typography>
+                      <Chip
+                        size="small"
+                        label={cat.status === "closed" ? "Chiusa" : "Aperta"}
+                        color={cat.status === "closed" ? "default" : "success"}
                       />
-                      <IconButton size="small" onClick={() => openJudgeEdit(ja)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" color="error" onClick={() => deleteJudgeAssignment(ja.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </ListItem>
-                  ))}
-                </List>
-              </>
-            )}
-          </SectionCard>
+                    </Stack>
+                    <Stack direction="row" spacing={2}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t(language, "judgePercentComplete")}: {cat.percentComplete}% ({cat.scoredModels}/{cat.totalModels})
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {t(language, "judgeCompletedCount")}: {cat.completedJudges}/{cat.totalJudges}
+                      </Typography>
+                    </Stack>
+                    <Box sx={{ mt: 0.5, height: 6, bgcolor: "grey.200", borderRadius: 3 }}>
+                      <Box sx={{ height: 6, bgcolor: cat.status === "closed" ? "grey.500" : "primary.main", borderRadius: 3, width: `${cat.percentComplete}%` }} />
+                    </Box>
+                  </Box>
+                ))}
+                {monitoringData.length === 0 && monitoringEventId && (
+                  <Typography variant="body2" color="text.secondary">{t(language, "adminNoData")}</Typography>
+                )}
+              </Stack>
+            </SectionCard>
+          </Stack>
         )}
 
         {tab === "awards" && (
@@ -766,6 +866,69 @@ export default function Admin({ language }: AdminProps) {
                     </Stack>
                   </Stack>
                 ))}
+              </Stack>
+            </SectionCard>
+
+            <SectionCard title={t(language, "judgeCorrectionsTitle")}>
+              <Stack spacing={2}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
+                  <Select
+                    value={correctionsEventId}
+                    label={t(language, "adminJudgeEventPlaceholder")}
+                    onChange={(e) => { setCorrectionsEventId(e.target.value); loadCorrections(e.target.value); }}
+                  >
+                    {events.map(ev => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700 }}>Modello</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Categoria</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Score</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Premio</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Fonte</TableCell>
+                        <TableCell />
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {correctionsData.map(row => (
+                        <TableRow key={row.modelId} sx={{ bgcolor: row.source === "frozen" && !row.medalLabel ? "error.light" : undefined }}>
+                          <TableCell>{row.modelId.slice(0, 8)}</TableCell>
+                          <TableCell>{getCategoryName(row.categoryId)}</TableCell>
+                          <TableCell>{row.totalScore ?? (row.averageRank != null ? row.averageRank.toFixed(2) : "-")}</TableCell>
+                          <TableCell>
+                            {row.medalLabel
+                              ? <Chip size="small" label={row.medalLabel} color={row.source === "override" ? "warning" : "default"} />
+                              : <Chip size="small" label="live" variant="outlined" />
+                            }
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={t(language, row.source === "frozen" || row.source === "override" ? "judgeFrozenAward" : "judgeMonitorTitle")} variant="outlined" />
+                          </TableCell>
+                          <TableCell align="right">
+                            {(row.source === "frozen" || row.source === "override") && (
+                              <IconButton size="small" color="warning" onClick={() => {
+                                // TODO: needs awardId from backend, using row.id (frozen) or modelId as placeholder
+                                setOverridingAward(row.id ?? row.modelId);
+                                setOverrideMedalLabel(row.medalLabel ?? "");
+                                setOverrideMedalRank(row.medalRank ?? 0);
+                                setOverrideDialog(true);
+                              }}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {correctionsData.length === 0 && correctionsEventId && (
+                        <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">{t(language, "adminNoData")}</Typography></TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Stack>
             </SectionCard>
           </Stack>
@@ -914,6 +1077,22 @@ export default function Admin({ language }: AdminProps) {
         <DialogActions>
           <Button onClick={saveCategoryEdit} variant="contained">{t(language, "profileSaveButton")}</Button>
           <Button onClick={() => setCategoryEditDialog(false)}>{t(language, "profileCancelButton")}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={overrideDialog} onClose={() => setOverrideDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t(language, "judgeOverrideLabel")}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField size="small" label={t(language, "judgeAwardBracketMedal")} value={overrideMedalLabel}
+              onChange={e => setOverrideMedalLabel(e.target.value)} fullWidth />
+            <TextField size="small" label={t(language, "judgeAwardBracketRank")} type="number" value={overrideMedalRank}
+              onChange={e => setOverrideMedalRank(Number(e.target.value))} fullWidth />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={saveOverride} variant="contained">{t(language, "profileSaveButton")}</Button>
+          <Button onClick={() => setOverrideDialog(false)}>{t(language, "profileCancelButton")}</Button>
         </DialogActions>
       </Dialog>
 

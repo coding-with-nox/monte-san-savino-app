@@ -26,6 +26,7 @@ export const awardRoutes = new Elysia({ prefix: "/awards" })
 
     // --- Frozen awards from closed categories ---
     const frozenRows: Array<{
+      id: string;
       modelId: string;
       categoryId: string;
       totalScore: number | null;
@@ -39,6 +40,7 @@ export const awardRoutes = new Elysia({ prefix: "/awards" })
     if (closedCatIds.length > 0) {
       const frozen = await tenantDb
         .select({
+          id: awardsTable.id,
           modelId: awardsTable.modelId,
           categoryId: awardsTable.categoryId,
           totalScore: awardsTable.totalScore,
@@ -50,6 +52,7 @@ export const awardRoutes = new Elysia({ prefix: "/awards" })
 
       for (const row of frozen) {
         frozenRows.push({
+          id: row.id,
           modelId: row.modelId,
           categoryId: row.categoryId,
           totalScore: row.totalScore,
