@@ -483,6 +483,7 @@ export default function Judge({ language }: JudgeProps) {
               {[0, 1, 2, 3, 4].map((score) => {
                 const isSelected = selectedScore === score;
                 const color = RANK_COLOR[score];
+                const name = t(language, RANK_KEY[score] as any);
                 return (
                   <Button
                     key={score}
@@ -491,26 +492,33 @@ export default function Judge({ language }: JudgeProps) {
                     onClick={() => setSelectedScore(score)}
                     sx={{
                       minWidth: 44,
-                      width: 44,
                       fontWeight: 700,
+                      overflow: "hidden",
+                      transition: "background-color 0.15s, border-color 0.15s, color 0.15s",
                       ...(isSelected
                         ? { bgcolor: color, "&:hover": { bgcolor: color }, color: "#fff" }
                         : { borderColor: color, color: color }),
                     }}
                   >
-                    {score}
+                    <Box component="span">{score}</Box>
+                    <Box
+                      component="span"
+                      sx={{
+                        maxWidth: isSelected ? "120px" : "0px",
+                        overflow: "hidden",
+                        display: "inline-block",
+                        whiteSpace: "nowrap",
+                        verticalAlign: "middle",
+                        transition: "max-width 0.2s ease, margin-left 0.2s ease",
+                        ml: isSelected ? 0.5 : 0,
+                      }}
+                    >
+                      {name}
+                    </Box>
                   </Button>
                 );
               })}
             </Stack>
-            {selectedScore !== null && (
-              <Typography
-                variant="caption"
-                sx={{ fontWeight: 700, color: RANK_COLOR[selectedScore], mt: 0.5 }}
-              >
-                {t(language, RANK_KEY[selectedScore] as any)}
-              </Typography>
-            )}
           </Stack>
 
           <Divider />
