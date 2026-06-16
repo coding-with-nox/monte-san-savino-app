@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
+  Checkbox,
   Chip,
   Divider,
   FormControl,
@@ -441,7 +442,7 @@ export default function Judge({ language }: JudgeProps) {
                 checked={displayMode}
                 onChange={(e) => {
                   setDisplayMode(e.target.checked);
-                  setSelectedModels(new Set());
+                  if (e.target.checked) setSelectedModels(new Set()); // clear only when going to display mode
                 }}
                 size="small"
               />
@@ -481,6 +482,21 @@ export default function Judge({ language }: JudgeProps) {
 
           <Divider />
 
+          {/* Select All / Deselect All */}
+          {!displayMode && (
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 0.5 }}>
+              <Button size="small" variant="text" onClick={() => {
+                if (selectedModels.size === activeExhibitor!.models.length) {
+                  setSelectedModels(new Set());
+                } else {
+                  setSelectedModels(new Set(activeExhibitor!.models.map(m => m.id)));
+                }
+              }}>
+                {selectedModels.size === activeExhibitor!.models.length ? "Deseleziona tutti" : "Seleziona tutti"}
+              </Button>
+            </Box>
+          )}
+
           {/* Model list */}
           <Stack spacing={1}>
             {activeExhibitor.models.map((model) => {
@@ -496,10 +512,17 @@ export default function Judge({ language }: JudgeProps) {
                 <Paper
                   key={model.id}
                   variant="outlined"
-                  onClick={() => !displayMode && toggleModel(model.id)}
+                  onClick={() => {
+                    if (displayMode) {
+                      setDisplayMode(false);
+                      setSelectedModels(new Set([model.id]));
+                    } else {
+                      toggleModel(model.id);
+                    }
+                  }}
                   sx={{
                     p: 1.5,
-                    cursor: displayMode ? "default" : "pointer",
+                    cursor: "pointer",
                     bgcolor: isSelected && !displayMode ? "action.selected" : undefined,
                     borderColor: isSelected && !displayMode ? "primary.main" : undefined,
                     display: "flex",
@@ -507,7 +530,16 @@ export default function Judge({ language }: JudgeProps) {
                     justifyContent: "space-between",
                   }}
                 >
-                  <Typography variant="body2">{label}</Typography>
+                  <Box sx={{ display: "flex", alignItems: "center" }}>
+                    <Checkbox
+                      checked={selectedModels.has(model.id) && !displayMode}
+                      disabled={displayMode}
+                      size="small"
+                      sx={{ p: 0, mr: 1 }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <Typography variant="body2">{label}</Typography>
+                  </Box>
                   {model.currentRank !== null && (
                     <Chip
                       size="small"
@@ -524,6 +556,20 @@ export default function Judge({ language }: JudgeProps) {
               );
             })}
           </Stack>
+
+          {/* Selection count hint */}
+          {!displayMode && (
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 1 }}>
+              {selectedModels.size > 0
+                ? `${selectedModels.size} modell${selectedModels.size === 1 ? "o" : "i"} selezionat${selectedModels.size === 1 ? "o" : "i"}`
+                : "Nessun modello selezionato"}
+            </Typography>
+          )}
+          {displayMode && activeExhibitor && (
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 1 }}>
+              {`Tutti i modelli (${activeExhibitor.models.length})`}
+            </Typography>
+          )}
 
           {/* Submit button */}
           <Button
