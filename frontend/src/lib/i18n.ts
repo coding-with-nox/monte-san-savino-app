@@ -285,6 +285,11 @@ export const translations = {
     judgeAwardBracketRank: "Valore",
     judgeCompletedCount: "giudici completati",
     judgeFrozenAward: "Premio congelato",
+    judgeExhibitor: "Espositore",
+    judgeDisplayToggle: "Display",
+    judgeSubmitScore: "Invia Voto",
+    judgeAllJudged: "Tutti gli espositori sono stati giudicati",
+    judgeFilterExhibit: "Filtra per n° espositore",
   },
   en: {
     loginEyebrow: "Welcome back",
@@ -570,6 +575,11 @@ export const translations = {
     judgeAwardBracketRank: "Value",
     judgeCompletedCount: "judges completed",
     judgeFrozenAward: "Frozen award",
+    judgeExhibitor: "Exhibitor",
+    judgeDisplayToggle: "Display",
+    judgeSubmitScore: "Submit Your Score",
+    judgeAllJudged: "All exhibits in class judged",
+    judgeFilterExhibit: "Filter Exhibit #",
   }
 } as const;
 
