@@ -271,8 +271,8 @@ export const translations = {
     // Judging
     judgeCompleteButton: "Giudizio Completato",
     judgeWaitingOthers: "In attesa degli altri giudici...",
-    judgeShowAll: "Mostra tutti",
-    judgeHideJudged: "Nascondi giudicati",
+    judgeShowAll: "Mostra anche già votati",
+    judgeHideJudged: "Nascondi già votati",
     judgeAllDone: "Tutti i giudici hanno completato",
     judgeOverrideLabel: "Sovrascrittura manuale",
     judgeCorrectionsTitle: "Correzioni premi",
@@ -567,8 +567,8 @@ export const translations = {
     // Judging
     judgeCompleteButton: "Judging Complete",
     judgeWaitingOthers: "Waiting for other judges...",
-    judgeShowAll: "Show all",
-    judgeHideJudged: "Hide judged",
+    judgeShowAll: "Show already voted",
+    judgeHideJudged: "Hide already voted",
     judgeAllDone: "All judges completed",
     judgeOverrideLabel: "Manual override",
     judgeCorrectionsTitle: "Award Corrections",
