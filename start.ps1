@@ -15,23 +15,9 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Check bun is installed before starting the backend
-$bunFound = (Get-Command bun -ErrorAction SilentlyContinue) -or (Test-Path "$env:USERPROFILE\.bun\bin\bun.exe")
-if (-not $bunFound) {
-    Write-Host ""
-    Write-Host "ERRORE: bun non e' installato o non e' nel PATH." -ForegroundColor Red
-    Write-Host "Possibili cause:" -ForegroundColor Yellow
-    Write-Host "  - bun non e' stato installato" -ForegroundColor Yellow
-    Write-Host "  - bun non e' nel PATH di sistema" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Soluzione: installa bun da https://bun.sh e riprova." -ForegroundColor Cyan
-    Write-Host ""
-    exit 1
-}
-
 Write-Host "Starting dev stack..."
 Push-Location $root
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-docker compose logs -f --tail=100
+docker compose -f docker-compose.debug.yml down
+docker compose -f docker-compose.debug.yml up -d
+docker compose -f docker-compose.debug.yml logs -f --tail=100
 Pop-Location
