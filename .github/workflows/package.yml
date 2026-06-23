@@ -1,0 +1,34 @@
+name: Package laptop bundle
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare package
+        run: |
+          mkdir -p package/docker/nginx package/docker/postgres
+          cp docker-compose.yml package/docker-compose.yml
+          cp .env.example package/.env.example
+          cp start-prod.ps1 package/start-prod.ps1
+          cp PACKAGE.md package/README.md
+          cp docker/nginx/default.conf package/docker/nginx/default.conf
+          cp docker/postgres/01-init-tenant.sh package/docker/postgres/01-init-tenant.sh
+          cp docker/postgres/02-test-data.sh package/docker/postgres/02-test-data.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: monte-san-savino-laptop-package
+          path: package
