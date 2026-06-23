@@ -10,7 +10,6 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/postgres/01-init-tenant.sh:/docker-entrypoint-initdb.d/01-init-tenant.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 3s
@@ -36,6 +35,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      db-schema:
+        condition: service_completed_successfully
     environment:
       JWT_SECRET: ${JWT_SECRET:-change-me}
       PG_HOST: postgres
@@ -53,13 +54,17 @@ services:
   frontend:
     image: ghcr.io/coding-with-nox/monte-san-savino-app-frontend:latest
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+      db-seed:
+        condition: service_completed_successfully
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "8080:80"
 
-  db-init:
+  # One-shot psql client: loads schema into the postgres service database.
+  db-schema:
     image: postgres:16
     depends_on:
       postgres:
@@ -72,11 +77,32 @@ services:
       PGPORT: 5432
     volumes:
       - ./docker/postgres/01-init-tenant.sh:/scripts/01-init-tenant.sh:ro
-      - ./docker/postgres/02-test-data.sh:/scripts/02-test-data.sh:ro
     command: >
       bash -c "until pg_isready -h postgres -p 5432 -U $${POSTGRES_USER}; do sleep 1; done;
-      bash /scripts/01-init-tenant.sh &&
-      bash /scripts/02-test-data.sh"
+      bash /scripts/01-init-tenant.sh"
+    restart: "no"
+
+  # One-shot psql client: loads seed data into the same postgres service database.
+  db-seed:
+    image: postgres:16
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
+      PGHOST: postgres
+      PGPORT: 5432
+    volumes:
+      - ./docker/postgres/02-test-data.sh:/scripts/02-test-data.sh:ro
+    command: >
+      bash -c "
+        until pg_isready -h postgres -p 5432 -U $${POSTGRES_USER}; do sleep 1; done;
+        export PGPASSWORD=$${POSTGRES_PASSWORD};
+        until psql -h postgres -U $${POSTGRES_USER} -d $${TENANT_DB_NAME} -tAc \"SELECT to_regclass('public.team_mates') IS NOT NULL AND to_regclass('public.award_brackets') IS NOT NULL AND to_regclass('public.judge_completions') IS NOT NULL;\" | grep -q t; do sleep 1; done;
+        bash /scripts/02-test-data.sh
+      "
     restart: "no"
 
 volumes:

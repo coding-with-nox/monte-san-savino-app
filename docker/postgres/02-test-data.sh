@@ -801,7 +801,7 @@ echo "  user5@test.com    → user  (senza profilo, iscrizione senza modello)"
 # Hash argon2id generato con: Bun.password.hash('Password1!')
 # ===========================================================================
 RAND_UUID=$(cat /proc/sys/kernel/random/uuid)
-RAND_SUFFIX=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 6)
+RAND_SUFFIX=$(set +o pipefail; LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 6)
 RAND_EMAIL="admin-${RAND_SUFFIX}@mss.local"
 ARGON2_HASH='$argon2id$v=19$m=65536,t=2,p=1$jEZURwULbt/2wPh7F7NyXD5WAMJExKYYhP5G4M6Lcxo$JdOU8r8+KkCBK6FV87OIQ/OgKF7t/3Zecly3FWF3rx8'
 

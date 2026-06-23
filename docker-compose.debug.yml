@@ -51,11 +51,10 @@ services:
       - miniodata_debug:/data
 
   # -------------------------------------------------------------------------
-  # db-init: schema + seed condizionale
-  #   01-init-tenant.sh  → crea tabelle (idempotente)
-  #   02-test-data.sh    → inserisce dati di test SOLO se users è vuota
+  # db-schema + db-seed: caricamenti separati
   # -------------------------------------------------------------------------
-  db-init:
+  # One-shot psql client: loads schema into the postgres service database.
+  db-schema:
     image: postgres:16
     depends_on:
       postgres:
@@ -68,19 +67,31 @@ services:
       PGPORT: 5432
     volumes:
       - ./docker/postgres/01-init-tenant.sh:/scripts/01-init-tenant.sh:ro
+    command: >
+      bash -c "until pg_isready -h postgres -p 5432 -U $${POSTGRES_USER}; do sleep 1; done;
+      bash /scripts/01-init-tenant.sh"
+    restart: "no"
+
+  # One-shot psql client: loads seed data into the same postgres service database.
+  db-seed:
+    image: postgres:16
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
+      PGHOST: postgres
+      PGPORT: 5432
+    volumes:
       - ./docker/postgres/02-test-data.sh:/scripts/02-test-data.sh:ro
     command: >
       bash -c "
-        until pg_isready -h postgres -p 5432 -U $${POSTGRES_USER}; do sleep 1; done &&
-        /scripts/01-init-tenant.sh &&
-        export PGPASSWORD=$${POSTGRES_PASSWORD} &&
-        HAS_USERS=$$(psql -h postgres -U $${POSTGRES_USER} -d $${TENANT_DB_NAME} -tAc 'SELECT COUNT(*) FROM users;' 2>/dev/null || echo 0) &&
-        HAS_USERS=$$(echo $${HAS_USERS} | tr -d '[:space:]') &&
-        if [ \"$${HAS_USERS}\" = \"0\" ] || [ -z \"$${HAS_USERS}\" ]; then
-          echo '>>> Tabella users vuota: eseguo seed di test...' && /scripts/02-test-data.sh;
-        else
-          echo \">>> DB già popolato ($${HAS_USERS} utenti): skip seed.\";
-        fi
+        until pg_isready -h postgres -p 5432 -U $${POSTGRES_USER}; do sleep 1; done;
+        export PGPASSWORD=$${POSTGRES_PASSWORD};
+        until psql -h postgres -U $${POSTGRES_USER} -d $${TENANT_DB_NAME} -tAc \"SELECT to_regclass('public.team_mates') IS NOT NULL AND to_regclass('public.award_brackets') IS NOT NULL AND to_regclass('public.judge_completions') IS NOT NULL;\" | grep -q t; do sleep 1; done;
+        bash /scripts/02-test-data.sh
       "
     restart: "no"
 
@@ -95,7 +106,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      db-init:
+      db-schema:
         condition: service_completed_successfully
       minio:
         condition: service_started
@@ -131,7 +142,10 @@ services:
     image: node:20-alpine
     working_dir: /app
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+      db-seed:
+        condition: service_completed_successfully
     environment:
       # Sovrascrive il target del proxy Vite (vite.config.ts lo legge da process.env)
       VITE_PROXY_TARGET: http://backend:3000
@@ -141,7 +155,7 @@ services:
     ports:
       - "5173:5173"
     command: >
-      sh -c "npm install &&
+      sh -c "npm ci &&
              npx vite --host 0.0.0.0 --port 5173"
 
   # -------------------------------------------------------------------------
