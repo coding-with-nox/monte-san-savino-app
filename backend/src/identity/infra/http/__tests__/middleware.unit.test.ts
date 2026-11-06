@@ -1,8 +1,15 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Elysia } from "elysia";
 import { requireRole } from "../role.middleware";
 import { authMiddleware } from "../auth.middleware";
 import { JwtTokenService } from "../../tokens/jwtTokenService";
+
+const originalSecret = process.env.JWT_SECRET;
+beforeAll(() => { process.env.JWT_SECRET = "test-secret"; });
+afterAll(() => {
+  if (originalSecret === undefined) delete process.env.JWT_SECRET;
+  else process.env.JWT_SECRET = originalSecret;
+});
 
 const svc = new JwtTokenService();
 const claims = (role: string) => ({ sub: "u1", email: "a@b.it", role });

@@ -58,7 +58,7 @@ Each bounded context follows the same `domain / application / infra` layering.
 |-------------------|----------------|-----------------|--------------------------------------------------------------|
 | `PORT`            | `3000`         | optional        | HTTP listen port.                                            |
 | `NODE_ENV`        | —              | optional        | Set to `production` to disable dev seeding.                 |
-| `JWT_SECRET`      | `change-me`    | **yes** (prod)  | HMAC secret for signing/verifying JWTs. Must be stable across restarts. |
+| `JWT_SECRET`      | — (none)       | **yes**         | HMAC secret for signing/verifying JWTs. Required, no default: the server refuses to start if missing or blank. Must be stable across restarts. |
 | `PG_HOST`         | `localhost`    | optional        | PostgreSQL host. `localhost` for local dev, `postgres` inside Docker. |
 | `PG_PORT`         | `5432`         | optional        | PostgreSQL port.                                            |
 | `PG_USER`         | `postgres`     | optional        | PostgreSQL user.                                            |
@@ -98,6 +98,7 @@ bun install
 
 # 3. Point the app at local services (in .env or shell)
 #    PG_HOST=localhost  MINIO_ENDPOINT=localhost
+#    JWT_SECRET=<a-long-random-string>   (required: the server refuses to start without it)
 
 # 4. Start with hot-reload (pushes schema, then serves)
 bun run dev

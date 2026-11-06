@@ -3,7 +3,15 @@ import { SignJWT, jwtVerify } from "jose";
 const DEFAULT_ACCESS_TTL_SECONDS = 86400;
 const DEFAULT_REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
 
-function secret() { return new TextEncoder().encode(process.env.JWT_SECRET ?? "dev-secret-change-me"); }
+export function requireJwtSecret(): string {
+  const value = process.env.JWT_SECRET;
+  if (value === undefined || value.trim() === "") {
+    throw new Error("JWT_SECRET environment variable is required and must not be empty");
+  }
+  return value;
+}
+
+function secret() { return new TextEncoder().encode(requireJwtSecret()); }
 
 function secondsFromEnv(value: string | undefined, fallback: number) {
   const parsed = Number(value);

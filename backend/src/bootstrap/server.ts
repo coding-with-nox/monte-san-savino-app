@@ -1,4 +1,5 @@
 import { buildApp } from "./app";
+import { assertRequiredEnv } from "./assertRequiredEnv";
 import { seedDatabase } from "./seed";
 import { logger } from "../shared/infra/logger/logger";
 import { ensureTenantSchema } from "../tenancy/infra/persistence/ensureTenantSchema";
@@ -15,6 +16,7 @@ scheduler.register({
 });
 
 async function start() {
+  assertRequiredEnv();
   await ensureTenantSchema();
 
   const app = buildApp();
