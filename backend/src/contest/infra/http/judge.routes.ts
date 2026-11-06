@@ -130,6 +130,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
         code: modelsTable.code,
         imageUrl: modelsTable.imageUrl,
         displayNumber: modelsTable.displayNumber,
+        notes: modelsTable.notes,
         categorySeqId: categoriesTable.seqId
       })
       .from(modelsTable)

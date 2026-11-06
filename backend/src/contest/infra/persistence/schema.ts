@@ -56,7 +56,9 @@ export const modelsTable = pgTable("models", {
   imageUrl: text("image_url"),
   isTeam: boolean("is_team").default(false).notNull(),
   displayNumber: integer("display_number"),
-  teamId: uuid("team_id")
+  teamId: uuid("team_id"),
+  notes: text("notes"),
+  internalNotes: text("internal_notes")
 }, (t) => ({
   uniqCode: uniqueIndex("ux_models_code").on(t.code)
 }));

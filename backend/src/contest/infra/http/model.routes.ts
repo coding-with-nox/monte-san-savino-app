@@ -139,6 +139,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         isTeam: modelsTable.isTeam,
         teamId: modelsTable.teamId,
         displayNumber: modelsTable.displayNumber,
+        notes: modelsTable.notes,
         categorySeqId: categoriesTable.seqId
       })
       .from(modelsTable)
@@ -199,6 +200,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
           levelId: body.levelId,
           name: body.name,
           description: body.description ?? null,
+          notes: body.notes?.trim() || null,
           code,
           imageUrl: body.imageUrl ?? null,
           isTeam: body.isTeam ?? false,
@@ -236,6 +238,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       categoryId: t.String(),
       levelId: t.String(),
       description: t.Optional(t.String()),
+      notes: t.Optional(t.String({ maxLength: 2000 })),
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
       teamId: t.Optional(t.String()),
@@ -265,6 +268,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         isTeam: modelsTable.isTeam,
         teamId: modelsTable.teamId,
         displayNumber: modelsTable.displayNumber,
+        notes: modelsTable.notes,
         categorySeqId: categoriesTable.seqId
       })
       .from(modelsTable)
@@ -346,6 +350,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (body.levelId !== undefined) updateData.levelId = body.levelId;
     if (body.description !== undefined) updateData.description = body.description;
     if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
+    if (body.notes !== undefined) updateData.notes = body.notes.trim() || null;
     if (body.isTeam !== undefined) updateData.isTeam = body.isTeam;
     if ("teamId" in body) updateData.teamId = body.teamId ?? null;
 
@@ -375,6 +380,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       categoryId: t.Optional(t.String()),
       levelId: t.Optional(t.String()),
       description: t.Optional(t.String()),
+      notes: t.Optional(t.String({ maxLength: 2000 })),
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
       teamId: t.Optional(t.String()),

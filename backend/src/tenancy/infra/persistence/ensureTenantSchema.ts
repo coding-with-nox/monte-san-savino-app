@@ -159,6 +159,17 @@ export async function ensureTenantSchema() {
         ADD COLUMN IF NOT EXISTS display_number integer,
         ADD COLUMN IF NOT EXISTS is_team boolean NOT NULL DEFAULT false;
     `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS models
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS internal_notes text;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS user_profiles
+        ADD COLUMN IF NOT EXISTS instagram text,
+        ADD COLUMN IF NOT EXISTS facebook text,
+        ADD COLUMN IF NOT EXISTS website text;
+    `);
     // Backfill display_number from code for models that have code but no display_number
     await pool.query(`
       UPDATE models SET display_number = code

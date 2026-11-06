@@ -1,5 +1,7 @@
 import { Elysia, t } from "elysia";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import QRCode from "qrcode";
+import { escapeHtml } from "../../../shared/domain/escapeHtml";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable } from "../persistence/schema";
@@ -306,9 +308,43 @@ function formatModelCodeForExport(settings: ExportSettings, code: number | null 
   });
 }
 
+export function socialHref(kind: "instagram" | "facebook", value: string | null | undefined): string | null {
+  const v = (value ?? "").trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[A-Za-z0-9._]+$/.test(v)) {
+    return kind === "instagram" ? `https://instagram.com/${v}` : `https://facebook.com/${v}`;
+  }
+  return null;
+}
+
+function renderLink(href: string | null, label: string | null | undefined) {
+  const text = (label ?? "").trim();
+  if (!text) return "";
+  if (!href || !/^https?:\/\//i.test(href)) return escapeHtml(text);
+  return `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`;
+}
+
+export function renderSocialHtml(u: { instagram?: string | null; facebook?: string | null; website?: string | null }) {
+  const parts: string[] = [];
+  if (u.instagram) parts.push(`IG: ${renderLink(socialHref("instagram", u.instagram), u.instagram)}`);
+  if (u.facebook) parts.push(`FB: ${renderLink(socialHref("facebook", u.facebook), u.facebook)}`);
+  if (u.website) parts.push(`Web: ${renderLink(u.website, u.website)}`);
+  return parts.join("<br/>");
+}
+
+export function modelQrPayload(modelId: string) {
+  return `model:${modelId}`;
+}
+
+async function modelQrDataUrl(modelId: string) {
+  return QRCode.toDataURL(modelQrPayload(modelId), { margin: 1, width: 160, errorCorrectionLevel: "M" });
+}
+
 async function getLabelRows(tenantDb: any, eventId: string, exportSettings: ExportSettings) {
   const rows = await tenantDb
     .select({
+      modelId: modelsTable.id,
       userEmail: usersTable.email,
       firstName: userProfilesTable.firstName,
       lastName: userProfilesTable.lastName,
@@ -316,7 +352,8 @@ async function getLabelRows(tenantDb: any, eventId: string, exportSettings: Expo
       categorySeqId: categoriesTable.seqId,
       modelName: modelsTable.name,
       modelCode: modelsTable.code,
-      displayNumber: modelsTable.displayNumber
+      displayNumber: modelsTable.displayNumber,
+      notes: modelsTable.notes
     })
     .from(modelsTable)
     .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
@@ -324,12 +361,15 @@ async function getLabelRows(tenantDb: any, eventId: string, exportSettings: Expo
     .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId))
     .where(eq(categoriesTable.eventId, eventId as any));
 
-  return (rows as any[]).map((row) => ({
+  return Promise.all((rows as any[]).map(async (row) => ({
     utente: fullName(row.firstName, row.lastName, row.userEmail) || row.userEmail || "",
     categoria: row.categoryName ?? "",
     nomeModello: row.modelName ?? "",
-    codice: formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber)
-  }));
+    codice: formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber),
+    note: row.notes ?? "",
+    qrPayload: modelQrPayload(row.modelId),
+    qr: await modelQrDataUrl(row.modelId)
+  })));
 }
 
 const managerExportRoutes = new Elysia()
@@ -458,7 +498,10 @@ const managerExportRoutes = new Elysia()
         userId: registrationsTable.userId,
         email: usersTable.email,
         firstName: userProfilesTable.firstName,
-        lastName: userProfilesTable.lastName
+        lastName: userProfilesTable.lastName,
+        instagram: userProfilesTable.instagram,
+        facebook: userProfilesTable.facebook,
+        website: userProfilesTable.website
       })
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
@@ -509,6 +552,9 @@ const managerExportRoutes = new Elysia()
       if (exportSettings.includeParticipantEmail) {
         base.email = u.email;
       }
+      base.instagram = u.instagram ?? "";
+      base.facebook = u.facebook ?? "";
+      base.website = u.website ?? "";
       return base;
     });
 
@@ -542,7 +588,10 @@ const managerExportRoutes = new Elysia()
         userId: registrationsTable.userId,
         email: usersTable.email,
         firstName: userProfilesTable.firstName,
-        lastName: userProfilesTable.lastName
+        lastName: userProfilesTable.lastName,
+        instagram: userProfilesTable.instagram,
+        facebook: userProfilesTable.facebook,
+        website: userProfilesTable.website
       })
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
@@ -580,18 +629,19 @@ const managerExportRoutes = new Elysia()
       .map((u) => {
         const participant = fullName(u.firstName, u.lastName, u.email);
         const modelList = modelsByUser.get(u.userId) ?? [];
-        return `<tr><td>${participant}</td><td>${u.email}</td><td>${modelList.join("<br/>") || "-"}</td></tr>`;
+        const modelsHtml = modelList.map((m) => escapeHtml(m)).join("<br/>") || "-";
+        return `<tr><td>${escapeHtml(participant)}</td><td>${escapeHtml(u.email)}</td><td>${renderSocialHtml(u) || "-"}</td><td>${modelsHtml}</td></tr>`;
       })
       .join("");
 
     set.headers["content-type"] = "text/html; charset=utf-8";
-    set.headers["content-disposition"] = `inline; filename=\"users-by-event-${eventId}.html\"`;
+    set.headers["content-disposition"] = `inline; filename=\"users-by-event-${normalizeFilePart(eventId, "event")}.html\"`;
 
     return `<!DOCTYPE html>
 <html>
   <head>
     <meta charset=\"utf-8\" />
-    <title>Export utenti ${event?.name ?? eventId}</title>
+    <title>Export utenti ${escapeHtml(event?.name ?? eventId)}</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 24px; }
       h1 { margin-bottom: 8px; }
@@ -606,17 +656,18 @@ const managerExportRoutes = new Elysia()
   </head>
   <body>
     <h1>Utenti per evento</h1>
-    <p><strong>Evento:</strong> ${event?.name ?? eventId}</p>
+    <p><strong>Evento:</strong> ${escapeHtml(event?.name ?? eventId)}</p>
     <table>
       <thead>
         <tr>
           <th>Partecipante</th>
           <th>Email</th>
+          <th>Social</th>
           <th>Modelli</th>
         </tr>
       </thead>
       <tbody>
-        ${rows || "<tr><td colspan=\"3\">Nessun dato</td></tr>"}
+        ${rows || "<tr><td colspan=\"4\">Nessun dato</td></tr>"}
       </tbody>
     </table>
     <script>window.onload = () => window.print();</script>
@@ -626,6 +677,83 @@ const managerExportRoutes = new Elysia()
     query: t.Object({ eventId: t.String() }),
     detail: {
       summary: "Export utenti per evento (stampa PDF)",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/models/print", async ({ tenantDb, query, set }) => {
+    const eventId = query?.eventId ? String(query.eventId) : null;
+    const categoryId = query?.categoryId ? String(query.categoryId) : null;
+    const exportSettings = await loadExportSettings(tenantDb);
+
+    const filters = [] as any[];
+    if (eventId) filters.push(eq(categoriesTable.eventId, eventId as any));
+    if (categoryId) filters.push(eq(modelsTable.categoryId, categoryId as any));
+    const baseQuery = tenantDb
+      .select({
+        id: modelsTable.id,
+        name: modelsTable.name,
+        description: modelsTable.description,
+        notes: modelsTable.notes,
+        code: modelsTable.code,
+        displayNumber: modelsTable.displayNumber,
+        categoryName: categoriesTable.name,
+        categorySeqId: categoriesTable.seqId,
+        userEmail: usersTable.email,
+        firstName: userProfilesTable.firstName,
+        lastName: userProfilesTable.lastName
+      })
+      .from(modelsTable)
+      .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
+      .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId));
+    const rows = (filters.length ? await baseQuery.where(and(...filters)) : await baseQuery) as any[];
+
+    const cards = await Promise.all(rows.map(async (row) => {
+      const code = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber);
+      const qr = await modelQrDataUrl(row.id);
+      return `<section class="card">
+        <img class="qr" alt="${escapeHtml(modelQrPayload(row.id))}" src="${escapeHtml(qr)}" width="120" height="120"/>
+        <div class="info">
+          <h2>${escapeHtml(row.name)}</h2>
+          <p><strong>Codice:</strong> ${escapeHtml(code)}</p>
+          <p><strong>Categoria:</strong> ${escapeHtml(row.categoryName)}</p>
+          <p><strong>Utente:</strong> ${escapeHtml(fullName(row.firstName, row.lastName, row.userEmail))}</p>
+          ${row.description && exportSettings.includeModelDescription ? `<p><strong>Descrizione:</strong> ${escapeHtml(row.description)}</p>` : ""}
+          ${row.notes ? `<p><strong>Note:</strong> ${escapeHtml(row.notes)}</p>` : ""}
+        </div>
+      </section>`;
+    }));
+
+    set.headers["content-type"] = "text/html; charset=utf-8";
+    set.headers["content-disposition"] = `inline; filename="models-print.html"`;
+
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Stampa modelli</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; }
+      .card { display: flex; gap: 16px; border: 1px solid #ccc; padding: 12px; margin-bottom: 12px; page-break-inside: avoid; break-inside: avoid; }
+      .card h2 { margin: 0 0 6px; font-size: 14pt; }
+      .card p { margin: 2px 0; font-size: 10pt; }
+      @media print {
+        @page { size: A4 portrait; margin: 12mm; }
+        body { margin: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Modelli</h1>
+    ${cards.join("") || "<p>Nessun modello</p>"}
+    <script>window.onload = () => window.print();</script>
+  </body>
+</html>`;
+  }, {
+    query: t.Object({ eventId: t.Optional(t.String()), categoryId: t.Optional(t.String()) }),
+    detail: {
+      summary: "Stampa modelli (HTML stampabile con QR e note)",
       tags: ["Exports"],
       security: [{ bearerAuth: [] }]
     }
@@ -656,7 +784,7 @@ const managerExportRoutes = new Elysia()
     const exportSettings = await loadExportSettings(tenantDb);
     const rows = await getLabelRows(tenantDb, eventId, exportSettings);
     setXlsxHeaders(set, buildFileName(exportSettings, "labels", eventId));
-    return toXlsx(buildSheetName(exportSettings, "Labels"), rows);
+    return toXlsx(buildSheetName(exportSettings, "Labels"), rows.map(({ qr: _qr, ...rest }) => rest));
   }, {
     query: t.Object({ eventId: t.String() }),
     detail: {
@@ -681,17 +809,17 @@ const managerExportRoutes = new Elysia()
     const exportSettings = await loadExportSettings(tenantDb);
     const rows = await getLabelRows(tenantDb, eventId, exportSettings);
     const bodyRows = rows
-      .map((row) => `<tr><td>${row.utente}</td><td>${row.categoria}</td><td>${row.nomeModello}</td><td>${row.codice}</td></tr>`)
+      .map((row) => `<tr><td>${escapeHtml(row.utente)}</td><td>${escapeHtml(row.categoria)}</td><td>${escapeHtml(row.nomeModello)}</td><td>${escapeHtml(row.codice)}</td><td>${escapeHtml(row.note)}</td><td><img class="qr" alt="${escapeHtml(row.qrPayload)}" src="${escapeHtml(row.qr)}" width="80" height="80"/></td></tr>`)
       .join("");
 
     set.headers["content-type"] = "text/html; charset=utf-8";
-    set.headers["content-disposition"] = `inline; filename=\"labels-${eventId}.html\"`;
+    set.headers["content-disposition"] = `inline; filename=\"labels-${normalizeFilePart(eventId, "event")}.html\"`;
 
     return `<!DOCTYPE html>
 <html>
   <head>
     <meta charset=\"utf-8\" />
-    <title>Etichette ${event?.name ?? eventId}</title>
+    <title>Etichette ${escapeHtml(event?.name ?? eventId)}</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 24px; }
       h1 { margin-bottom: 8px; }
@@ -706,7 +834,7 @@ const managerExportRoutes = new Elysia()
   </head>
   <body>
     <h1>Stampa etichette</h1>
-    <p><strong>Evento:</strong> ${event?.name ?? eventId}</p>
+    <p><strong>Evento:</strong> ${escapeHtml(event?.name ?? eventId)}</p>
     <table>
       <thead>
         <tr>
@@ -714,10 +842,12 @@ const managerExportRoutes = new Elysia()
           <th>Categoria</th>
           <th>Nome modello</th>
           <th>Codice</th>
+          <th>Note</th>
+          <th>QR</th>
         </tr>
       </thead>
       <tbody>
-        ${bodyRows || "<tr><td colspan=\"4\">Nessun dato</td></tr>"}
+        ${bodyRows || "<tr><td colspan=\"6\">Nessun dato</td></tr>"}
       </tbody>
     </table>
     <script>window.onload = () => window.print();</script>
@@ -830,9 +960,9 @@ const userExportRoutes = new Elysia()
     const modelRowsHtml = (allModels as any[]).map((model) => {
       const code = formatModelCodeForExport(exportSettings, model.code, model.categorySeqId, model.displayNumber);
       return `<tr>
-        <td>${code || model.id.slice(0, 8)}</td>
-        <td>${model.name}</td>
-        <td>${model.categoryName ?? ""}</td>
+        <td>${escapeHtml(code || model.id.slice(0, 8))}</td>
+        <td>${escapeHtml(model.name)}</td>
+        <td>${escapeHtml(model.categoryName ?? "")}</td>
       </tr>`;
     });
 
@@ -862,10 +992,10 @@ const userExportRoutes = new Elysia()
   <div class="section">
     <h2>User Details</h2>
     <p><strong>User ID:</strong> ${paddedUserId}</p>
-    <p><strong>First name:</strong> ${profile.firstName ?? ""}</p>
-    <p><strong>Last name:</strong> ${profile.lastName ?? ""}</p>
-    <p><strong>Country:</strong> ${profile.city ?? ""}</p>
-    <p><strong>E-mail address:</strong> ${profile.email}</p>
+    <p><strong>First name:</strong> ${escapeHtml(profile.firstName)}</p>
+    <p><strong>Last name:</strong> ${escapeHtml(profile.lastName)}</p>
+    <p><strong>Country:</strong> ${escapeHtml(profile.city)}</p>
+    <p><strong>E-mail address:</strong> ${escapeHtml(profile.email)}</p>
     <p><strong>Model Total:</strong> ${allModels.length}</p>
   </div>
   <div class="section">

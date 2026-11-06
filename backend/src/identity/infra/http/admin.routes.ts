@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import crypto from "node:crypto";
 import { requireRole } from "./role.middleware";
+import { normalizeSocialPatch } from "../../../shared/domain/socialLinks";
 import { usersTable, userProfilesTable } from "../persistence/schema";
 import { BcryptHasher } from "../crypto/bcryptHasher";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
@@ -69,7 +70,10 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
         city: userProfilesTable.city,
         address: userProfilesTable.address,
         emergencyContact: userProfilesTable.emergencyContact,
-        emergencyContactName: userProfilesTable.emergencyContactName
+        emergencyContactName: userProfilesTable.emergencyContactName,
+        instagram: userProfilesTable.instagram,
+        facebook: userProfilesTable.facebook,
+        website: userProfilesTable.website
       })
       .from(usersTable)
       .leftJoin(userProfilesTable, eq(usersTable.id, userProfilesTable.userId))
@@ -87,13 +91,19 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .put("/:userId/profile", async ({ tenantDb, params, body }) => {
+  .put("/:userId/profile", async ({ tenantDb, params, body, set }) => {
+    const social = normalizeSocialPatch(body);
+    if (!social.ok) {
+      set.status = 422;
+      return { error: social.error };
+    }
+    const values = { ...body, ...social.patch };
     await tenantDb
       .insert(userProfilesTable)
-      .values({ userId: params.userId as any, ...body })
+      .values({ userId: params.userId as any, ...values })
       .onConflictDoUpdate({
         target: userProfilesTable.userId,
-        set: body
+        set: values
       });
     return { updated: true };
   }, {
@@ -105,7 +115,10 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
       city: t.Optional(t.String()),
       address: t.Optional(t.String()),
       emergencyContact: t.Optional(t.String()),
-      emergencyContactName: t.Optional(t.String())
+      emergencyContactName: t.Optional(t.String()),
+      instagram: t.Optional(t.Union([t.String(), t.Null()])),
+      facebook: t.Optional(t.Union([t.String(), t.Null()])),
+      website: t.Optional(t.Union([t.String(), t.Null()]))
     }),
     detail: {
       summary: "Aggiorna profilo utente (admin)",

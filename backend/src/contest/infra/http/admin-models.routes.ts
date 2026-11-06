@@ -24,6 +24,8 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
           levelId: modelsTable.levelId,
           displayNumber: modelsTable.displayNumber,
           isTeam: modelsTable.isTeam,
+          notes: modelsTable.notes,
+          internalNotes: modelsTable.internalNotes,
           categorySeqId: categoriesTable.seqId
         })
         .from(modelsTable)
@@ -45,6 +47,8 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
         levelId: modelsTable.levelId,
         displayNumber: modelsTable.displayNumber,
         isTeam: modelsTable.isTeam,
+        notes: modelsTable.notes,
+        internalNotes: modelsTable.internalNotes,
         categorySeqId: categoriesTable.seqId
       })
       .from(modelsTable)
@@ -67,6 +71,9 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
       const trailingDigits = updates.code.match(/(\d+)\s*$/);
       updates.code = trailingDigits ? Number.parseInt(trailingDigits[1], 10) : null;
     }
+    for (const key of ["notes", "internalNotes"] as const) {
+      if (typeof updates[key] === "string") updates[key] = (updates[key] as string).trim() || null;
+    }
     await tenantDb.update(modelsTable).set(updates as any).where(eq(modelsTable.id, params.modelId as any));
     return { updated: true };
   }, {
@@ -76,7 +83,9 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
       categoryId: t.Optional(t.String()),
       description: t.Optional(t.String()),
       code: t.Optional(t.Union([t.Number(), t.String()])),
-      imageUrl: t.Optional(t.String())
+      imageUrl: t.Optional(t.String()),
+      notes: t.Optional(t.String({ maxLength: 2000 })),
+      internalNotes: t.Optional(t.String({ maxLength: 4000 }))
     }),
     detail: {
       summary: "Aggiorna modello (admin)",
