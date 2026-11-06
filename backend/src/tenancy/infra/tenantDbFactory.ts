@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { assertProductionSecrets } from "../../shared/infra/config/productionEnv";
 
 const cache = new Map<string, ReturnType<typeof drizzle>>();
 
@@ -12,6 +13,8 @@ export type TenantDbConfig = {
 };
 
 export function getTenantDbConfigFromEnv(env: NodeJS.ProcessEnv = process.env): TenantDbConfig {
+  // Dev-only fallbacks below; production must provide a non-default PG_PASSWORD.
+  assertProductionSecrets(env, ["PG_PASSWORD"]);
   return {
     host: env.PG_HOST ?? "localhost",
     port: Number(env.PG_PORT ?? "5432"),

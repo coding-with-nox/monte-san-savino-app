@@ -25,7 +25,6 @@ jobs:
           cp PACKAGE.md package/README.md
           cp docker/nginx/default.conf package/docker/nginx/default.conf
           cp docker/postgres/01-init-tenant.sh package/docker/postgres/01-init-tenant.sh
-          cp docker/postgres/02-test-data.sh package/docker/postgres/02-test-data.sh
 
       - name: Upload package
         uses: actions/upload-artifact@v4

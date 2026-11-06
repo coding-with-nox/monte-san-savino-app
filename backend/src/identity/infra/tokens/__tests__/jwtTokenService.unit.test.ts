@@ -4,7 +4,7 @@ import { JwtTokenService } from "../jwtTokenService";
 import { assertRequiredEnv } from "../../../../bootstrap/assertRequiredEnv";
 
 const p = { sub: "u1", email: "a@b.it", role: "admin", tenantId: "t1" };
-const TEST_SECRET = "unit-test-secret";
+const TEST_SECRET = "unit-test-secret-0123456789abcdef0123";
 const originalSecret = process.env.JWT_SECRET;
 
 beforeAll(() => { process.env.JWT_SECRET = TEST_SECRET; });
@@ -69,5 +69,25 @@ describe("JwtTokenService", () => {
     const bad = await new SignJWT({ ...p }).setProtectedHeader({ alg: "HS256" }).setExpirationTime("1h")
       .sign(new TextEncoder().encode("other-secret"));
     await expect(svc.verify(bad)).rejects.toThrow();
+  });
+});
+
+describe("hardening", () => {
+  it("rejects JWT_SECRET shorter than 32 chars", async () => {
+    process.env.JWT_SECRET = "too-short";
+    try {
+      await expect(new JwtTokenService().signAccess(p)).rejects.toThrow(/32/);
+      expect(() => assertRequiredEnv()).toThrow(/JWT_SECRET/);
+    } finally { process.env.JWT_SECRET = TEST_SECRET; }
+  });
+  it("only accepts HS256 tokens", async () => {
+    const hs512 = await new SignJWT({ ...p }).setProtectedHeader({ alg: "HS512" }).setExpirationTime("1h")
+      .sign(new TextEncoder().encode(TEST_SECRET));
+    await expect(new JwtTokenService().verify(hs512)).rejects.toThrow();
+  });
+  it("access token default TTL is 15 minutes, refresh 30 days", async () => {
+    const svc = new JwtTokenService();
+    expect((await svc.signAccess(p)).expiresIn).toBe(900);
+    expect((await svc.signRefresh(p)).expiresIn).toBe(60 * 60 * 24 * 30);
   });
 });

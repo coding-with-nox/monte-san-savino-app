@@ -13,7 +13,6 @@ import { modelRoutes } from "../contest/infra/http/model.routes";
 import { eventRoutes, enrollmentRoutes } from "../contest/infra/http/event.routes";
 import { categoryRoutes } from "../contest/infra/http/category.routes";
 import { userEnrollmentRoutes, adminEnrollmentRoutes, staffCheckinRoutes } from "../contest/infra/http/enrollment.routes";
-import { paymentRoutes } from "../contest/infra/http/payment.routes";
 import { publicRoutes } from "../contest/infra/http/public.routes";
 import { exportRoutes } from "../contest/infra/http/export.routes";
 import { awardRoutes } from "../contest/infra/http/award.routes";
@@ -116,7 +115,11 @@ export function buildApp() {
     .use(userEnrollmentRoutes)
     .use(adminEnrollmentRoutes)
     .use(staffCheckinRoutes)
-    .use(paymentRoutes)
+    // /payments DISABLED: unused by the frontend and insecure as written. To re-enable it needs:
+    // (1) ownership check (the registration must belong to the caller), (2) webhook signature
+    // verification (no unauthenticated status changes), (3) amount computed server-side from the
+    // event/category fee (never from the client body), (4) a DB transaction for payment + registration update.
+    // .use(paymentRoutes)
     .use(publicRoutes)
     .use(exportRoutes)
     .use(awardRoutes)

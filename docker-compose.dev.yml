@@ -2,7 +2,7 @@ services:
   adminer:
     image: adminer:4
     ports:
-      - "8888:8080"
+      - "127.0.0.1:8888:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -14,7 +14,7 @@ services:
       - ./backend:/app
     command: sh -c "bun install && bun run dev"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
   frontend:
     image: node:20-alpine
@@ -24,7 +24,7 @@ services:
       - frontend_modules:/app/node_modules
     command: sh -c "npm ci && npm run dev -- --host"
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     environment:
       VITE_PROXY_TARGET: http://backend:3000
 

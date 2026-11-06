@@ -8,11 +8,22 @@ import { BcryptHasher } from "../crypto/bcryptHasher";
 import { normalizeProfilePatch } from "../../domain/profileFields";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { EmailService } from "../../../shared/infra/email/emailService";
+import { ROLES, type Role } from "../../domain/Role";
+import { authorizeCreateUser, authorizeUpdateUser, authorizeResetPassword } from "../../domain/adminUserPolicy";
+import { generateTemporaryPassword } from "../../domain/temporaryPassword";
+
+const roleSchema = t.Union(ROLES.map((r) => t.Literal(r)) as any);
 
 export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
-  .post("/", async ({ tenantDb, body, set }) => {
+  .post("/", async ({ tenantDb, body, set, user }) => {
+    const newRole: Role = (body.role as Role | undefined) ?? "user";
+    const authz = authorizeCreateUser(user!.role as Role, newRole);
+    if (!authz.ok) {
+      set.status = 403;
+      return { error: authz.error };
+    }
     if (body.password.length < 8) {
       set.status = 400;
       return { error: "Password must be at least 8 characters long" };
@@ -27,16 +38,16 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
     await tenantDb.insert(usersTable).values({
       id,
       email: body.email,
-      role: body.role || "user",
+      role: newRole,
       passwordHash,
       isActive: true
     });
-    return { id, email: body.email, role: body.role || "user" };
+    return { id, email: body.email, role: newRole };
   }, {
     body: t.Object({
       email: t.String(),
       password: t.String(),
-      role: t.Optional(t.String())
+      role: t.Optional(roleSchema)
     }),
     detail: {
       summary: "Crea utente (admin)",
@@ -142,13 +153,38 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .patch("/:userId", async ({ tenantDb, params, body }) => {
-    await tenantDb.update(usersTable).set(body).where(eq(usersTable.id, params.userId as any));
+  .patch("/:userId", async ({ tenantDb, params, body, set, user }) => {
+    const rows = await tenantDb
+      .select({ role: usersTable.role })
+      .from(usersTable)
+      .where(eq(usersTable.id, params.userId as any));
+    if (!rows[0]) {
+      set.status = 404;
+      return { error: "User not found" };
+    }
+    const authz = authorizeUpdateUser({
+      actorId: user!.id,
+      actorRole: user!.role as Role,
+      targetId: params.userId,
+      targetRole: rows[0].role as Role,
+      newRole: body.role as Role | undefined,
+      newIsActive: body.isActive
+    });
+    if (!authz.ok) {
+      set.status = 403;
+      return { error: authz.error };
+    }
+    const patch: { role?: Role; isActive?: boolean } = {};
+    if (body.role !== undefined) patch.role = body.role as Role;
+    if (body.isActive !== undefined) patch.isActive = body.isActive;
+    if (Object.keys(patch).length > 0) {
+      await tenantDb.update(usersTable).set(patch).where(eq(usersTable.id, params.userId as any));
+    }
     return { updated: true };
   }, {
     params: t.Object({ userId: t.String() }),
     body: t.Object({
-      role: t.Optional(t.String()),
+      role: t.Optional(roleSchema),
       isActive: t.Optional(t.Boolean())
     }),
     detail: {
@@ -157,27 +193,43 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .post("/:userId/reset-password", async ({ tenantDb, params }) => {
+  .post("/:userId/reset-password", async ({ tenantDb, params, set, user }) => {
     const userRows = await tenantDb
-      .select({ email: usersTable.email })
+      .select({ email: usersTable.email, role: usersTable.role })
       .from(usersTable)
       .where(eq(usersTable.id, params.userId as any));
     if (!userRows[0]) {
+      set.status = 404;
       return { error: "User not found" };
     }
-    const tempPassword = `Temp-${Math.random().toString(36).slice(2, 10)}`;
-    const passwordHash = await new BcryptHasher().hash(tempPassword);
-    await tenantDb.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, params.userId as any));
-    const emailService = new EmailService();
-    const emailSent = await emailService.sendPasswordReset({
+    const authz = authorizeResetPassword({
+      actorId: user!.id,
+      actorRole: user!.role as Role,
+      targetId: params.userId,
+      targetRole: userRows[0].role as Role
+    });
+    if (!authz.ok) {
+      set.status = 403;
+      return { error: authz.error };
+    }
+    // The temporary password is never returned in the response: it is delivered by email only.
+    const tempPassword = generateTemporaryPassword();
+    const emailSent = await new EmailService().sendPasswordReset({
       to: userRows[0].email,
       temporaryPassword: tempPassword
     });
-    return { temporaryPassword: tempPassword, emailSent };
+    if (!emailSent) {
+      // Do not change the password if nobody can receive it (would lock the user out).
+      set.status = 503;
+      return { error: "Email delivery unavailable: password was not reset", emailSent: false };
+    }
+    const passwordHash = await new BcryptHasher().hash(tempPassword);
+    await tenantDb.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, params.userId as any));
+    return { emailSent: true };
   }, {
     params: t.Object({ userId: t.String() }),
     detail: {
-      summary: "Reset password",
+      summary: "Reset password (la password temporanea viene inviata solo via email)",
       tags: ["Admin"],
       security: [{ bearerAuth: [] }]
     }

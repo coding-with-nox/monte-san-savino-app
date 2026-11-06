@@ -5,7 +5,7 @@ import { authMiddleware } from "../auth.middleware";
 import { JwtTokenService } from "../../tokens/jwtTokenService";
 
 const originalSecret = process.env.JWT_SECRET;
-beforeAll(() => { process.env.JWT_SECRET = "test-secret"; });
+beforeAll(() => { process.env.JWT_SECRET = "unit-test-secret-0123456789abcdef0123"; });
 afterAll(() => {
   if (originalSecret === undefined) delete process.env.JWT_SECRET;
   else process.env.JWT_SECRET = originalSecret;

@@ -5,7 +5,8 @@ process.env.PG_HOST ??= "localhost";
 process.env.PG_PORT ??= "5432";
 process.env.PG_USER ??= "postgres";
 process.env.PG_PASSWORD ??= "postgres";
-process.env.JWT_SECRET ??= "test-secret";
+process.env.JWT_SECRET ??= "integration-test-secret-0123456789abcdef";
+process.env.RATE_LIMIT_ENABLED ??= "false";
 
 import { buildApp } from "../bootstrap/app";
 

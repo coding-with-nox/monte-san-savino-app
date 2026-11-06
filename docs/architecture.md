@@ -277,10 +277,11 @@ MinIO config: `MINIO_ENDPOINT`, `MINIO_PORT`, `MINIO_SSL`, `MINIO_ACCESS_KEY`,
 | Service  | Image | Purpose |
 |----------|-------|---------|
 | `postgres` | `postgres:16` | Database; init script `docker/postgres/01-init-tenant.sh` creates the tenant DB |
-| `minio`    | `minio/minio` | Object storage (API `:9000`, console `:9001`) |
-| `backend`  | GHCR `…-backend:latest` | Elysia API on `:3000`; waits for postgres healthy + minio |
+| `minio`    | `minio/minio` | Object storage (API `127.0.0.1:9000` only; console not published) |
+| `backend`  | GHCR `…-backend:latest` | Elysia API on `:3000` (not published; reached via nginx `/api`); waits for postgres healthy + minio |
 | `frontend` | GHCR `…-frontend:latest` | Nginx-served SPA on `:8080` |
-| `db-init`  | `postgres:16` | One-shot: runs `01-init-tenant.sh` then `02-test-data.sh` |
+| `db-schema` | `postgres:16` | One-shot: runs `01-init-tenant.sh` |
+| `db-seed`  | `postgres:16` | Opt-in (`--profile demo`): `02-test-data.sh`, demo data, only on an empty `users` table, needs `DEMO_PASSWORD_HASH` |
 
 Key backend env: `JWT_SECRET`, `PG_HOST/PORT/DB/USER/PASSWORD`,
 `MINIO_ENDPOINT/PORT/ACCESS_KEY/SECRET_KEY`.

@@ -17,59 +17,53 @@
 #   • sponsor
 #   • settings export/tema
 #
-# Password di tutti gli utenti: Password1!
+#
+# SOLO DEMO / SVILUPPO. Non eseguire su database reali.
+#   • Parte solo se la tabella users e' VUOTA (count = 0); altrimenti esce senza
+#     toccare nulla. Tutti gli INSERT usano ON CONFLICT DO NOTHING.
+#   • Nessuna password nel repo: l'hash argon2id degli utenti demo va passato
+#     in DEMO_PASSWORD_HASH (obbligatoria, nessun default). Nessuna password o
+#     hash viene stampato nei log.
+#   • Generare l'hash (stessa funzione usata dal backend):
+#       cd backend && bun -e "console.log(await Bun.password.hash(process.argv[1]))" 'LaTuaPassword'
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 TENANT_DB_NAME="${TENANT_DB_NAME:-tenant_db_1}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}"
+: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
+DEMO_PASSWORD_HASH="${DEMO_PASSWORD_HASH:-}"
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
 
-FORCE_OVERWRITE="${FORCE_OVERWRITE:-false}"
+if [ -z "$DEMO_PASSWORD_HASH" ]; then
+  echo "ERRORE: DEMO_PASSWORD_HASH e' obbligatoria per il profilo demo (hash argon2id, nessun default)." >&2
+  exit 1
+fi
+case "$DEMO_PASSWORD_HASH" in
+  '$argon2id$'*) ;;
+  *) echo "ERRORE: DEMO_PASSWORD_HASH non sembra un hash argon2id (atteso prefisso \$argon2id\$)." >&2; exit 1 ;;
+esac
 
-if [ "$FORCE_OVERWRITE" = "true" ]; then
-  echo "⚠  FORCE_OVERWRITE=true — truncate di tutte le tabelle di test..."
-  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$TENANT_DB_NAME" <<'TRUNCATE_SQL'
-TRUNCATE TABLE
-  settings,
-  special_mentions,
-  sponsors,
-  modification_requests,
-  votes,
-  judge_completions,
-  judge_assignments,
-  registrations,
-  models,
-  team_mates,
-  teams,
-  awards,
-  award_brackets,
-  categories,
-  event_campaigns,
-  events,
-  user_profiles,
-  users
-CASCADE;
-TRUNCATE_SQL
+# Guard: non seminare mai un database che contiene gia' utenti.
+USER_COUNT=$(psql -v ON_ERROR_STOP=1 -tA --username "$POSTGRES_USER" --dbname "$TENANT_DB_NAME" -c "SELECT count(*) FROM users")
+if [ "$USER_COUNT" != "0" ]; then
+  echo "Seed demo saltato: la tabella users contiene gia' ${USER_COUNT} righe (il seed gira solo su DB vuoto)."
+  exit 0
 fi
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$TENANT_DB_NAME" <<'SQL'
+psql -v ON_ERROR_STOP=1 -v demo_hash="$DEMO_PASSWORD_HASH" --username "$POSTGRES_USER" --dbname "$TENANT_DB_NAME" <<'SQL'
 
--- ===========================================================================
--- pgcrypto per hashing bcrypt (compatibile con Bun.password.verify)
--- ===========================================================================
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- L'hash arriva da DEMO_PASSWORD_HASH (variabile psql :demo_hash); i blocchi $$ non
+-- espandono le variabili psql, quindi lo passiamo via parametro di sessione.
+-- \gset: l'esito (che contiene l'hash) non viene stampato nei log.
+SELECT set_config('mss.demo_hash', :'demo_hash', false) AS _unused \gset
 
--- Precomputed argon2id hash di "Password1!"
--- pgcrypto genera $2a$ (bcrypt) ma Bun 1.1.29 supporta solo $2b$ e argon2id
--- Hash generato con: Bun.password.hash('Password1!')
 DO $$
 DECLARE
-  pwd_hash text := '$argon2id$v=19$m=65536,t=2,p=1$jEZURwULbt/2wPh7F7NyXD5WAMJExKYYhP5G4M6Lcxo$JdOU8r8+KkCBK6FV87OIQ/OgKF7t/3Zecly3FWF3rx8';
+  pwd_hash text := current_setting('mss.demo_hash');
 BEGIN
 
 -- ===========================================================================
@@ -78,7 +72,7 @@ BEGIN
 -- admin@test.com — ruolo admin
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000001', 'admin@test.com', 'admin', pwd_hash, true)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_profiles (user_id, first_name, last_name, phone, city, address, emergency_contact, emergency_contact_name)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000001', 'Admin', 'Sistema', '+39 0577 000001', 'Monte San Savino', 'Via Roma 1', '+39 333 0000001', 'Contatto Admin')
@@ -87,7 +81,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- manager@test.com — ruolo manager
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000002', 'manager@test.com', 'manager', pwd_hash, true)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_profiles (user_id, first_name, last_name, phone, city, address, emergency_contact, emergency_contact_name)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000002', 'Marco', 'Direttore', '+39 0577 000002', 'Arezzo', 'Via Mazzini 10', '+39 333 0000002', 'Contatto Marco')
@@ -96,7 +90,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- judge1@test.com — ruolo judge
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000003', 'judge1@test.com', 'judge', pwd_hash, true)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_profiles (user_id, first_name, last_name, phone, city, address, emergency_contact, emergency_contact_name)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000003', 'Giulia', 'Giudice', '+39 0577 000003', 'Siena', 'Via Tribunale 3', '+39 333 0000003', 'Contatto Giulia')
@@ -105,7 +99,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- judge2@test.com — ruolo judge
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000004', 'judge2@test.com', 'judge', pwd_hash, true)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_profiles (user_id, first_name, last_name, phone, city, address, emergency_contact, emergency_contact_name)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000004', 'Roberto', 'Arbitro', '+39 0577 000004', 'Firenze', 'Via Giudici 7', '+39 333 0000004', 'Contatto Roberto')
@@ -114,7 +108,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- staff@test.com — ruolo staff (check-in)
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000005', 'staff@test.com', 'staff', pwd_hash, true)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_profiles (user_id, first_name, last_name, phone, city, address, emergency_contact, emergency_contact_name)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000005', 'Sara', 'Accoglienza', '+39 0577 000005', 'Monte San Savino', 'Via Staff 5', '+39 333 0000005', 'Contatto Sara')
@@ -123,7 +117,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- user1@test.com — utente normale, profilo completo, modelli iscritti, check-in
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000006', 'user1@test.com', 'user', pwd_hash, true)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_profiles (user_id, first_name, last_name, phone, city, address, emergency_contact, emergency_contact_name)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000006', 'Mario', 'Rossi', '+39 335 100001', 'Roma', 'Via dei Modelli 12', '+39 335 100099', 'Maria Rossi')
@@ -132,7 +126,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- user2@test.com — utente normale, fa parte di un team
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000007', 'user2@test.com', 'user', pwd_hash, true)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_profiles (user_id, first_name, last_name, phone, city, address, emergency_contact, emergency_contact_name)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000007', 'Luigi', 'Bianchi', '+39 335 100002', 'Milano', 'Via Scala 8', '+39 335 100098', 'Anna Bianchi')
@@ -141,7 +135,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- user3@test.com — partecipante evento passato, check-in effettuato
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000008', 'user3@test.com', 'user', pwd_hash, true)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_profiles (user_id, first_name, last_name, phone, city, address, emergency_contact, emergency_contact_name)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000008', 'Anna', 'Verdi', '+39 335 100003', 'Napoli', 'Via Vesuvio 22', '+39 335 100097', 'Giorgio Verdi')
@@ -150,7 +144,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- user4@test.com — utente DISATTIVATO (is_active=false)
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000009', 'user4@test.com', 'user', pwd_hash, false)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_profiles (user_id, first_name, last_name, phone, city, address, emergency_contact, emergency_contact_name)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000009', 'Carlo', 'Neri', '+39 335 100004', 'Torino', 'Via Buia 1', '+39 335 100096', 'Luisa Neri')
@@ -159,7 +153,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- user5@test.com — utente senza profilo (solo iscrizione senza modello)
 INSERT INTO users (id, email, role, password_hash, is_active)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000010', 'user5@test.com', 'user', pwd_hash, true)
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+ON CONFLICT DO NOTHING;
 -- Nessun user_profiles intenzionalmente
 
 END $$;
@@ -602,8 +596,7 @@ VALUES
   ('excel_file_prefix',           'export', NOW()),
   ('theme_mode',                  'light',  NOW()),
   ('theme_preset',                'violet', NOW())
-ON CONFLICT (key) DO UPDATE
-  SET value = EXCLUDED.value, updated_at = NOW();
+ON CONFLICT (key) DO NOTHING;
 
 -- ===========================================================================
 -- TEAM ADMIN
@@ -783,44 +776,14 @@ SQL
 
 echo "✓ Test data inseriti con successo nel DB '${TENANT_DB_NAME}'"
 echo ""
-echo "Credenziali di accesso (password: Password1!):"
-echo "  admin@test.com    → admin"
-echo "  manager@test.com  → manager"
-echo "  judge1@test.com   → judge (assegnato a MSS 2026 e MSS 2025)"
-echo "  judge2@test.com   → judge (assegnato a MSS 2026)"
-echo "  staff@test.com    → staff"
-echo "  user1@test.com    → user  (Mario Rossi, 3 modelli, check-in su Spitfire)"
-echo "  user2@test.com    → user  (Luigi Bianchi, team Aquile Blu + Dragoni Verdi)"
-echo "  user3@test.com    → user  (Anna Verdi, partecipante MSS 2025)"
-echo "  user4@test.com    → user  (Carlo Neri, DISATTIVATO)"
-echo "  user5@test.com    → user  (senza profilo, iscrizione senza modello)"
-
-# ===========================================================================
-# UTENTE ADMIN CASUALE — email random, password fissa Password1!
-# Nota: pgcrypto genera $2a$ non supportato da Bun 1.1.29 (UnsupportedAlgorithm)
-# Hash argon2id generato con: Bun.password.hash('Password1!')
-# ===========================================================================
-RAND_UUID=$(cat /proc/sys/kernel/random/uuid)
-RAND_SUFFIX=$(set +o pipefail; LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 6)
-RAND_EMAIL="admin-${RAND_SUFFIX}@mss.local"
-ARGON2_HASH='$argon2id$v=19$m=65536,t=2,p=1$jEZURwULbt/2wPh7F7NyXD5WAMJExKYYhP5G4M6Lcxo$JdOU8r8+KkCBK6FV87OIQ/OgKF7t/3Zecly3FWF3rx8'
-
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$TENANT_DB_NAME" <<SQL
-INSERT INTO users (id, email, role, password_hash, is_active)
-VALUES ('${RAND_UUID}', '${RAND_EMAIL}', 'admin', '${ARGON2_HASH}', true)
-ON CONFLICT (email) DO NOTHING;
-
-INSERT INTO user_profiles (user_id, first_name, last_name)
-VALUES ('${RAND_UUID}', 'Admin', 'Casuale')
-ON CONFLICT (user_id) DO NOTHING;
-SQL
-
-echo ""
-echo "============================================================"
-echo "  ADMIN CASUALE (usa queste credenziali per il primo login)"
-echo "============================================================"
-echo "  Email:    ${RAND_EMAIL}"
-echo "  Password: Password1!"
-echo "  Ruolo:    admin"
-echo "============================================================"
-echo ""
+echo "Utenti demo creati (la password e' quella da cui deriva DEMO_PASSWORD_HASH):"
+echo "  admin@test.com    -> admin"
+echo "  manager@test.com  -> manager"
+echo "  judge1@test.com   -> judge (assegnato a MSS 2026 e MSS 2025)"
+echo "  judge2@test.com   -> judge (assegnato a MSS 2026)"
+echo "  staff@test.com    -> staff"
+echo "  user1@test.com    -> user  (Mario Rossi, 3 modelli, check-in su Spitfire)"
+echo "  user2@test.com    -> user  (Luigi Bianchi, team Aquile Blu + Dragoni Verdi)"
+echo "  user3@test.com    -> user  (Anna Verdi, partecipante MSS 2025)"
+echo "  user4@test.com    -> user  (Carlo Neri, DISATTIVATO)"
+echo "  user5@test.com    -> user  (senza profilo, iscrizione senza modello)"

@@ -56,11 +56,14 @@ monte-san-savino-app/
 
 This runs `docker compose -f docker-compose.yml -f docker-compose.dev.yml up`, starting:
 
-- PostgreSQL — `:5432`
-- MinIO — API `:9000`, console `:9001`
-- Backend — `:3000`
-- Frontend — `:5173`
-- Adminer — `:8888`
+- PostgreSQL — `127.0.0.1:5432`
+- MinIO — API `127.0.0.1:9000`, console `127.0.0.1:9001`
+- Backend — `127.0.0.1:3000`
+- Frontend — `127.0.0.1:5173`
+- Adminer — `127.0.0.1:8888`
+
+All host ports are bound to loopback only. `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`,
+`MINIO_ROOT_PASSWORD` and `JWT_SECRET` are required in `.env` (no defaults, see `.env.example`).
 
 In dev mode the backend runs `bunx drizzle-kit push` (sync schema) then `bun --hot` for hot-reload, and seeds demo data on startup when `NODE_ENV != production`.
 
@@ -137,7 +140,7 @@ Deployment guides:
 | `PG_PORT` | `5432` | PostgreSQL port |
 | `PG_DB` | `tenant_db_1` | Database name |
 | `PG_USER` | `postgres` | DB user |
-| `PG_PASSWORD` | `postgres` | DB password |
+| `PG_PASSWORD` | — | Required, no default: DB password (compose passes `POSTGRES_PASSWORD`) |
 | `MINIO_ENDPOINT` | `localhost` | MinIO endpoint |
 | `MINIO_PORT` | `9000` | MinIO port |
 | `MINIO_ACCESS_KEY` | — | MinIO access key |

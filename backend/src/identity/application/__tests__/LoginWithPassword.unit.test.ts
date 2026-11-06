@@ -74,4 +74,10 @@ describe("LoginWithPassword.unit", () => {
       expect(p.role).toBe("judge");
     }
   });
+
+  it("disabled user gets the same error as wrong credentials", async () => {
+    const disabled = new User("uid-2", Email.create("bob@example.com"), "user", "hashed-pw", false);
+    const uc = new LoginWithPassword(stubRepo(disabled), stubHasher(true), stubTokens());
+    await expect(uc.execute({ email: "bob@example.com", password: "pw" })).rejects.toThrow(new Error("Invalid credentials"));
+  });
 });

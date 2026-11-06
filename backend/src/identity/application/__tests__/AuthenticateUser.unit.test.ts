@@ -44,7 +44,7 @@ describe("AuthenticateUser.unit", () => {
   it("throws when user is disabled (canLogin returns false)", async () => {
     const user = makeDisabledUser();
     const uc = new AuthenticateUser(stubRepo(user), stubHasher(true));
-    await expect(uc.execute({ email: "bob@example.com", password: "pw" })).rejects.toThrow();
+    await expect(uc.execute({ email: "bob@example.com", password: "pw" })).rejects.toThrow("Invalid credentials");
   });
 
   it("throws 'Invalid credentials' when password is wrong", async () => {

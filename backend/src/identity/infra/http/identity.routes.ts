@@ -8,7 +8,31 @@ import { UserRepositoryDrizzle } from "../persistence/userRepository.drizzle";
 import { getTenantDbFromEnv } from "../../../tenancy/infra/tenantDbFactory";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { consumeAuthCode, createAuthCode } from "../tokens/pkceStore";
+import { RefreshSession } from "../../application/RefreshSession";
+import { clientIp, rateLimiterFromEnv, type SlidingWindowRateLimiter } from "../../../shared/infra/http/rateLimiter";
 import crypto from "node:crypto";
+
+// Per-process limiter (not shared between replicas); built lazily so env is read at first use.
+let limiter: SlidingWindowRateLimiter | null | undefined;
+let limiterClock: (() => number) | undefined;
+export function resetAuthRateLimiter(now?: () => number) { limiter = undefined; limiterClock = now; }
+
+/** beforeHandle guard: limits attempts per IP+email (IP only when no email, e.g. /token). */
+export function authRateLimit({ body, request, server, set }: any) {
+  if (limiter === undefined) limiter = rateLimiterFromEnv(process.env, limiterClock);
+  if (!limiter) return;
+  const headers = { "x-forwarded-for": request.headers.get("x-forwarded-for") ?? undefined };
+  const ip = clientIp(headers, server?.requestIP?.(request)?.address);
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const r = limiter.hit(`${ip}|${email}`);
+  if (!r.allowed) {
+    set.status = 429;
+    set.headers["retry-after"] = String(r.retryAfterSeconds);
+    return { error: "Too many attempts, try again later" };
+  }
+}
+
+const GENERIC_REGISTER_FAILURE = "Registration failed";
 
 function base64Url(buffer: Buffer) {
   return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -38,13 +62,22 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
       return { error: "Password must be at least 8 characters long" };
     }
     try {
-      const uc = new RegisterUser(new UserRepositoryDrizzle(db), new BcryptHasher());
+      const hasher = new BcryptHasher();
+      const uc = new RegisterUser(new UserRepositoryDrizzle(db), hasher);
       return await uc.execute({ id: crypto.randomUUID(), email: body.email, password: body.password });
     } catch (error) {
+      const message = error instanceof Error ? error.message : GENERIC_REGISTER_FAILURE;
+      if (message === "Email already registered") {
+        // Do not reveal whether the email exists: answer like a success (the frontend then logs in,
+        // which fails with the uniform "Invalid credentials" unless the password matches).
+        await new BcryptHasher().hash(body.password); // equalize timing
+        return { id: crypto.randomUUID(), email: body.email.trim().toLowerCase(), role: "user" };
+      }
       set.status = 400;
-      return { error: error instanceof Error ? error.message : "Registration failed" };
+      return { error: message };
     }
   }, {
+    beforeHandle: authRateLimit,
     body: t.Object({ email: t.String(), password: t.String() }),
     detail: {
       summary: "Registrazione utente",
@@ -54,6 +87,7 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
     response: {
       200: t.Object({ id: t.String(), email: t.String(), role: t.String() }),
       400: t.Object({ error: t.String() }),
+      429: t.Object({ error: t.String() }),
       500: t.Object({ error: t.String() })
     }
   })
@@ -69,6 +103,7 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
       return { error: message };
     }
   }, {
+    beforeHandle: authRateLimit,
     body: t.Object({ email: t.String(), password: t.String() }),
     detail: {
       summary: "Login con password",
@@ -78,6 +113,7 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
     response: {
       200: t.Object({ accessToken: t.String(), refreshToken: t.String(), expiresIn: t.Number(), expires_in: t.Number(), role: t.String() }),
       400: t.Object({ error: t.String() }),
+      429: t.Object({ error: t.String() }),
       401: t.Object({ error: t.String() }),
       500: t.Object({ error: t.String() })
     }
@@ -102,6 +138,7 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
       return { error: message };
     }
   }, {
+    beforeHandle: authRateLimit,
     body: t.Object({
       email: t.String(),
       password: t.String(),
@@ -116,6 +153,7 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
     response: {
       200: t.Object({ code: t.String() }),
       400: t.Object({ error: t.String() }),
+      429: t.Object({ error: t.String() }),
       401: t.Object({ error: t.String() }),
       500: t.Object({ error: t.String() })
     }
@@ -150,6 +188,7 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
     });
     return buildTokenResponse(access.token, refresh.token, access.expiresIn, record.user.role);
   }, {
+    beforeHandle: authRateLimit,
     body: t.Object({
       code: t.String(),
       code_verifier: t.String()
@@ -162,33 +201,19 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
     response: {
       200: t.Object({ accessToken: t.String(), refreshToken: t.String(), expiresIn: t.Number(), expires_in: t.Number(), role: t.String() }),
       400: t.Object({ error: t.String() }),
+      429: t.Object({ error: t.String() }),
       500: t.Object({ error: t.String() })
     }
   })
-  .post("/refresh", async ({ body, set }) => {
+  .post("/refresh", async ({ body, tenantDb, set }) => {
+    const db = tenantDb ?? getTenantDbFromEnv();
     try {
-      const tokenService = new JwtTokenService();
-      const payload = await tokenService.verify(body.refreshToken);
-      if (payload.tokenType !== "refresh") {
-        set.status = 401;
-        return { error: "Invalid refresh token" };
-      }
-      const access = await tokenService.signAccess({
-        sub: payload.sub as string,
-        email: payload.email as string,
-        role: payload.role as string,
-        tenantId: payload.tenantId as any
-      });
-      const refresh = await tokenService.signRefresh({
-        sub: payload.sub as string,
-        email: payload.email as string,
-        role: payload.role as string,
-        tenantId: payload.tenantId as any
-      });
-      return buildTokenResponse(access.token, refresh.token, access.expiresIn, payload.role as string);
-    } catch (error) {
+      const uc = new RefreshSession(new UserRepositoryDrizzle(db), new JwtTokenService());
+      const r = await uc.execute(body.refreshToken);
+      return buildTokenResponse(r.accessToken, r.refreshToken, r.expiresIn, r.role);
+    } catch {
       set.status = 401;
-      return { error: error instanceof Error ? error.message : "Invalid refresh token" };
+      return { error: "Invalid refresh token" };
     }
   }, {
     body: t.Object({ refreshToken: t.String() }),

@@ -2,8 +2,13 @@ import { describe, it, expect } from "bun:test";
 import { getTenantDbConfigFromEnv, getTenantDb } from "../infra/tenantDbFactory";
 
 describe("getTenantDbConfigFromEnv", () => {
-  it("uses defaults", () => {
+  it("uses dev defaults outside production", () => {
     expect(getTenantDbConfigFromEnv({})).toEqual({ host: "localhost", port: 5432, database: "tenant_db_1", user: "postgres", password: "postgres" });
+  });
+  it("in production requires a non-default PG_PASSWORD", () => {
+    expect(() => getTenantDbConfigFromEnv({ NODE_ENV: "production" })).toThrow(/PG_PASSWORD/);
+    expect(() => getTenantDbConfigFromEnv({ NODE_ENV: "production", PG_PASSWORD: "postgres" })).toThrow(/PG_PASSWORD/);
+    expect(getTenantDbConfigFromEnv({ NODE_ENV: "production", PG_PASSWORD: "s3cret" }).password).toBe("s3cret");
   });
   it("reads env overrides and coerces port", () => {
     const c = getTenantDbConfigFromEnv({ PG_HOST: "h", PG_PORT: "6543", PG_DB: "d", PG_USER: "u", PG_PASSWORD: "p" });

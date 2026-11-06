@@ -20,9 +20,10 @@ env:
 secrets:
   # REQUIRED, no default: helm template/install fails if empty (set via --set or a private values file)
   JWT_SECRET: ""
-  PG_PASSWORD: "postgres"
-  MINIO_ACCESS_KEY: "minioadmin"
-  MINIO_SECRET_KEY: "minioadmin"
+  # All REQUIRED, no default (`required` in templates/secret.yaml): set via --set or a private values file.
+  PG_PASSWORD: ""
+  MINIO_ACCESS_KEY: ""
+  MINIO_SECRET_KEY: ""
 ingress:
   enabled: false
   className: ""

@@ -1,14 +1,16 @@
 import { Client } from "minio";
+import { assertProductionSecrets } from "../config/productionEnv";
 import type { ObjectStorage } from "../../application/ports/ObjectStorage";
 
 export class MinioStorage implements ObjectStorage {
-  private client = new Client({
+  // Dev-only fallbacks (minioadmin); production requires explicit non-default keys.
+  private client = (assertProductionSecrets(process.env, ["MINIO_ACCESS_KEY", "MINIO_SECRET_KEY"]), new Client({
     endPoint: process.env.MINIO_ENDPOINT ?? "localhost",
     port: Number(process.env.MINIO_PORT ?? "9000"),
     useSSL: (process.env.MINIO_SSL ?? "false") === "true",
     accessKey: process.env.MINIO_ACCESS_KEY ?? "minioadmin",
     secretKey: process.env.MINIO_SECRET_KEY ?? "minioadmin"
-  });
+  }));
   private bucket = process.env.MINIO_BUCKET ?? "models";
 
   async getUploadUrl(input: { key: string; contentType: string }) {

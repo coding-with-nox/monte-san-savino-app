@@ -3,11 +3,12 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
-    ports:
-      - "5432:5432"
+    # Not published on the host: reachable only from the compose network.
+    expose:
+      - "5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,12 +20,14 @@ services:
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"
+    # S3 API bound to loopback only: model image URLs (MINIO_PUBLIC_URL, default
+    # http://localhost:9000) are fetched directly by the browser on this machine.
+    # The console (9001) is not published; use docker-compose.debug.yml for it.
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     volumes:
       - miniodata:/data
 
@@ -43,21 +46,24 @@ services:
       PG_PORT: 5432
       PG_DB: ${TENANT_DB_NAME:-tenant_db_1}
       PG_USER: ${POSTGRES_USER:-postgres}
-      PG_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    ports:
-      - "3000:3000"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    # Not published: the browser reaches the API through nginx at /api (port 8080).
+    expose:
+      - "3000"
 
   frontend:
     image: ghcr.io/coding-with-nox/monte-san-savino-app-frontend:latest
     depends_on:
       backend:
         condition: service_started
+      # db-seed only exists with `--profile demo`; do not block start-up without it.
       db-seed:
         condition: service_completed_successfully
+        required: false
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
@@ -71,7 +77,7 @@ services:
         condition: service_healthy
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
       PGHOST: postgres
       PGPORT: 5432
@@ -82,16 +88,23 @@ services:
       bash /scripts/01-init-tenant.sh"
     restart: "no"
 
-  # One-shot psql client: loads seed data into the same postgres service database.
+  # DEMO ONLY (opt-in): `docker compose --profile demo up`.
+  # Loads fictitious demo data, and only into an EMPTY database (users = 0).
+  # Requires DEMO_PASSWORD_HASH (argon2id hash, no default): see docs/configuration_deploy_debug.md, "Profilo demo".
+  # Never enable on a real/production database.
   db-seed:
+    profiles: ["demo"]
     image: postgres:16
     depends_on:
       backend:
         condition: service_started
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
+      # Mandatory for the demo profile; checked by 02-test-data.sh (not here, so that
+      # `compose config/up` without the demo profile does not require it).
+      DEMO_PASSWORD_HASH: ${DEMO_PASSWORD_HASH:-}
       PGHOST: postgres
       PGPORT: 5432
     volumes:
