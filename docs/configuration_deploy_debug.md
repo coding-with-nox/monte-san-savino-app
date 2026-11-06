@@ -49,7 +49,7 @@ File: `.env` (copia da `.env.example`)
 | `POSTGRES_USER`      | `postgres`       |                                   |
 | `POSTGRES_PASSWORD`  | `postgres`       |                                   |
 | `POSTGRES_DB`        | `postgres`       |                                   |
-| `JWT_SECRET`         | `change-me`      | **Cambiare in produzione**        |
+| `JWT_SECRET`         | nessuno          | **Obbligatorio**, senza default (`openssl rand -base64 48`) |
 | `PG_HOST`            | `postgres`       | `localhost` in dev locale         |
 | `PG_PORT`            | `5432`           |                                   |
 | `PG_DB`              | `tenant_db_1`    |                                   |
@@ -62,6 +62,21 @@ File: `.env` (copia da `.env.example`)
 > In sviluppo locale sostituire `PG_HOST=localhost` e `MINIO_ENDPOINT=localhost` nel `.env`.
 
 ---
+
+### JWT_SECRET: obbligatorio, senza default
+
+- Il backend rifiuta di partire se `JWT_SECRET` e' assente o vuoto. I file `docker-compose.yml` e
+  `docker-compose.debug.yml` falliscono subito (`required variable JWT_SECRET is missing a value`)
+  se non e' valorizzato; anche il chart Helm (`secrets.JWT_SECRET`) fa fallire `helm template/install`.
+- Generarlo: `openssl rand -base64 48`. Deve restare stabile tra i riavvii.
+- `start-prod.ps1` crea `.env` da `.env.example` e genera automaticamente un `JWT_SECRET` casuale se
+  mancante/vuoto (non sovrascrive un valore esistente e non lo stampa).
+- `docker-compose.dev.yml` e' un override: non ridefinisce `environment` del backend, quindi con
+  `-f docker-compose.yml -f docker-compose.dev.yml` il backend eredita `JWT_SECRET` dal file base
+  (e il controllo `:?` resta attivo).
+- Migrazione: chi ha un `.env` o values Helm con `change-me` (o `debug-secret-change-me`) deve
+  sostituirlo con un valore casuale. Attenzione: cambiare il segreto invalida i token JWT gia' emessi
+  (gli utenti dovranno rifare il login).
 
 ## 3. Deploy completo con Docker Compose
 

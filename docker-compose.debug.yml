@@ -112,7 +112,7 @@ services:
         condition: service_started
     environment:
       NODE_ENV: development
-      JWT_SECRET: ${JWT_SECRET:-debug-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       PG_HOST: postgres
       PG_PORT: 5432
       PG_DB: ${TENANT_DB_NAME:-tenant_db_1}

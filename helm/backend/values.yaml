@@ -18,7 +18,8 @@ env:
   MINIO_BUCKET: "models"
   MINIO_PUBLIC_URL: "http://minio:9000"
 secrets:
-  JWT_SECRET: "change-me"
+  # REQUIRED, no default: helm template/install fails if empty (set via --set or a private values file)
+  JWT_SECRET: ""
   PG_PASSWORD: "postgres"
   MINIO_ACCESS_KEY: "minioadmin"
   MINIO_SECRET_KEY: "minioadmin"

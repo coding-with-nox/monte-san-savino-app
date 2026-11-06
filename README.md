@@ -130,7 +130,7 @@ Deployment guides:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JWT_SECRET` | — | Required: JWT signing key |
+| `JWT_SECRET` | — | Required, no default (obbligatorio, senza default): JWT signing key; the server refuses to start without it |
 | `PORT` | `3000` | API listen port |
 | `NODE_ENV` | — | Skips demo seeding when set to `production` |
 | `PG_HOST` | `localhost` | PostgreSQL host |
@@ -142,6 +142,10 @@ Deployment guides:
 | `MINIO_PORT` | `9000` | MinIO port |
 | `MINIO_ACCESS_KEY` | — | MinIO access key |
 | `MINIO_SECRET_KEY` | — | MinIO secret key |
+
+> **Migration note:** `JWT_SECRET` no longer has a default. If your `.env` (or Helm values) still contains
+> `change-me`, replace it with a random value (`openssl rand -base64 48`); existing JWTs become invalid
+> on change. See `docs/configuration_deploy_debug.md`.
 
 ### Frontend
 
