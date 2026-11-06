@@ -341,7 +341,57 @@ async function modelQrDataUrl(modelId: string) {
   return QRCode.toDataURL(modelQrPayload(modelId), { margin: 1, width: 160, errorCorrectionLevel: "M" });
 }
 
-async function getLabelRows(tenantDb: any, eventId: string, exportSettings: ExportSettings) {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type ExportFilters = { eventId?: string; categoryId?: string; userId?: string; modelId?: string };
+export type ExportFiltersResult =
+  | { ok: true; filters: ExportFilters }
+  | { ok: false; status: 422; error: string };
+
+/**
+ * Parses optional, combinable export filters (all uuid). Invalid uuid -> 422.
+ * With requireEventUnlessScoped, eventId is mandatory unless userId or modelId is present.
+ */
+export function parseExportFilters(
+  query: Record<string, unknown> | undefined,
+  opts: { requireEventUnlessScoped?: boolean } = {}
+): ExportFiltersResult {
+  const filters: ExportFilters = {};
+  for (const key of ["eventId", "categoryId", "userId", "modelId"] as const) {
+    const raw = query?.[key];
+    if (raw === undefined || raw === null || raw === "") continue;
+    const value = String(raw);
+    if (!UUID_RE.test(value)) return { ok: false, status: 422, error: `${key} must be a valid uuid` };
+    filters[key] = value;
+  }
+  if (opts.requireEventUnlessScoped && !filters.eventId && !filters.userId && !filters.modelId) {
+    return { ok: false, status: 422, error: "eventId is required unless userId or modelId is provided" };
+  }
+  return { ok: true, filters };
+}
+
+function buildModelFilterConditions(filters: ExportFilters) {
+  const conds: any[] = [];
+  if (filters.eventId) conds.push(eq(categoriesTable.eventId, filters.eventId as any));
+  if (filters.categoryId) conds.push(eq(modelsTable.categoryId, filters.categoryId as any));
+  if (filters.userId) conds.push(eq(modelsTable.userId, filters.userId as any));
+  if (filters.modelId) conds.push(eq(modelsTable.id, filters.modelId as any));
+  return conds;
+}
+
+export const exportFilterQuerySchema = t.Object({
+  eventId: t.Optional(t.String()),
+  categoryId: t.Optional(t.String()),
+  userId: t.Optional(t.String()),
+  modelId: t.Optional(t.String())
+});
+
+function filtersFileSuffix(filters: ExportFilters) {
+  return [filters.eventId, filters.userId, filters.modelId].filter(Boolean).join("-") || undefined;
+}
+
+async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSettings: ExportSettings) {
+  const conds = buildModelFilterConditions(filters);
   const rows = await tenantDb
     .select({
       modelId: modelsTable.id,
@@ -359,7 +409,7 @@ async function getLabelRows(tenantDb: any, eventId: string, exportSettings: Expo
     .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
     .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
     .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId))
-    .where(eq(categoriesTable.eventId, eventId as any));
+    .where(conds.length ? and(...conds) : undefined);
 
   return Promise.all((rows as any[]).map(async (row) => ({
     utente: fullName(row.firstName, row.lastName, row.userEmail) || row.userEmail || "",
@@ -682,13 +732,14 @@ const managerExportRoutes = new Elysia()
     }
   })
   .get("/models/print", async ({ tenantDb, query, set }) => {
-    const eventId = query?.eventId ? String(query.eventId) : null;
-    const categoryId = query?.categoryId ? String(query.categoryId) : null;
+    const parsed = parseExportFilters(query as any);
+    if (!parsed.ok) {
+      set.status = parsed.status;
+      return { error: parsed.error };
+    }
     const exportSettings = await loadExportSettings(tenantDb);
 
-    const filters = [] as any[];
-    if (eventId) filters.push(eq(categoriesTable.eventId, eventId as any));
-    if (categoryId) filters.push(eq(modelsTable.categoryId, categoryId as any));
+    const filters = buildModelFilterConditions(parsed.filters);
     const baseQuery = tenantDb
       .select({
         id: modelsTable.id,
@@ -751,7 +802,7 @@ const managerExportRoutes = new Elysia()
   </body>
 </html>`;
   }, {
-    query: t.Object({ eventId: t.Optional(t.String()), categoryId: t.Optional(t.String()) }),
+    query: exportFilterQuerySchema,
     detail: {
       summary: "Stampa modelli (HTML stampabile con QR e note)",
       tags: ["Exports"],
@@ -759,15 +810,15 @@ const managerExportRoutes = new Elysia()
     }
   })
   .get("/labels/data", async ({ tenantDb, query, set }) => {
-    const eventId = query?.eventId ? String(query.eventId) : "";
-    if (!eventId) {
-      set.status = 400;
-      return { error: "eventId is required" };
+    const parsed = parseExportFilters(query as any, { requireEventUnlessScoped: true });
+    if (!parsed.ok) {
+      set.status = parsed.status;
+      return { error: parsed.error };
     }
     const exportSettings = await loadExportSettings(tenantDb);
-    return await getLabelRows(tenantDb, eventId, exportSettings);
+    return await getLabelRows(tenantDb, parsed.filters, exportSettings);
   }, {
-    query: t.Object({ eventId: t.String() }),
+    query: exportFilterQuerySchema,
     detail: {
       summary: "Dati etichette JSON (DYMO/stampa diretta)",
       tags: ["Exports"],
@@ -775,18 +826,18 @@ const managerExportRoutes = new Elysia()
     }
   })
   .get("/labels/excel", async ({ tenantDb, query, set }) => {
-    const eventId = query?.eventId ? String(query.eventId) : "";
-    if (!eventId) {
-      set.status = 400;
-      return { error: "eventId is required" };
+    const parsed = parseExportFilters(query as any, { requireEventUnlessScoped: true });
+    if (!parsed.ok) {
+      set.status = parsed.status;
+      return { error: parsed.error };
     }
 
     const exportSettings = await loadExportSettings(tenantDb);
-    const rows = await getLabelRows(tenantDb, eventId, exportSettings);
-    setXlsxHeaders(set, buildFileName(exportSettings, "labels", eventId));
+    const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
+    setXlsxHeaders(set, buildFileName(exportSettings, "labels", filtersFileSuffix(parsed.filters)));
     return toXlsx(buildSheetName(exportSettings, "Labels"), rows.map(({ qr: _qr, ...rest }) => rest));
   }, {
-    query: t.Object({ eventId: t.String() }),
+    query: exportFilterQuerySchema,
     detail: {
       summary: "Export etichette Excel (XLSX)",
       tags: ["Exports"],
@@ -794,32 +845,35 @@ const managerExportRoutes = new Elysia()
     }
   })
   .get("/labels/pdf", async ({ tenantDb, query, set }) => {
-    const eventId = query?.eventId ? String(query.eventId) : "";
-    if (!eventId) {
-      set.status = 400;
-      return { error: "eventId is required" };
+    const parsed = parseExportFilters(query as any, { requireEventUnlessScoped: true });
+    if (!parsed.ok) {
+      set.status = parsed.status;
+      return { error: parsed.error };
     }
+    const eventId = parsed.filters.eventId;
 
-    const [event] = await tenantDb
-      .select({ id: eventsTable.id, name: eventsTable.name })
-      .from(eventsTable)
-      .where(eq(eventsTable.id, eventId as any))
-      .limit(1);
+    const [event] = eventId
+      ? await tenantDb
+        .select({ id: eventsTable.id, name: eventsTable.name })
+        .from(eventsTable)
+        .where(eq(eventsTable.id, eventId as any))
+        .limit(1)
+      : [];
 
     const exportSettings = await loadExportSettings(tenantDb);
-    const rows = await getLabelRows(tenantDb, eventId, exportSettings);
+    const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
     const bodyRows = rows
       .map((row) => `<tr><td>${escapeHtml(row.utente)}</td><td>${escapeHtml(row.categoria)}</td><td>${escapeHtml(row.nomeModello)}</td><td>${escapeHtml(row.codice)}</td><td>${escapeHtml(row.note)}</td><td><img class="qr" alt="${escapeHtml(row.qrPayload)}" src="${escapeHtml(row.qr)}" width="80" height="80"/></td></tr>`)
       .join("");
 
     set.headers["content-type"] = "text/html; charset=utf-8";
-    set.headers["content-disposition"] = `inline; filename=\"labels-${normalizeFilePart(eventId, "event")}.html\"`;
+    set.headers["content-disposition"] = `inline; filename=\"labels-${normalizeFilePart(filtersFileSuffix(parsed.filters), "labels")}.html\"`;
 
     return `<!DOCTYPE html>
 <html>
   <head>
     <meta charset=\"utf-8\" />
-    <title>Etichette ${escapeHtml(event?.name ?? eventId)}</title>
+    <title>Etichette ${escapeHtml(event?.name ?? eventId ?? "")}</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 24px; }
       h1 { margin-bottom: 8px; }
@@ -834,7 +888,7 @@ const managerExportRoutes = new Elysia()
   </head>
   <body>
     <h1>Stampa etichette</h1>
-    <p><strong>Evento:</strong> ${escapeHtml(event?.name ?? eventId)}</p>
+    ${eventId ? `<p><strong>Evento:</strong> ${escapeHtml(event?.name ?? eventId)}</p>` : ""}
     <table>
       <thead>
         <tr>
@@ -854,7 +908,7 @@ const managerExportRoutes = new Elysia()
   </body>
 </html>`;
   }, {
-    query: t.Object({ eventId: t.String() }),
+    query: exportFilterQuerySchema,
     detail: {
       summary: "Export etichette PDF",
       tags: ["Exports"],

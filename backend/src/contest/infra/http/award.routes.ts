@@ -132,7 +132,17 @@ export const awardRoutes = new Elysia({ prefix: "/awards" })
     }
 
     const combined = [...frozenRows, ...liveRows];
-    return combined.sort((a, b) => (b.averageRank ?? 0) - (a.averageRank ?? 0));
+    const allModelIds = Array.from(new Set(combined.map((r) => r.modelId)));
+    const nameRows = allModelIds.length > 0
+      ? await tenantDb
+        .select({ id: modelsTable.id, name: modelsTable.name })
+        .from(modelsTable)
+        .where(inArray(modelsTable.id, allModelIds as any))
+      : [];
+    const nameById = new Map<string, string>((nameRows as any[]).map((m) => [m.id, m.name]));
+    return combined
+      .map((r) => ({ ...r, modelName: nameById.get(r.modelId) ?? null }))
+      .sort((a, b) => (b.averageRank ?? 0) - (a.averageRank ?? 0));
   }, {
     params: t.Object({ eventId: t.String() }),
     detail: {
