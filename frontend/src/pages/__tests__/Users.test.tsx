@@ -15,6 +15,12 @@ vi.mock("../../lib/api", () => ({
   },
   api: (...a: unknown[]) => apiMock(...a)
 }));
+let roleValue: string | null = "admin";
+let userIdValue: string | null = null;
+vi.mock("../../lib/auth", async () => {
+  const actual = await vi.importActual<typeof import("../../lib/auth")>("../../lib/auth");
+  return { ...actual, getRole: () => roleValue, getUserId: () => userIdValue };
+});
 vi.mock("../../lib/download", () => ({ downloadAuthenticatedFile: vi.fn() }));
 vi.mock("../../components/PrintActions", () => ({ default: () => null }));
 
@@ -39,6 +45,8 @@ function setup(list = users) {
 describe("Users", () => {
   beforeEach(() => {
     apiMock.mockReset();
+    roleValue = "admin";
+    userIdValue = null;
   });
 
   it("lists users with their role", async () => {
@@ -216,6 +224,122 @@ describe("Users", () => {
       expect(await screen.findByText("Role refused")).toBeInTheDocument();
       expect(within(dialog).getAllByRole("combobox")[0]).toHaveTextContent("user");
       await flush();
+    });
+  });
+
+  describe("reset password contract", () => {
+    const profile = { id: "u1", email: "mario@example.com", role: "user", isActive: true };
+
+    async function openReset(resetImpl: () => unknown) {
+      apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+        if (path.endsWith("/reset-password")) return resetImpl();
+        if (path === "/admin/users" && !init) return users;
+        if (path === "/events") return [];
+        if (path === "/admin/users/u1/profile" && !init) return profile;
+        return {};
+      });
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await user.click(await screen.findByText("mario@example.com"));
+      await user.click(await screen.findByRole("button", { name: "Reset password" }));
+    }
+
+    it("shows the email-sent toast and never a temporary password", async () => {
+      await openReset(() => ({ emailSent: true }));
+      expect(await screen.findByText("Email sent: the user will receive the new password")).toBeInTheDocument();
+      expect(screen.queryByText(/temporary password/i)).not.toBeInTheDocument();
+    });
+
+    it("explains that email is not configured on 503", async () => {
+      await openReset(() => { throw new ApiError(503, "mail down"); });
+      expect(await screen.findByText("Email not configured: the password was not changed")).toBeInTheDocument();
+    });
+
+    it("shows the backend message on 403", async () => {
+      await openReset(() => { throw new ApiError(403, "Target role too high"); });
+      expect(await screen.findByText("Target role too high")).toBeInTheDocument();
+    });
+  });
+
+  describe("role-based restrictions", () => {
+    const list = [
+      { id: "u1", email: "mario@example.com", role: "user", isActive: true },
+      { id: "u3", email: "boss@example.com", role: "manager", isActive: true },
+      { id: "u2", email: "admin@example.com", role: "admin", isActive: true }
+    ];
+
+    function setupList() {
+      apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+        if (path === "/admin/users" && !init) return list;
+        if (path === "/events") return [];
+        const m = /^\/admin\/users\/(u\d)\/profile$/.exec(path);
+        if (m && !init) return { ...list.find((u) => u.id === m[1])! };
+        return {};
+      });
+    }
+
+    async function optionsOfCreateRole() {
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await screen.findByText("mario@example.com");
+      await user.click(screen.getByRole("button", { name: "Create user" }));
+      const dialog = await screen.findByRole("dialog");
+      await user.click(within(dialog).getAllByRole("combobox")[0]);
+      return (await screen.findAllByRole("option")).map((o) => o.textContent);
+    }
+
+    it("manager sees only roles below manager when creating a user", async () => {
+      roleValue = "manager";
+      setupList();
+      expect(await optionsOfCreateRole()).toEqual(["user", "staff", "judge"]);
+    });
+
+    it("admin sees every role when creating a user", async () => {
+      setupList();
+      expect(await optionsOfCreateRole()).toEqual(["user", "staff", "judge", "manager", "admin"]);
+    });
+
+    it("manager cannot toggle users with role >= manager and sees no reset button on them", async () => {
+      roleValue = "manager";
+      setupList();
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await screen.findByText("mario@example.com");
+      const switches = screen.getAllByRole("checkbox");
+      expect(switches[0]).toBeEnabled();
+      expect(switches[1]).toBeDisabled();
+      expect(switches[2]).toBeDisabled();
+      await user.click(screen.getByText("boss@example.com"));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).queryByRole("button", { name: "Reset password" })).not.toBeInTheDocument();
+      expect(within(dialog).getAllByRole("combobox")[0]).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("manager keeps the reset button and role select on a lower-role user", async () => {
+      roleValue = "manager";
+      setupList();
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await user.click(await screen.findByText("mario@example.com"));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByRole("button", { name: "Reset password" })).toBeInTheDocument();
+      await user.click(within(dialog).getAllByRole("combobox")[0]);
+      expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["user", "staff", "judge"]);
+    });
+
+    it("admin cannot change own role or deactivate self", async () => {
+      userIdValue = "u2";
+      setupList();
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await screen.findByText("mario@example.com");
+      const switches = screen.getAllByRole("checkbox");
+      expect(switches[0]).toBeEnabled();
+      expect(switches[2]).toBeDisabled();
+      await user.click(screen.getByText("admin@example.com"));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getAllByRole("combobox")[0]).toHaveAttribute("aria-disabled", "true");
+      expect(within(dialog).getAllByRole("checkbox")[0]).toBeDisabled();
     });
   });
 });

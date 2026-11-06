@@ -112,4 +112,17 @@ describe("Login flow", () => {
     expect(await screen.findByText("Email taken")).toBeInTheDocument();
     expect(navigateMock).not.toHaveBeenCalled();
   });
+
+  it("shows the invalid-credentials error when registering with an already used email", async () => {
+    // /auth/register answers 200 for an existing email, then /auth/login rejects the password
+    apiMock
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new ApiError(401, "Invalid credentials"));
+    const user = await fillAndSubmit();
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+    expect(await screen.findByText("Invalid credentials")).toBeInTheDocument();
+    expect(apiMock.mock.calls.map((c) => c[0])).toEqual(["/auth/register", "/auth/login"]);
+    expect(setSessionMock).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
 });

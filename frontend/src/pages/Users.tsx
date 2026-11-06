@@ -38,6 +38,7 @@ import { api, ApiError } from "../lib/api";
 import { downloadAuthenticatedFile } from "../lib/download";
 import { Language, t } from "../lib/i18n";
 import ActiveSwitch from "../lib/ActiveSwitch";
+import { getRole, getUserId, roleAtLeast, type Role } from "../lib/auth";
 import ProfileEditSections from "../components/ProfileEditSections";
 import PageContainer from "../components/PageContainer";
 import EmptyState from "../components/EmptyState";
@@ -76,7 +77,21 @@ interface UsersProps {
   language: Language;
 }
 
-const roles = ["user", "staff", "judge", "manager", "admin"];
+const roles: Role[] = ["user", "staff", "judge", "manager", "admin"];
+
+// Roles the current user may assign: admin all, anyone else only roles strictly below their own.
+function assignableRoles(me: Role | null): Role[] {
+  if (!me) return [];
+  if (me === "admin") return roles;
+  return roles.filter((r) => !roleAtLeast(r, me));
+}
+
+// Non-admins cannot act on users whose role is >= their own (the backend answers 403).
+function canManageRole(me: Role | null, target: string): boolean {
+  if (!me) return false;
+  if (me === "admin") return true;
+  return !roleAtLeast(target as Role, me);
+}
 
 export default function Users({ language }: UsersProps) {
   const [users, setUsers] = useState<User[]>([]);
@@ -86,6 +101,11 @@ export default function Users({ language }: UsersProps) {
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const toast = useToast();
+  const myRole = getRole();
+  const myId = getUserId();
+  const myAssignableRoles = assignableRoles(myRole);
+  const isSelf = (id: string) => !!myId && id === myId;
+  const canAct = (u: { id: string; role: string }) => canManageRole(myRole, u.role) && !isSelf(u.id);
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -127,7 +147,7 @@ export default function Users({ language }: UsersProps) {
   function openCreateDialog() {
     setCreateEmail("");
     setCreatePassword("");
-    setCreateRole("user");
+    setCreateRole(myAssignableRoles.includes("user") ? "user" : (myAssignableRoles[0] ?? "user"));
     setCreateCountry("");
     setCreatePublic(false);
     setCreateOpen(true);
@@ -232,16 +252,16 @@ export default function Users({ language }: UsersProps) {
   async function resetPassword() {
     if (!editProfile) return;
     try {
-      const res = await api<{ temporaryPassword: string; emailSent: boolean }>(`/admin/users/${editProfile.id}/reset-password`, { method: "POST" });
-      let msg = `${t(language, "adminTempPassword")}: ${res.temporaryPassword}`;
-      if (res.emailSent) {
-        msg += ` - ${t(language, "adminEmailSent")}`;
-      } else {
-        msg += ` - ${t(language, "adminEmailNotSent")}`;
-      }
-      toast.info(msg);
+      await api<{ emailSent: boolean }>(`/admin/users/${editProfile.id}/reset-password`, { method: "POST" });
+      toast.success(t(language, "adminResetEmailSent"));
     } catch (err: any) {
-      toast.error(err?.message ?? String(err));
+      if (err instanceof ApiError && err.status === 503) {
+        toast.error(t(language, "adminResetEmailNotConfigured"));
+      } else if (err instanceof ApiError && err.status === 403) {
+        toast.error(err.message || t(language, "adminActionForbidden"));
+      } else {
+        toast.error(err?.message ?? String(err));
+      }
     }
   }
 
@@ -378,6 +398,7 @@ export default function Users({ language }: UsersProps) {
                       <ActiveSwitch
                         checked={user.isActive}
                         onChange={() => toggleUserActive(user.id, user.isActive)}
+                        disabled={!canAct(user)}
                         activeLabel={t(language, "adminUserActive")}
                         inactiveLabel={t(language, "adminUserInactive")}
                       />
@@ -421,7 +442,7 @@ export default function Users({ language }: UsersProps) {
             <FormControl fullWidth>
               <InputLabel>{t(language, "usersRolePlaceholder")}</InputLabel>
               <Select value={createRole} label={t(language, "usersRolePlaceholder")} onChange={(e) => setCreateRole(e.target.value)}>
-                {roles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                {myAssignableRoles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
               </Select>
             </FormControl>
             <TextField
@@ -473,19 +494,23 @@ export default function Users({ language }: UsersProps) {
                       value={editProfile.role}
                       label={t(language, "usersRolePlaceholder")}
                       onChange={(e) => updateRole(e.target.value)}
+                      disabled={!canAct(editProfile)}
                     >
-                      {roles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                      {(myAssignableRoles.includes(editProfile.role as Role) ? myAssignableRoles : [...myAssignableRoles, editProfile.role]).map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
                     </Select>
                   </FormControl>
                   <ActiveSwitch
                     checked={editProfile.isActive}
                     onChange={toggleActive}
+                    disabled={!canAct(editProfile)}
                     activeLabel={t(language, "adminUserActive")}
                     inactiveLabel={t(language, "adminUserInactive")}
                   />
-                  <Button variant="outlined" size="small" startIcon={<LockResetIcon />} onClick={resetPassword}>
-                    {t(language, "adminResetPasswordButton")}
-                  </Button>
+                  {canManageRole(myRole, editProfile.role) && (
+                    <Button variant="outlined" size="small" startIcon={<LockResetIcon />} onClick={resetPassword}>
+                      {t(language, "adminResetPasswordButton")}
+                    </Button>
+                  )}
                   {/* Print shortcuts for this user's models/labels (userId, optionally narrowed by the selected event) */}
                   <PrintActions
                     language={language}

@@ -39,6 +39,11 @@ export function getRole(): Role | null {
   const t = getToken(); if (!t) return null;
   try { return (decodeJwt(t).role as Role) ?? null; } catch { return null; }
 }
+export function getUserId(): string | null {
+  const t = getToken(); if (!t) return null;
+  const sub = decodeJwt(t).sub;
+  return typeof sub === "string" ? sub : null;
+}
 const order: Role[] = ["user","staff","judge","manager","admin"];
 export function roleAtLeast(actual: Role, minimum: Role) { return order.indexOf(actual) >= order.indexOf(minimum); }
 
