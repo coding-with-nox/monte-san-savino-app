@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -36,6 +37,9 @@ import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import { EmptyValue } from "../components/Field";
+import PageSkeleton from "../components/PageSkeleton";
+import PrintActions from "../components/PrintActions";
+import { useConfirm } from "../components/ConfirmDialog";
 import useToast from "../components/useToast";
 
 type Event = { id: string; name: string; status: string };
@@ -45,6 +49,7 @@ type Sponsor = { id: string; eventId: string; name: string; tier: string };
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
 type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null };
+type ModelRef = { id: string; name: string };
 type EventCampaign = { id: string; eventId: string; name: string; enrollmentOpenDate?: string | null; enrollmentCloseDate?: string | null };
 
 interface AdminProps {
@@ -59,6 +64,10 @@ export default function Admin({ language }: AdminProps) {
   const [modRequests, setModRequests] = useState<ModificationRequest[]>([]);
   const [judgeAssignments, setJudgeAssignments] = useState<JudgeAssignmentEntry[]>([]);
   const [specialMentions, setSpecialMentions] = useState<SpecialMention[]>([]);
+  const [models, setModels] = useState<ModelRef[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
+  const { confirm, node: confirmNode } = useConfirm(language);
 
   const [eventForm, setEventForm] = useState({ name: "", status: "" });
   const [categoryForm, setCategoryForm] = useState({ eventId: "", name: "" });
@@ -95,7 +104,7 @@ export default function Admin({ language }: AdminProps) {
   // D5: corrections state
   const [correctionsEventId, setCorrectionsEventId] = useState("");
   const [correctionsData, setCorrectionsData] = useState<{
-    id?: string; modelId: string; categoryId: string; totalScore: number | null;
+    id?: string; modelId: string; modelName?: string | null; categoryId: string; totalScore: number | null;
     medalLabel: string | null; medalRank: number | null;
     votes: number; source: string; averageRank: number | null;
   }[]>([]);
@@ -112,15 +121,25 @@ export default function Admin({ language }: AdminProps) {
   const [editingJudgeAssignment, setEditingJudgeAssignment] = useState<JudgeAssignmentEntry | null>(null);
   const [judgeEditForm, setJudgeEditForm] = useState({ eventId: "", judgeId: "", categoryId: "" });
 
+  // The initial calls are independent: a failing section must not blank the others.
   async function load() {
-    setEvents(await api<Event[]>("/events"));
-    setCategories(await api<Category[]>("/categories"));
-    setUsers(await api<User[]>("/admin/users"));
-    setSponsors(await api<Sponsor[]>("/sponsors"));
-    setModRequests(await api<ModificationRequest[]>("/admin/modification-requests"));
-    setJudgeAssignments(await api<JudgeAssignmentEntry[]>("/admin/judges/assignments"));
-    setSpecialMentions(await api<SpecialMention[]>("/awards/mentions"));
-    setEventCampaigns(await api<EventCampaign[]>("/admin/event-campaigns"));
+    const sections: { key: string; titleKey: Parameters<typeof t>[1]; run: () => Promise<void> }[] = [
+      { key: "events", titleKey: "adminEventsTitle", run: async () => setEvents(await api<Event[]>("/events")) },
+      { key: "categories", titleKey: "adminCategoriesTitle", run: async () => setCategories(await api<Category[]>("/categories")) },
+      { key: "users", titleKey: "usersTitle", run: async () => setUsers(await api<User[]>("/admin/users")) },
+      { key: "sponsors", titleKey: "adminSponsorsTitle", run: async () => setSponsors(await api<Sponsor[]>("/sponsors")) },
+      { key: "modRequests", titleKey: "adminModRequestsTitle", run: async () => setModRequests(await api<ModificationRequest[]>("/admin/modification-requests")) },
+      { key: "judgeAssignments", titleKey: "adminJudgeAssignments", run: async () => setJudgeAssignments(await api<JudgeAssignmentEntry[]>("/admin/judges/assignments")) },
+      { key: "mentions", titleKey: "adminSpecialMentionsTitle", run: async () => setSpecialMentions(await api<SpecialMention[]>("/awards/mentions")) },
+      { key: "campaigns", titleKey: "adminEventCampaignsTitle", run: async () => setEventCampaigns(await api<EventCampaign[]>("/admin/event-campaigns")) }
+    ];
+    const results = await Promise.allSettled(sections.map((section) => section.run()));
+    setLoadErrors(
+      results.flatMap((r, i) => (r.status === "rejected" ? [`${t(language, sections[i].titleKey)}`] : []))
+    );
+    setLoading(false);
+    // Best effort: model names for corrections/mentions/requests (falls back to short ids)
+    api<ModelRef[]>("/models").then(setModels).catch(() => undefined);
   }
 
   async function createEvent() {
@@ -149,7 +168,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteCategory(categoryId: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/categories/${categoryId}`, { method: "DELETE" });
     await load();
   }
@@ -181,7 +200,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteJudgeAssignment(id: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/admin/judges/assignments/${id}`, { method: "DELETE" });
     await load();
   }
@@ -221,7 +240,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteSponsor(id: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/sponsors/${id}`, { method: "DELETE" });
     await load();
   }
@@ -241,7 +260,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteMention(id: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/awards/mentions/${id}`, { method: "DELETE" });
     await load();
   }
@@ -278,7 +297,7 @@ export default function Admin({ language }: AdminProps) {
   }
 
   async function deleteCampaign(id: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/admin/event-campaigns/${id}`, { method: "DELETE" });
     await load();
   }
@@ -295,7 +314,7 @@ export default function Admin({ language }: AdminProps) {
     await loadAwardBrackets(bracketEventId);
   }
   async function deleteAwardBracket(id: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/admin/award-brackets/${id}`, { method: "DELETE" });
     await loadAwardBrackets(bracketEventId);
   }
@@ -314,7 +333,7 @@ export default function Admin({ language }: AdminProps) {
     await loadLevels();
   }
   async function deleteLevel(id: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/admin/levels/${id}`, { method: "DELETE" });
     await loadLevels();
   }
@@ -330,7 +349,7 @@ export default function Admin({ language }: AdminProps) {
     await loadMemberRoles();
   }
   async function deleteMemberRole(id: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/admin/member-roles/${id}`, { method: "DELETE" });
     await loadMemberRoles();
   }
@@ -365,12 +384,17 @@ export default function Admin({ language }: AdminProps) {
   }
 
   useEffect(() => {
-    load().catch((err) => toast.error(err?.message ?? String(err)));
+    load();
     loadLevels();
     loadMemberRoles();
   }, []);
 
   const eventStatuses = ["draft", "active", "closed"];
+  const getModelName = (mid: string) => {
+    const m = models.find((model) => model.id === mid);
+    return m ? m.name : mid.slice(0, 8);
+  };
+
   const getEventName = (eid: string) => {
     const ev = events.find((e) => e.id === eid);
     return ev ? ev.name : eid.slice(0, 8);
@@ -393,17 +417,31 @@ export default function Admin({ language }: AdminProps) {
       <Stack spacing={2}>
         <Typography variant="h4">{t(language, "adminTitle")}</Typography>
 
+        {loadErrors.map((section) => (
+          <Alert
+            key={section}
+            severity="error"
+            action={<Button color="inherit" size="small" onClick={() => load()}>{t(language, "retryButton")}</Button>}
+          >
+            {t(language, "adminLoadSectionError")}: {section}
+          </Alert>
+        ))}
+
+        {loading && <PageSkeleton variant="table" />}
+
+        {!loading && (
         <Paper variant="outlined">
-          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-            <Tab value="events" label="Gara" />
-            <Tab value="judges" label="Giudici" />
-            <Tab value="awards" label="Premi" />
-            <Tab value="sponsors" label="Sponsor" />
-            <Tab value="catalog" label="Catalogo" />
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
+            <Tab value="events" label={t(language, "adminTabEvents")} />
+            <Tab value="judges" label={t(language, "adminTabJudges")} />
+            <Tab value="awards" label={t(language, "adminTabAwards")} />
+            <Tab value="sponsors" label={t(language, "adminTabSponsors")} />
+            <Tab value="catalog" label={t(language, "adminTabCatalog")} />
           </Tabs>
         </Paper>
+        )}
 
-        {tab === "events" && (
+        {!loading && tab === "events" && (
           <Stack spacing={2}>
             <SectionCard title={t(language, "adminEventsTitle")}>
               <Grid container spacing={2} alignItems="center">
@@ -439,6 +477,7 @@ export default function Admin({ language }: AdminProps) {
                 {events.map((event) => (
                   <ListItem key={event.id} disableGutters>
                     <ListItemText primary={event.name} />
+                    <PrintActions language={language} params={{ eventId: event.id }} />
                     <FormControl size="small" sx={{ minWidth: 110, ml: 1 }}>
                       <Select
                         value={event.status || "draft"}
@@ -503,6 +542,7 @@ export default function Admin({ language }: AdminProps) {
                     >
                       {category.status === "open" ? t(language, "adminCategoryClose") : t(language, "adminCategoryReopen")}
                     </Button>
+                    <PrintActions language={language} params={{ eventId: category.eventId, categoryId: category.id }} />
                     <IconButton size="small" onClick={() => openCategoryEdit(category)}>
                       <EditIcon fontSize="small" />
                     </IconButton>
@@ -646,7 +686,7 @@ export default function Admin({ language }: AdminProps) {
           </Stack>
         )}
 
-        {tab === "judges" && (
+        {!loading && tab === "judges" && (
           <Stack spacing={2}>
             <SectionCard title={t(language, "adminJudgeAssignTitle")}>
               <Grid container spacing={2} alignItems="center">
@@ -746,7 +786,7 @@ export default function Admin({ language }: AdminProps) {
                     </Select>
                   </FormControl>
                   <Button size="small" variant="outlined" onClick={() => loadMonitoring(monitoringEventId)} disabled={!monitoringEventId}>
-                    Aggiorna
+                    {t(language, "adminRefreshButton")}
                   </Button>
                 </Stack>
 
@@ -756,7 +796,7 @@ export default function Admin({ language }: AdminProps) {
                       <Typography variant="subtitle2">{cat.categoryName}</Typography>
                       <Chip
                         size="small"
-                        label={cat.status === "closed" ? "Chiusa" : "Aperta"}
+                        label={cat.status === "closed" ? t(language, "adminCategoryClosed") : t(language, "adminCategoryOpen")}
                         color={cat.status === "closed" ? "default" : "success"}
                       />
                     </Stack>
@@ -781,7 +821,7 @@ export default function Admin({ language }: AdminProps) {
           </Stack>
         )}
 
-        {tab === "awards" && (
+        {!loading && tab === "awards" && (
           <Stack spacing={2}>
             <SectionCard title={t(language, "adminSpecialMentionsTitle")}>
               <Grid container spacing={2} alignItems="center">
@@ -836,7 +876,7 @@ export default function Admin({ language }: AdminProps) {
                       <ListItem key={m.id} disableGutters>
                         <ListItemText
                           primary={m.title}
-                          secondary={`${getEventName(m.eventId)} - Model: ${m.modelId.slice(0, 8)}`}
+                          secondary={`${getEventName(m.eventId)} - ${t(language, "adminModelLabel")}: ${getModelName(m.modelId)}`}
                         />
                         <IconButton size="small" color="error" onClick={() => deleteMention(m.id)}>
                           <DeleteIcon fontSize="small" />
@@ -853,7 +893,7 @@ export default function Admin({ language }: AdminProps) {
                 {modRequests.map((req) => (
                   <Stack key={req.id} spacing={1}>
                     <Typography variant="body2">
-                      Model: {req.modelId.slice(0, 8)} - {req.reason}
+                      {t(language, "adminModelLabel")}: {getModelName(req.modelId)} - {req.reason}
                     </Typography>
                     <Stack direction="row" spacing={1}>
                       <Chip
@@ -893,18 +933,18 @@ export default function Admin({ language }: AdminProps) {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 700 }}>Modello</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Categoria</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Score</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Premio</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Fonte</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsModel")}</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsCategory")}</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsScore")}</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsAward")}</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsSource")}</TableCell>
                         <TableCell />
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {correctionsData.map(row => (
                         <TableRow key={row.modelId} sx={{ bgcolor: row.source === "frozen" && !row.medalLabel ? "error.light" : undefined }}>
-                          <TableCell>{row.modelId.slice(0, 8)}</TableCell>
+                          <TableCell>{row.modelName ?? getModelName(row.modelId)}</TableCell>
                           <TableCell>{getCategoryName(row.categoryId)}</TableCell>
                           <TableCell>{row.totalScore ?? (row.averageRank != null ? row.averageRank.toFixed(2) : "-")}</TableCell>
                           <TableCell>
@@ -942,7 +982,7 @@ export default function Admin({ language }: AdminProps) {
           </Stack>
         )}
 
-        {tab === "sponsors" && (
+        {!loading && tab === "sponsors" && (
           <SectionCard title={t(language, "adminSponsorsTitle")}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} md={3}>
@@ -999,7 +1039,7 @@ export default function Admin({ language }: AdminProps) {
           </SectionCard>
         )}
 
-        {tab === "catalog" && (
+        {!loading && tab === "catalog" && (
           <Stack spacing={2}>
             <SectionCard title={t(language, "adminLevelsTitle")}>
               <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -1069,6 +1109,7 @@ export default function Admin({ language }: AdminProps) {
         )}
       </Stack>
 
+      {confirmNode}
       {/* Dialogs */}
       {/* Category Edit Dialog */}
       <Dialog open={categoryEditDialog} onClose={() => setCategoryEditDialog(false)} maxWidth="xs" fullWidth>

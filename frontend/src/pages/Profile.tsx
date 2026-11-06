@@ -4,6 +4,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import PersonIcon from "@mui/icons-material/Person";
 import PhoneIcon from "@mui/icons-material/Phone";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
+import ShareIcon from "@mui/icons-material/Share";
 import { matchIsValidTel } from "mui-tel-input";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
@@ -11,7 +12,9 @@ import ProfileEditSections from "../components/ProfileEditSections";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import Field, { EmptyValue } from "../components/Field";
+import SocialLinks from "../components/SocialLinks";
 import useToast from "../components/useToast";
+import { hasInvalidSocial, socialPayload } from "../lib/social";
 
 type Profile = {
   email?: string;
@@ -22,6 +25,9 @@ type Profile = {
   city?: string | null;
   emergencyContact?: string | null;
   emergencyContactName?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  website?: string | null;
 };
 
 interface ProfileProps {
@@ -46,6 +52,10 @@ export default function Profile({ language }: ProfileProps) {
   }
 
   async function save() {
+    if (hasInvalidSocial(editProfile)) {
+      toast.error(t(language, "profileSocialInvalid"));
+      return;
+    }
     if (editProfile.phone && !matchIsValidTel(editProfile.phone)) {
       setPhoneError(true);
       return;
@@ -56,9 +66,10 @@ export default function Profile({ language }: ProfileProps) {
     }
     try {
       const { email, role, ...body } = editProfile;
-      await api("/users/profile", { method: "PUT", body: JSON.stringify(body) });
+      const payload = { ...body, ...socialPayload(editProfile) };
+      await api("/users/profile", { method: "PUT", body: JSON.stringify(payload) });
       toast.success(t(language, "profileSaved"));
-      setProfile(editProfile);
+      setProfile({ ...editProfile, ...socialPayload(editProfile) });
       setEditing(false);
     } catch (err: any) {
       toast.error(err.message);
@@ -147,6 +158,15 @@ export default function Profile({ language }: ProfileProps) {
                 <Field label={t(language, "profileCity")} value={profile.city} />
               </Grid>
             </Grid>
+          </SectionCard>
+
+          <SectionCard icon={<ShareIcon />} title={t(language, "profileSocialSection")}>
+            <SocialLinks
+              language={language}
+              instagram={profile.instagram}
+              facebook={profile.facebook}
+              website={profile.website}
+            />
           </SectionCard>
         </Stack>
       </PageContainer>

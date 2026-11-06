@@ -36,6 +36,9 @@ import HomeIcon from "@mui/icons-material/Home";
 import EventIcon from "@mui/icons-material/Event";
 import GavelIcon from "@mui/icons-material/Gavel";
 import GroupsIcon from "@mui/icons-material/Groups";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import PeopleIcon from "@mui/icons-material/People";
+import HowToRegIcon from "@mui/icons-material/HowToReg";
 
 function FigurineIcon(props: React.ComponentProps<typeof SvgIcon>) {
   return (
@@ -53,6 +56,9 @@ function FigurineIcon(props: React.ComponentProps<typeof SvgIcon>) {
 import Login from "./pages/Login";
 import Judge from "./pages/Judge";
 import Profile from "./pages/Profile";
+import Dashboard from "./pages/Dashboard";
+import Enrollments from "./pages/Enrollments";
+import StaffCheckin from "./pages/StaffCheckin";
 import Models from "./pages/Models";
 import Teams from "./pages/Teams";
 import PublicEvents from "./pages/PublicEvents";
@@ -173,10 +179,12 @@ export default function App() {
   };
 
   const allNavItems = [
-    { label: t(language, "navProfile"), path: "/", minRole: "user" as Role },
-{ label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
+    { label: t(language, "navHome"), path: "/", minRole: "user" as Role },
+    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
+    { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role },
     { label: t(language, "navTeams"), path: "/teams", minRole: "user" as Role },
     { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null },
+    { label: t(language, "navCheckin"), path: "/staff-checkin", minRole: "staff" as Role },
     { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role },
     { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role },
     { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role },
@@ -190,13 +198,23 @@ export default function App() {
     return roleAtLeast(role, item.minRole);
   });
 
-  const bottomNavItems = [
-    { label: t(language, "navProfile"),      path: "/",              icon: <HomeIcon /> },
-    { label: t(language, "navModels"),       path: "/models",        icon: <FigurineIcon /> },
-    { label: t(language, "navTeams"),        path: "/teams",         icon: <GroupsIcon /> },
-    { label: t(language, "navPublicEvents"), path: "/public-events", icon: <EventIcon /> },
-    ...(role && roleAtLeast(role, "judge") ? [{ label: t(language, "navJudge"), path: "/judge", icon: <GavelIcon /> }] : []),
-  ];
+  const isManagerRole = !!role && roleAtLeast(role, "manager");
+  const bottomNavItems = isManagerRole
+    ? [
+        { label: t(language, "navHome"),   path: "/",        icon: <HomeIcon /> },
+        { label: t(language, "navModels"), path: "/models",  icon: <FigurineIcon /> },
+        { label: t(language, "navJudge"),  path: "/judge",   icon: <GavelIcon /> },
+        { label: t(language, "navUsers"),  path: "/users",   icon: <PeopleIcon /> },
+        { label: t(language, "navAdmin"),  path: "/admin",   icon: <AdminPanelSettingsIcon /> },
+      ]
+    : [
+        { label: t(language, "navHome"),         path: "/",              icon: <HomeIcon /> },
+        { label: t(language, "navModels"),       path: "/models",        icon: <FigurineIcon /> },
+        { label: t(language, "navTeams"),        path: "/teams",         icon: <GroupsIcon /> },
+        { label: t(language, "navPublicEvents"), path: "/public-events", icon: <EventIcon /> },
+        ...(role && roleAtLeast(role, "judge") ? [{ label: t(language, "navJudge"), path: "/judge", icon: <GavelIcon /> }] : []),
+        ...(role === "staff" ? [{ label: t(language, "navCheckin"), path: "/staff-checkin", icon: <HowToRegIcon /> }] : []),
+      ];
 
   const bottomNavValue = bottomNavItems.findIndex((item) =>
     item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path)
@@ -244,7 +262,7 @@ export default function App() {
         <Box sx={{ minHeight: "100vh", bgcolor: "background.default", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2, p: 4 }}>
           <Typography variant="h4" sx={{ color: "error.main" }}>⚠ {t(language, "maintenanceTitle")}</Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center">{t(language, "maintenanceSubtitle")}</Typography>
-          <Button variant="outlined" onClick={() => { setBackendDown(false); window.location.reload(); }}>Riprova</Button>
+          <Button variant="outlined" onClick={() => { setBackendDown(false); window.location.reload(); }}>{t(language, "retryButton")}</Button>
         </Box>
       </ThemeProvider>
     );
@@ -313,7 +331,7 @@ export default function App() {
                     anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                     transformOrigin={{ vertical: "top", horizontal: "right" }}
                   >
-                    <MenuItem component={RouterLink} to="/" onClick={() => setAvatarMenuAnchor(null)}>
+                    <MenuItem component={RouterLink} to="/profile" onClick={() => setAvatarMenuAnchor(null)}>
                       <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
                       {t(language, "navProfile")}
                     </MenuItem>
@@ -341,8 +359,11 @@ export default function App() {
                 />
               )}
             />
-            <Route path="/" element={<Protected><Profile language={language} /></Protected>} />
-<Route path="/models" element={<Protected><Models language={language} /></Protected>} />
+            <Route path="/" element={<Protected><Dashboard language={language} /></Protected>} />
+            <Route path="/profile" element={<Protected><Profile language={language} /></Protected>} />
+            <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
+            <Route path="/enrollments" element={<Protected><Enrollments language={language} /></Protected>} />
+            <Route path="/staff-checkin" element={<Protected><RequireRole min="staff"><StaffCheckin language={language} /></RequireRole></Protected>} />
             <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
             <Route path="/public-events" element={<PublicEvents language={language} />} />
             <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />

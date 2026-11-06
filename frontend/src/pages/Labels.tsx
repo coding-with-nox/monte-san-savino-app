@@ -13,118 +13,14 @@ import PrintIcon from "@mui/icons-material/Print";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import { api } from "../lib/api";
 import { downloadAuthenticatedFile } from "../lib/download";
+import { DymoSdkError, printDymoLabels } from "../lib/dymo";
+import { openHtmlExport } from "../lib/exports";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import useToast from "../components/useToast";
 
 type Event = { id: string; name: string; status: string };
-type LabelRow = { utente: string; categoria: string; nomeModello: string; codice: string };
-
-declare const dymo: any;
-
-function loadDymoSdk(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof dymo !== "undefined") { resolve(); return; }
-    const script = document.createElement("script");
-    script.src = "http://labelwriter.com/software/dls/sdk/js/DYMO.Label.Framework.latest.js";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load DYMO SDK"));
-    document.head.appendChild(script);
-  });
-}
-
-function buildDymoLabelXml(row: LabelRow): string {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<DieCutLabel Version="8.0" Units="twips">
-  <PaperOrientation>Landscape</PaperOrientation>
-  <Id>LargeAddress</Id>
-  <PaperName>30321 Large Address</PaperName>
-  <DrawCommands>
-    <RoundRectangle X="0" Y="0" Width="1638" Height="5040" Rx="270" Ry="270"/>
-  </DrawCommands>
-  <ObjectInfo>
-    <TextObject>
-      <Name>TEXT_USER</Name>
-      <ForeColor Alpha="255" Red="0" Green="0" Blue="0"/>
-      <BackColor Alpha="0" Red="255" Green="255" Blue="255"/>
-      <LinkedObjectName></LinkedObjectName>
-      <Rotation>Rotation0</Rotation>
-      <IsMirrored>False</IsMirrored>
-      <IsVariable>True</IsVariable>
-      <HorizontalAlignment>Left</HorizontalAlignment>
-      <VerticalAlignment>Middle</VerticalAlignment>
-      <TextFitMode>ShrinkToFit</TextFitMode>
-      <UseFullFontHeight>True</UseFullFontHeight>
-      <Verticalized>False</Verticalized>
-      <StyledText>
-        <Element><String>${row.utente}</String><Attributes><Font Family="Arial" Size="10" Bold="True" Italic="False" Underline="False" Strikeout="False"/></Attributes></Element>
-      </StyledText>
-    </TextObject>
-    <Bounds X="336" Y="100" Width="4600" Height="360"/>
-  </ObjectInfo>
-  <ObjectInfo>
-    <TextObject>
-      <Name>TEXT_CAT</Name>
-      <ForeColor Alpha="255" Red="0" Green="0" Blue="0"/>
-      <BackColor Alpha="0" Red="255" Green="255" Blue="255"/>
-      <LinkedObjectName></LinkedObjectName>
-      <Rotation>Rotation0</Rotation>
-      <IsMirrored>False</IsMirrored>
-      <IsVariable>True</IsVariable>
-      <HorizontalAlignment>Left</HorizontalAlignment>
-      <VerticalAlignment>Middle</VerticalAlignment>
-      <TextFitMode>ShrinkToFit</TextFitMode>
-      <UseFullFontHeight>True</UseFullFontHeight>
-      <Verticalized>False</Verticalized>
-      <StyledText>
-        <Element><String>${row.categoria}</String><Attributes><Font Family="Arial" Size="9" Bold="False" Italic="False" Underline="False" Strikeout="False"/></Attributes></Element>
-      </StyledText>
-    </TextObject>
-    <Bounds X="336" Y="460" Width="4600" Height="320"/>
-  </ObjectInfo>
-  <ObjectInfo>
-    <TextObject>
-      <Name>TEXT_MODEL</Name>
-      <ForeColor Alpha="255" Red="0" Green="0" Blue="0"/>
-      <BackColor Alpha="0" Red="255" Green="255" Blue="255"/>
-      <LinkedObjectName></LinkedObjectName>
-      <Rotation>Rotation0</Rotation>
-      <IsMirrored>False</IsMirrored>
-      <IsVariable>True</IsVariable>
-      <HorizontalAlignment>Left</HorizontalAlignment>
-      <VerticalAlignment>Middle</VerticalAlignment>
-      <TextFitMode>ShrinkToFit</TextFitMode>
-      <UseFullFontHeight>True</UseFullFontHeight>
-      <Verticalized>False</Verticalized>
-      <StyledText>
-        <Element><String>${row.nomeModello}</String><Attributes><Font Family="Arial" Size="9" Bold="False" Italic="False" Underline="False" Strikeout="False"/></Attributes></Element>
-      </StyledText>
-    </TextObject>
-    <Bounds X="336" Y="780" Width="4600" Height="320"/>
-  </ObjectInfo>
-  <ObjectInfo>
-    <TextObject>
-      <Name>TEXT_CODE</Name>
-      <ForeColor Alpha="255" Red="0" Green="0" Blue="0"/>
-      <BackColor Alpha="0" Red="255" Green="255" Blue="255"/>
-      <LinkedObjectName></LinkedObjectName>
-      <Rotation>Rotation0</Rotation>
-      <IsMirrored>False</IsMirrored>
-      <IsVariable>True</IsVariable>
-      <HorizontalAlignment>Left</HorizontalAlignment>
-      <VerticalAlignment>Middle</VerticalAlignment>
-      <TextFitMode>ShrinkToFit</TextFitMode>
-      <UseFullFontHeight>True</UseFullFontHeight>
-      <Verticalized>False</Verticalized>
-      <StyledText>
-        <Element><String>${row.codice}</String><Attributes><Font Family="Arial" Size="10" Bold="True" Italic="False" Underline="False" Strikeout="False"/></Attributes></Element>
-      </StyledText>
-    </TextObject>
-    <Bounds X="336" Y="1100" Width="4600" Height="360"/>
-  </ObjectInfo>
-</DieCutLabel>`;
-}
 
 interface LabelsProps {
   language: Language;
@@ -164,22 +60,12 @@ export default function Labels({ language }: LabelsProps) {
     }
     setPrintingDymo(true);
     try {
-      await loadDymoSdk();
-      const printers: any[] = dymo.label.framework.getPrinters();
-      const dymoprinter = printers.find((p: any) => p.printerType === "LabelWriterPrinter");
-      if (!dymoprinter) {
-        toast.error(t(language, "labelsDymoNoPrinter"));
-        return;
-      }
-      const rows = await api<LabelRow[]>(`/exports/labels/data?eventId=${encodeURIComponent(eventId)}`);
-      for (const row of rows) {
-        const labelXml = buildDymoLabelXml(row);
-        const label = dymo.label.framework.openLabelXml(labelXml);
-        label.print(dymoprinter.name);
-      }
-      toast.success(t(language, "labelsDymoPrinted"));
+      const result = await printDymoLabels({ eventId });
+      if (result === "noPrinter") toast.error(t(language, "labelsDymoNoPrinter"));
+      else if (result === "noData") toast.info(t(language, "printNoLabelData"));
+      else toast.success(t(language, "labelsDymoPrinted"));
     } catch (err: any) {
-      toast.error(err?.message ?? String(err));
+      toast.error(err instanceof DymoSdkError ? t(language, "labelsDymoSdkError") : err?.message ?? String(err));
     } finally {
       setPrintingDymo(false);
     }
@@ -192,11 +78,7 @@ export default function Labels({ language }: LabelsProps) {
     }
     setExportingPdf(true);
     try {
-      const html = await api<string>(`/exports/labels/pdf?eventId=${encodeURIComponent(eventId)}`);
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const url = window.URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      await openHtmlExport("/exports/labels/pdf", { eventId });
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
     } finally {
@@ -214,7 +96,7 @@ export default function Labels({ language }: LabelsProps) {
       <Stack spacing={2}>
         <Typography variant="h4">{t(language, "labelsTitle")}</Typography>
 
-        <SectionCard title="Esportazione etichette">
+        <SectionCard title={t(language, "labelsExportTitle")}>
           <Stack spacing={2}>
             <FormControl size="small" fullWidth>
               <InputLabel>{t(language, "enrollmentsEventSelect")}</InputLabel>

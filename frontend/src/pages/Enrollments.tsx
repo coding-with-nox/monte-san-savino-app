@@ -265,8 +265,8 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   const renderTable = (items: Enrollment[], isPast: boolean) => (
     items.length === 0 ? (
       <EmptyState
-        title={isPast ? "Nessuna iscrizione passata" : "Nessuna iscrizione attiva"}
-        description="Non hai ancora iscrizioni in questa sezione."
+        title={t(language, isPast ? "emptyEnrollmentsPastTitle" : "emptyEnrollmentsActiveTitle")}
+        description={t(language, "emptyEnrollmentsDescription")}
       />
     ) : (
       <TableContainer component={Paper} variant="outlined">

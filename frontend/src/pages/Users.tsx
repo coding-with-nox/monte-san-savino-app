@@ -39,6 +39,10 @@ import ActiveSwitch from "../lib/ActiveSwitch";
 import ProfileEditSections from "../components/ProfileEditSections";
 import PageContainer from "../components/PageContainer";
 import EmptyState from "../components/EmptyState";
+import PageSkeleton from "../components/PageSkeleton";
+import PrintActions from "../components/PrintActions";
+import SocialLinks from "../components/SocialLinks";
+import { hasInvalidSocial, socialPayload } from "../lib/social";
 import useToast from "../components/useToast";
 
 type User = { id: string; email: string; role: string; isActive: boolean };
@@ -55,6 +59,9 @@ type UserProfile = {
   city?: string | null;
   emergencyContact?: string | null;
   emergencyContactName?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  website?: string | null;
 };
 
 interface UsersProps {
@@ -65,6 +72,7 @@ const roles = ["user", "staff", "judge", "manager", "admin"];
 
 export default function Users({ language }: UsersProps) {
   const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<Event[]>([]);
   const [exportEventId, setExportEventId] = useState("");
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -95,7 +103,7 @@ export default function Users({ language }: UsersProps) {
   }
 
   useEffect(() => {
-    load().catch((err) => toast.error(err.message));
+    load().catch((err) => toast.error(err.message)).finally(() => setLoading(false));
     loadEvents().catch((err) => toast.error(err.message));
   }, []);
 
@@ -141,7 +149,10 @@ export default function Users({ language }: UsersProps) {
       phone: profile.phone,
       city: profile.city,
       emergencyContact: profile.emergencyContact,
-      emergencyContactName: profile.emergencyContactName
+      emergencyContactName: profile.emergencyContactName,
+      instagram: profile.instagram,
+      facebook: profile.facebook,
+      website: profile.website
     });
     setEditingFields(false);
     setPhoneError(false);
@@ -200,9 +211,13 @@ export default function Users({ language }: UsersProps) {
       setEmergencyPhoneError(true);
       return;
     }
+    if (hasInvalidSocial(profileForm)) {
+      toast.error(t(language, "profileSocialInvalid"));
+      return;
+    }
     await api(`/admin/users/${editProfile.id}/profile`, {
       method: "PUT",
-      body: JSON.stringify(profileForm)
+      body: JSON.stringify({ ...profileForm, ...socialPayload(profileForm) })
     });
     setEditingFields(false);
     const updated = await api<UserProfile>(`/admin/users/${editProfile.id}/profile`);
@@ -285,9 +300,11 @@ export default function Users({ language }: UsersProps) {
             </Button>
           </Stack>
         </Stack>
-        {users.length === 0 && (
-          <EmptyState title="Nessun utente" />
+        {loading && <PageSkeleton variant="table" />}
+        {!loading && users.length === 0 && (
+          <EmptyState title={t(language, "emptyUsersTitle")} />
         )}
+        {!loading && (
         <TableContainer component={Paper} variant="outlined">
           <Table>
             <TableHead>
@@ -326,6 +343,7 @@ export default function Users({ language }: UsersProps) {
             </TableBody>
           </Table>
         </TableContainer>
+        )}
       </Stack>
 
       {/* Create User Dialog */}
@@ -401,6 +419,11 @@ export default function Users({ language }: UsersProps) {
                   <Button variant="outlined" size="small" startIcon={<LockResetIcon />} onClick={resetPassword}>
                     {t(language, "adminResetPasswordButton")}
                   </Button>
+                  {/* Print shortcuts for this user's models/labels (userId, optionally narrowed by the selected event) */}
+                  <PrintActions
+                    language={language}
+                    params={{ userId: editProfile.id, eventId: exportEventId || undefined }}
+                  />
                 </Stack>
 
                 <Divider />
@@ -427,6 +450,15 @@ export default function Users({ language }: UsersProps) {
                     <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileCity")}</Typography>
                       <Typography>{editProfile.city || "-"}</Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="caption" color="text.secondary">{t(language, "profileSocialSection")}</Typography>
+                      <SocialLinks
+                        language={language}
+                        instagram={editProfile.instagram}
+                        facebook={editProfile.facebook}
+                        website={editProfile.website}
+                      />
                     </Grid>
                   </Grid>
                 )}
@@ -459,7 +491,10 @@ export default function Users({ language }: UsersProps) {
                       phone: editProfile.phone,
                       city: editProfile.city,
                       emergencyContact: editProfile.emergencyContact,
-                      emergencyContactName: editProfile.emergencyContactName
+                      emergencyContactName: editProfile.emergencyContactName,
+                      instagram: editProfile.instagram,
+                      facebook: editProfile.facebook,
+                      website: editProfile.website
                     });
                   }}>
                     {t(language, "profileEditButton")}

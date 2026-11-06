@@ -38,10 +38,14 @@ import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import ImageIcon from "@mui/icons-material/Image";
 import { api } from "../lib/api";
+import { getRole, roleAtLeast } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import EmptyState from "../components/EmptyState";
+import PageSkeleton from "../components/PageSkeleton";
+import PrintActions from "../components/PrintActions";
+import { useConfirm } from "../components/ConfirmDialog";
 import useToast from "../components/useToast";
 
 type Model = {
@@ -54,6 +58,10 @@ type Model = {
   imageUrl?: string | null;
   isTeam: boolean;
   displayNumber?: number | null;
+  /** Visible to owner, judges and managers. */
+  notes?: string | null;
+  /** Managers/admins only: never rendered for other roles. */
+  internalNotes?: string | null;
 };
 type Level = { id: string; name: string; sortOrder?: number | null };
 type ModelDetail = { model: Model & { teamId?: string | null }; images: { id: string; url: string }[] };
@@ -65,6 +73,12 @@ interface ModelsProps {
 
 export default function Models({ language }: ModelsProps) {
   const [models, setModels] = useState<Model[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { confirm, node: confirmNode } = useConfirm(language);
+  const role = getRole();
+  const isManager = role ? roleAtLeast(role, "manager") : false;
+  const [editNotes, setEditNotes] = useState("");
+  const [editInternalNotes, setEditInternalNotes] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ModelDetail | null>(null);
@@ -86,7 +100,13 @@ export default function Models({ language }: ModelsProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
-    setModels(await api<Model[]>("/models"));
+    try {
+      setModels(await api<Model[]>("/models"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   // Task 06: stampa scheda utente
@@ -96,6 +116,7 @@ export default function Models({ language }: ModelsProps) {
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const url = window.URL.createObjectURL(blob);
       window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
     }
@@ -133,6 +154,8 @@ export default function Models({ language }: ModelsProps) {
     setEditLevelId(d.model.levelId || "");
     setEditIsTeam(d.model.isTeam || false);
     setEditTeamId(d.model.teamId ?? "");
+    setEditNotes(d.model.notes ?? "");
+    setEditInternalNotes(isManager ? d.model.internalNotes ?? "" : "");
     setExpandedId(modelId);
     setIsCreating(false);
     setAttachName("");
@@ -152,6 +175,8 @@ export default function Models({ language }: ModelsProps) {
     setEditLevelId("");
     setEditIsTeam(false);
     setEditTeamId("");
+    setEditNotes("");
+    setEditInternalNotes("");
     setIsCreating(true);
     setAttachName("");
   }
@@ -166,7 +191,10 @@ export default function Models({ language }: ModelsProps) {
           categoryId: editCategoryId,
           levelId: editLevelId,
           isTeam: editIsTeam,
-          teamId: editIsTeam ? editTeamId : null
+          teamId: editIsTeam ? editTeamId : null,
+          notes: editNotes.trim() || null,
+          // internalNotes is sent only by managers/admins; other roles never touch it
+          ...(isManager ? { internalNotes: editInternalNotes.trim() || null } : {})
         })
       });
       setIsCreating(false);
@@ -181,7 +209,7 @@ export default function Models({ language }: ModelsProps) {
   async function saveModelChanges() {
     if (!detail?.model) return;
     if (editCategoryId !== detail.model.categoryId) {
-      const ok = window.confirm(t(language, "modelsCategoryChangeWarning"));
+      const ok = await confirm(t(language, "modelsCategoryChangeWarning"), { destructive: false });
       if (!ok) return;
     }
     setSavingModel(true);
@@ -193,7 +221,10 @@ export default function Models({ language }: ModelsProps) {
           categoryId: editCategoryId,
           levelId: editLevelId,
           isTeam: editIsTeam,
-          teamId: editIsTeam ? editTeamId : null
+          teamId: editIsTeam ? editTeamId : null,
+          notes: editNotes.trim() || null,
+          // internalNotes is sent only by managers/admins; other roles never touch it
+          ...(isManager ? { internalNotes: editInternalNotes.trim() || null } : {})
         })
       });
       closePanel();
@@ -206,7 +237,7 @@ export default function Models({ language }: ModelsProps) {
   }
 
   async function deleteModel(modelId: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/models/${modelId}`, { method: "DELETE" });
     if (expandedId === modelId) closePanel();
     await load();
@@ -279,7 +310,7 @@ export default function Models({ language }: ModelsProps) {
 
   async function deleteImage(imageId: string) {
     if (!detail?.model) return;
-    if (!window.confirm(t(language, "confirmDelete"))) return;
+    if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/models/${detail.model.id}/images/${imageId}`, { method: "DELETE" });
     const d = await api<ModelDetail>(`/models/${detail.model.id}`);
     setDetail(d);
@@ -355,6 +386,34 @@ export default function Models({ language }: ModelsProps) {
                   ))}
                 </Select>
               </FormControl>
+            )}
+            <TextField
+              label={t(language, "modelsNotesLabel")}
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              fullWidth
+              multiline
+              minRows={2}
+              size="small"
+              inputProps={{ maxLength: 2000 }}
+            />
+            {isManager && (
+              <TextField
+                label={t(language, "modelsInternalNotesLabel")}
+                value={editInternalNotes}
+                onChange={(e) => setEditInternalNotes(e.target.value)}
+                fullWidth
+                multiline
+                minRows={2}
+                size="small"
+                color="warning"
+                inputProps={{ maxLength: 2000 }}
+              />
+            )}
+            {!isCreating && detail?.model && (
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <PrintActions language={language} params={{ modelId: detail.model.id }} />
+              </Stack>
             )}
             <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || (isCreating && !editLevelId)} fullWidth>
               {savingModel ? t(language, "modelsUploading") : isCreating ? t(language, "modelsCreateButton") : t(language, "modelsSaveButton")}
@@ -440,6 +499,7 @@ export default function Models({ language }: ModelsProps) {
   return (
     <PageContainer maxWidth="lg">
       {toast.node}
+      {confirmNode}
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
@@ -461,8 +521,9 @@ export default function Models({ language }: ModelsProps) {
           </Paper>
         </Collapse>
         <SectionCard title={t(language, "modelsTitle")}>
-          {models.length === 0 && (
-            <EmptyState title="Nessun modello" description="Aggiungi il tuo primo modello per iniziare." />
+          {loading && <PageSkeleton variant="table" rows={4} />}
+          {!loading && models.length === 0 && (
+            <EmptyState title={t(language, "emptyModelsTitle")} description={t(language, "emptyModelsDescription")} />
           )}
           {models.length > 0 && (
             <TableContainer component={Paper} variant="outlined">
