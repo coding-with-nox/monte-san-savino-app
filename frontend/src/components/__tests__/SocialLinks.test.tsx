@@ -17,6 +17,15 @@ describe("SocialLinks", () => {
     expect(screen.getByRole("link", { name: "Website" })).toHaveAttribute("href", "http://example.com/");
   });
 
+  it("renders patreon, pinterest and tiktok links and rejects unsafe ones", () => {
+    renderWithProviders(
+      <SocialLinks language="en" patreon="patreon.com/mario" pinterest="https://pinterest.com/mario" tiktok="javascript:alert(1)" />
+    );
+    expect(screen.getByRole("link", { name: "Patreon" })).toHaveAttribute("href", "https://patreon.com/mario");
+    expect(screen.getByRole("link", { name: "Pinterest" })).toHaveAttribute("href", "https://pinterest.com/mario");
+    expect(screen.queryByRole("link", { name: "TikTok" })).not.toBeInTheDocument();
+  });
+
   it("never renders links for non-http(s) schemes", () => {
     renderWithProviders(<SocialLinks language="en" instagram="javascript:alert(1)" website="data:text/html,x" />);
     expect(screen.queryAllByRole("link")).toHaveLength(0);

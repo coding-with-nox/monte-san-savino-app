@@ -39,6 +39,9 @@ import SectionCard from "../components/SectionCard";
 import { EmptyValue } from "../components/Field";
 import PageSkeleton from "../components/PageSkeleton";
 import PrintActions from "../components/PrintActions";
+import ClassPrintActions from "../components/ClassPrintActions";
+import CsvImportCard from "../components/CsvImportCard";
+import ModelMoveCard from "../components/ModelMoveCard";
 import { useConfirm } from "../components/ConfirmDialog";
 import useToast from "../components/useToast";
 
@@ -49,7 +52,7 @@ type Sponsor = { id: string; eventId: string; name: string; tier: string };
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
 type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null };
-type ModelRef = { id: string; name: string };
+type ModelRef = { id: string; name: string; categoryId?: string };
 type EventCampaign = { id: string; eventId: string; name: string; enrollmentOpenDate?: string | null; enrollmentCloseDate?: string | null };
 
 interface AdminProps {
@@ -139,7 +142,7 @@ export default function Admin({ language }: AdminProps) {
     );
     setLoading(false);
     // Best effort: model names for corrections/mentions/requests (falls back to short ids)
-    api<ModelRef[]>("/models").then(setModels).catch(() => undefined);
+    api<ModelRef[]>("/admin/models").then(setModels).catch(() => undefined);
   }
 
   async function createEvent() {
@@ -542,6 +545,7 @@ export default function Admin({ language }: AdminProps) {
                     >
                       {category.status === "open" ? t(language, "adminCategoryClose") : t(language, "adminCategoryReopen")}
                     </Button>
+                    <ClassPrintActions language={language} categoryId={category.id} />
                     <PrintActions language={language} params={{ eventId: category.eventId, categoryId: category.id }} />
                     <IconButton size="small" onClick={() => openCategoryEdit(category)}>
                       <EditIcon fontSize="small" />
@@ -1041,6 +1045,27 @@ export default function Admin({ language }: AdminProps) {
 
         {!loading && tab === "catalog" && (
           <Stack spacing={2}>
+            <ModelMoveCard
+              language={language}
+              models={models}
+              categories={categories.map((c) => ({ id: c.id, name: `${c.name} (${getEventName(c.eventId)})` }))}
+              onMoved={() => api<ModelRef[]>("/admin/models").then(setModels).catch(() => undefined)}
+            />
+            <CsvImportCard
+              language={language}
+              title={`${t(language, "importTitle")}: ${t(language, "importLevels")}`}
+              help={t(language, "importHelpLevels")}
+              endpoint="/admin/import/levels"
+              onImported={loadLevels}
+            />
+            <CsvImportCard
+              language={language}
+              title={`${t(language, "importTitle")}: ${t(language, "importClasses")}`}
+              help={t(language, "importHelpClasses")}
+              endpoint="/admin/import/classes"
+              events={events}
+              onImported={() => load()}
+            />
             <SectionCard title={t(language, "adminLevelsTitle")}>
               <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
                 <TextField size="small" label={t(language, "adminLevelName")} value={newLevelName} onChange={(e) => setNewLevelName(e.target.value)} />

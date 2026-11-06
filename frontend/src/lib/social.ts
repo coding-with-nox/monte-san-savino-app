@@ -2,9 +2,12 @@ export type SocialFields = {
   instagram?: string | null;
   facebook?: string | null;
   website?: string | null;
+  patreon?: string | null;
+  pinterest?: string | null;
+  tiktok?: string | null;
 };
 
-export const SOCIAL_KEYS = ["instagram", "facebook", "website"] as const;
+export const SOCIAL_KEYS = ["instagram", "facebook", "website", "patreon", "pinterest", "tiktok"] as const;
 
 /**
  * Returns a normalized http(s) URL or null. Values without a scheme get "https://".
@@ -38,6 +41,9 @@ export function socialPayload(p: SocialFields): Record<(typeof SOCIAL_KEYS)[numb
   return {
     instagram: (p.instagram ?? "").trim() || null,
     facebook: (p.facebook ?? "").trim() || null,
-    website: (p.website ?? "").trim() || null
+    website: (p.website ?? "").trim() || null,
+    patreon: (p.patreon ?? "").trim() || null,
+    pinterest: (p.pinterest ?? "").trim() || null,
+    tiktok: (p.tiktok ?? "").trim() || null
   };
 }

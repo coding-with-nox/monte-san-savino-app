@@ -29,6 +29,7 @@ import { downloadAuthenticatedFile } from "../lib/download";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import EmptyState from "../components/EmptyState";
+import AbsentToggle from "../components/AbsentToggle";
 import useToast from "../components/useToast";
 
 type Enrollment = {
@@ -39,7 +40,7 @@ type Enrollment = {
   checkedIn: boolean;
 };
 
-type AdminEnrollment = Enrollment & { userId: string };
+type AdminEnrollment = Enrollment & { userId: string; absent?: boolean };
 type User = { id: string; email: string };
 type Event = { id: string; name: string; status: string };
 type Model = { id: string; name: string; categoryId: string; code?: string | null };
@@ -369,6 +370,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelColumn")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategoryColumn")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Check-in</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsAbsentColumn")}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -379,11 +381,21 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                         <TableCell>{getModelName(enrollment.modelId)}</TableCell>
                         <TableCell>{getCategoryName(enrollment.categoryId)}</TableCell>
                         <TableCell>{enrollment.checkedIn ? "yes" : "no"}</TableCell>
+                        <TableCell>
+                          <AbsentToggle
+                            language={language}
+                            enrollmentId={enrollment.id}
+                            absent={!!enrollment.absent}
+                            onChanged={(absent) =>
+                              setAdminEnrollments((rows) => rows.map((r) => (r.id === enrollment.id ? { ...r, absent } : r)))
+                            }
+                          />
+                        </TableCell>
                       </TableRow>
                     ))}
                     {adminEnrollments.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} align="center">
+                        <TableCell colSpan={6} align="center">
                           <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>-</Typography>
                         </TableCell>
                       </TableRow>

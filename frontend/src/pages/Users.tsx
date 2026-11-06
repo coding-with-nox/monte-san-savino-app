@@ -9,6 +9,7 @@ import {
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   Grid,
   IconButton,
   InputLabel,
@@ -16,6 +17,7 @@ import {
   Paper,
   Select,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -43,6 +45,7 @@ import PageSkeleton from "../components/PageSkeleton";
 import PrintActions from "../components/PrintActions";
 import SocialLinks from "../components/SocialLinks";
 import { hasInvalidSocial, socialPayload } from "../lib/social";
+import { countryName, countryOptions } from "../lib/countries";
 import useToast from "../components/useToast";
 
 type User = { id: string; email: string; role: string; isActive: boolean };
@@ -62,6 +65,11 @@ type UserProfile = {
   instagram?: string | null;
   facebook?: string | null;
   website?: string | null;
+  patreon?: string | null;
+  pinterest?: string | null;
+  tiktok?: string | null;
+  country?: string | null;
+  publicProfile?: boolean | null;
 };
 
 interface UsersProps {
@@ -84,6 +92,8 @@ export default function Users({ language }: UsersProps) {
   const [createEmail, setCreateEmail] = useState("");
   const [createPassword, setCreatePassword] = useState("");
   const [createRole, setCreateRole] = useState("user");
+  const [createCountry, setCreateCountry] = useState("");
+  const [createPublic, setCreatePublic] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Edit dialog
@@ -102,6 +112,12 @@ export default function Users({ language }: UsersProps) {
     setEvents(await api<Event[]>("/events"));
   }
 
+  // Deep link from the statistics page: /users?open=<userId> opens that user's card.
+  useEffect(() => {
+    const openId = new URLSearchParams(window.location.search).get("open");
+    if (openId) openEditDialog(openId).catch((err) => toast.error(err.message));
+  }, []);
+
   useEffect(() => {
     load().catch((err) => toast.error(err.message)).finally(() => setLoading(false));
     loadEvents().catch((err) => toast.error(err.message));
@@ -112,6 +128,8 @@ export default function Users({ language }: UsersProps) {
     setCreateEmail("");
     setCreatePassword("");
     setCreateRole("user");
+    setCreateCountry("");
+    setCreatePublic(false);
     setCreateOpen(true);
   }
 
@@ -123,7 +141,9 @@ export default function Users({ language }: UsersProps) {
         body: JSON.stringify({
           email: createEmail.trim(),
           password: createPassword,
-          role: createRole
+          role: createRole,
+          country: createCountry || null,
+          publicProfile: createPublic
         })
       });
       setCreateOpen(false);
@@ -152,7 +172,12 @@ export default function Users({ language }: UsersProps) {
       emergencyContactName: profile.emergencyContactName,
       instagram: profile.instagram,
       facebook: profile.facebook,
-      website: profile.website
+      website: profile.website,
+      patreon: profile.patreon,
+      pinterest: profile.pinterest,
+      tiktok: profile.tiktok,
+      country: profile.country,
+      publicProfile: profile.publicProfile
     });
     setEditingFields(false);
     setPhoneError(false);
@@ -217,7 +242,12 @@ export default function Users({ language }: UsersProps) {
     }
     await api(`/admin/users/${editProfile.id}/profile`, {
       method: "PUT",
-      body: JSON.stringify({ ...profileForm, ...socialPayload(profileForm) })
+      body: JSON.stringify({
+        ...profileForm,
+        ...socialPayload(profileForm),
+        country: profileForm.country || null,
+        publicProfile: profileForm.publicProfile ?? false
+      })
     });
     setEditingFields(false);
     const updated = await api<UserProfile>(`/admin/users/${editProfile.id}/profile`);
@@ -371,6 +401,20 @@ export default function Users({ language }: UsersProps) {
                 {roles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
               </Select>
             </FormControl>
+            <TextField
+              select
+              label={t(language, "profileCountry")}
+              value={createCountry}
+              onChange={(e) => setCreateCountry(e.target.value)}
+              fullWidth
+            >
+              <MenuItem value="">{t(language, "profileCountryNone")}</MenuItem>
+              {countryOptions(language).map((c) => <MenuItem key={c.code} value={c.code}>{c.name}</MenuItem>)}
+            </TextField>
+            <FormControlLabel
+              control={<Switch checked={createPublic} onChange={(e) => setCreatePublic(e.target.checked)} />}
+              label={t(language, "profilePublic")}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -452,12 +496,19 @@ export default function Users({ language }: UsersProps) {
                       <Typography>{editProfile.city || "-"}</Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
+                      <Typography variant="caption" color="text.secondary">{t(language, "profileCountry")}</Typography>
+                      <Typography>{countryName(editProfile.country, language) || "-"}</Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileSocialSection")}</Typography>
                       <SocialLinks
                         language={language}
                         instagram={editProfile.instagram}
                         facebook={editProfile.facebook}
                         website={editProfile.website}
+                        patreon={editProfile.patreon}
+                        pinterest={editProfile.pinterest}
+                        tiktok={editProfile.tiktok}
                       />
                     </Grid>
                   </Grid>
@@ -494,7 +545,12 @@ export default function Users({ language }: UsersProps) {
                       emergencyContactName: editProfile.emergencyContactName,
                       instagram: editProfile.instagram,
                       facebook: editProfile.facebook,
-                      website: editProfile.website
+                      website: editProfile.website,
+                      patreon: editProfile.patreon,
+                      pinterest: editProfile.pinterest,
+                      tiktok: editProfile.tiktok,
+                      country: editProfile.country,
+                      publicProfile: editProfile.publicProfile
                     });
                   }}>
                     {t(language, "profileEditButton")}

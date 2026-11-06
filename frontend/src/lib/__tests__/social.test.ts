@@ -23,7 +23,12 @@ describe("social helpers", () => {
     expect(socialPayload({ instagram: " ", facebook: " f.com ", website: undefined })).toEqual({
       instagram: null,
       facebook: "f.com",
-      website: null
+      website: null,
+      patreon: null,
+      pinterest: null,
+      tiktok: null
     });
+    expect(hasInvalidSocial({ tiktok: "javascript:x" })).toBe(true);
+    expect(socialPayload({ patreon: " patreon.com/x " }).patreon).toBe("patreon.com/x");
   });
 });

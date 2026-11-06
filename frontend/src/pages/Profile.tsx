@@ -15,6 +15,7 @@ import Field, { EmptyValue } from "../components/Field";
 import SocialLinks from "../components/SocialLinks";
 import useToast from "../components/useToast";
 import { hasInvalidSocial, socialPayload } from "../lib/social";
+import { countryName } from "../lib/countries";
 
 type Profile = {
   email?: string;
@@ -28,6 +29,11 @@ type Profile = {
   instagram?: string | null;
   facebook?: string | null;
   website?: string | null;
+  patreon?: string | null;
+  pinterest?: string | null;
+  tiktok?: string | null;
+  country?: string | null;
+  publicProfile?: boolean | null;
 };
 
 interface ProfileProps {
@@ -66,7 +72,7 @@ export default function Profile({ language }: ProfileProps) {
     }
     try {
       const { email, role, ...body } = editProfile;
-      const payload = { ...body, ...socialPayload(editProfile) };
+      const payload = { ...body, ...socialPayload(editProfile), country: editProfile.country || null, publicProfile: editProfile.publicProfile ?? false };
       await api("/users/profile", { method: "PUT", body: JSON.stringify(payload) });
       toast.success(t(language, "profileSaved"));
       setProfile({ ...editProfile, ...socialPayload(editProfile) });
@@ -157,6 +163,9 @@ export default function Profile({ language }: ProfileProps) {
               <Grid item xs={12} sm={6}>
                 <Field label={t(language, "profileCity")} value={profile.city} />
               </Grid>
+              <Grid item xs={12} sm={6}>
+                <Field label={t(language, "profileCountry")} value={countryName(profile.country, language) || undefined} />
+              </Grid>
             </Grid>
           </SectionCard>
 
@@ -166,6 +175,16 @@ export default function Profile({ language }: ProfileProps) {
               instagram={profile.instagram}
               facebook={profile.facebook}
               website={profile.website}
+              patreon={profile.patreon}
+              pinterest={profile.pinterest}
+              tiktok={profile.tiktok}
+            />
+            <Chip
+              size="small"
+              variant="outlined"
+              color={profile.publicProfile ? "success" : "default"}
+              label={t(language, profile.publicProfile ? "profilePublicYes" : "profilePublicNo")}
+              sx={{ mt: 2 }}
             />
           </SectionCard>
         </Stack>

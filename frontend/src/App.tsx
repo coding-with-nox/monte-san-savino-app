@@ -66,6 +66,8 @@ import Admin from "./pages/Admin";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Labels from "./pages/Labels";
+import Stats from "./pages/Stats";
+import Podium from "./pages/Podium";
 import { api, API_BASE } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
@@ -189,6 +191,8 @@ export default function App() {
     { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role },
     { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role },
     { label: t(language, "navLabels"), path: "/labels", minRole: "manager" as Role },
+    { label: t(language, "navStats"), path: "/stats", minRole: "manager" as Role },
+    { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role },
     { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role }
   ];
 
@@ -370,6 +374,8 @@ export default function App() {
             <Route path="/users" element={<Protected><RequireRole min="manager"><Users language={language} /></RequireRole></Protected>} />
             <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin language={language} /></RequireRole></Protected>} />
             <Route path="/labels" element={<Protected><RequireRole min="manager"><Labels language={language} /></RequireRole></Protected>} />
+            <Route path="/stats" element={<Protected><RequireRole min="manager"><Stats language={language} /></RequireRole></Protected>} />
+            <Route path="/podium" element={<Protected><RequireRole min="manager"><Podium language={language} /></RequireRole></Protected>} />
             <Route path="/settings" element={<Protected><RequireRole min="admin"><Settings language={language} /></RequireRole></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
