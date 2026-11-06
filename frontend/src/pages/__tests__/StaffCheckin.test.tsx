@@ -54,4 +54,32 @@ describe("StaffCheckin", () => {
     await user.click(screen.getByRole("button", { name: "Stampa badge" }));
     await waitFor(() => expect(screen.getByText("Printer offline")).toBeInTheDocument());
   });
+
+  it("does not call the API and shows a validation error for an empty or blank id on check-in", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<StaffCheckin language="en" />);
+    await user.click(screen.getByRole("button", { name: "Check-in" }));
+    expect(await screen.findByText("Enter the enrollment ID.")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Enrollment ID"), "   ");
+    await user.click(screen.getByRole("button", { name: "Check-in" }));
+    expect(apiMock).not.toHaveBeenCalled();
+  });
+
+  it("does not call the API for a blank id when printing the badge", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<StaffCheckin language="it" />);
+    await user.type(screen.getByLabelText("Enrollment ID"), "  ");
+    await user.click(screen.getByRole("button", { name: "Stampa badge" }));
+    expect(await screen.findByText("Inserisci l'ID iscrizione.")).toBeInTheDocument();
+    expect(apiMock).not.toHaveBeenCalled();
+  });
+
+  it("trims the id before calling the API", async () => {
+    apiMock.mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+    renderWithProviders(<StaffCheckin language="en" />);
+    await user.type(screen.getByLabelText("Enrollment ID"), "  enr-7 ");
+    await user.click(screen.getByRole("button", { name: "Check-in" }));
+    expect(apiMock).toHaveBeenCalledWith("/staff/checkin/enr-7", { method: "POST" });
+  });
 });

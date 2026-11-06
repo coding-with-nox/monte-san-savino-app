@@ -72,7 +72,7 @@ describe("Enrollments", () => {
     setup([]);
     renderWithProviders(<Enrollments language="en" />);
     await screen.findByText("No active enrollments");
-    expect(screen.queryByText("Gestione iscrizioni evento")).not.toBeInTheDocument();
+    expect(screen.queryByText("Event enrollment management")).not.toBeInTheDocument();
     expect(apiMock.mock.calls.some((c) => String(c[0]).startsWith("/admin"))).toBe(false);
   });
 
@@ -80,7 +80,7 @@ describe("Enrollments", () => {
     roleValue = "manager";
     setup([]);
     renderWithProviders(<Enrollments language="en" />);
-    expect(await screen.findByText("Gestione iscrizioni evento")).toBeInTheDocument();
+    expect(await screen.findByText("Event enrollment management")).toBeInTheDocument();
     expect(await screen.findByText("mario@example.com")).toBeInTheDocument();
   });
 
@@ -120,11 +120,28 @@ describe("Enrollments", () => {
     expect(await screen.findByText("Already enrolled")).toBeInTheDocument();
   });
 
+  it("renders the enrollment labels in Italian when the language is it", async () => {
+    roleValue = "manager";
+    setup([]);
+    renderWithProviders(<Enrollments language="it" />);
+    expect(await screen.findByText("Gestione iscrizioni evento")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /export mie iscrizioni/i })).toBeInTheDocument();
+  });
+
+  it("does not show Italian-only labels in English", async () => {
+    roleValue = "manager";
+    setup([]);
+    renderWithProviders(<Enrollments language="en" />);
+    await screen.findByText("mario@example.com");
+    expect(screen.queryByText("Gestione iscrizioni evento")).not.toBeInTheDocument();
+    expect(screen.queryByText(/export mie iscrizioni/i)).not.toBeInTheDocument();
+  });
+
   it("exports own enrollments", async () => {
     setup([]);
     const user = userEvent.setup();
     renderWithProviders(<Enrollments language="en" />);
-    await user.click(screen.getByRole("button", { name: /export mie iscrizioni/i }));
+    await user.click(screen.getByRole("button", { name: /export my enrollments/i }));
     expect(downloadMock).toHaveBeenCalledWith("/exports/my-enrollments", "my-enrollments.xlsx");
   });
 

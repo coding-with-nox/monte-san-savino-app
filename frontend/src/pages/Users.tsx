@@ -115,7 +115,7 @@ export default function Users({ language }: UsersProps) {
   // Deep link from the statistics page: /users?open=<userId> opens that user's card.
   useEffect(() => {
     const openId = new URLSearchParams(window.location.search).get("open");
-    if (openId) openEditDialog(openId).catch((err) => toast.error(err.message));
+    if (openId) void openEditDialog(openId);
   }, []);
 
   useEffect(() => {
@@ -161,7 +161,13 @@ export default function Users({ language }: UsersProps) {
 
   // --- Edit dialog ---
   async function openEditDialog(userId: string) {
-    const profile = await api<UserProfile>(`/admin/users/${userId}/profile`);
+    let profile: UserProfile;
+    try {
+      profile = await api<UserProfile>(`/admin/users/${userId}/profile`);
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+      return;
+    }
     setEditProfile(profile);
     setProfileForm({
       firstName: profile.firstName,
@@ -195,9 +201,14 @@ export default function Users({ language }: UsersProps) {
 
   async function updateRole(role: string) {
     if (!editProfile) return;
-    await api(`/admin/users/${editProfile.id}`, { method: "PATCH", body: JSON.stringify({ role }) });
-    setEditProfile({ ...editProfile, role });
-    await load();
+    try {
+      await api(`/admin/users/${editProfile.id}`, { method: "PATCH", body: JSON.stringify({ role }) });
+      setEditProfile({ ...editProfile, role });
+      await load();
+    } catch (err: any) {
+      // state is only updated after the API succeeds, so there is nothing to roll back
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   async function toggleActive() {
@@ -207,23 +218,31 @@ export default function Users({ language }: UsersProps) {
 
   async function toggleUserActive(userId: string, currentActive: boolean) {
     const newActive = !currentActive;
-    await api(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ isActive: newActive }) });
-    if (editProfile && editProfile.id === userId) {
-      setEditProfile({ ...editProfile, isActive: newActive });
+    try {
+      await api(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ isActive: newActive }) });
+      if (editProfile && editProfile.id === userId) {
+        setEditProfile({ ...editProfile, isActive: newActive });
+      }
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: newActive } : u));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
     }
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: newActive } : u));
   }
 
   async function resetPassword() {
     if (!editProfile) return;
-    const res = await api<{ temporaryPassword: string; emailSent: boolean }>(`/admin/users/${editProfile.id}/reset-password`, { method: "POST" });
-    let msg = `${t(language, "adminTempPassword")}: ${res.temporaryPassword}`;
-    if (res.emailSent) {
-      msg += ` - ${t(language, "adminEmailSent")}`;
-    } else {
-      msg += ` - ${t(language, "adminEmailNotSent")}`;
+    try {
+      const res = await api<{ temporaryPassword: string; emailSent: boolean }>(`/admin/users/${editProfile.id}/reset-password`, { method: "POST" });
+      let msg = `${t(language, "adminTempPassword")}: ${res.temporaryPassword}`;
+      if (res.emailSent) {
+        msg += ` - ${t(language, "adminEmailSent")}`;
+      } else {
+        msg += ` - ${t(language, "adminEmailNotSent")}`;
+      }
+      toast.info(msg);
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
     }
-    toast.info(msg);
   }
 
   async function saveProfile() {
@@ -240,19 +259,23 @@ export default function Users({ language }: UsersProps) {
       toast.error(t(language, "profileSocialInvalid"));
       return;
     }
-    await api(`/admin/users/${editProfile.id}/profile`, {
-      method: "PUT",
-      body: JSON.stringify({
-        ...profileForm,
-        ...socialPayload(profileForm),
-        country: profileForm.country || null,
-        publicProfile: profileForm.publicProfile ?? false
-      })
-    });
-    setEditingFields(false);
-    const updated = await api<UserProfile>(`/admin/users/${editProfile.id}/profile`);
-    setEditProfile(updated);
-    toast.success(t(language, "adminProfileSaved"));
+    try {
+      await api(`/admin/users/${editProfile.id}/profile`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...profileForm,
+          ...socialPayload(profileForm),
+          country: profileForm.country || null,
+          publicProfile: profileForm.publicProfile ?? false
+        })
+      });
+      setEditingFields(false);
+      const updated = await api<UserProfile>(`/admin/users/${editProfile.id}/profile`);
+      setEditProfile(updated);
+      toast.success(t(language, "adminProfileSaved"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   async function exportUsersExcel() {

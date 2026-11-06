@@ -147,18 +147,22 @@ export default function Models({ language }: ModelsProps) {
       setDetail(null);
       return;
     }
-    const d = await api<ModelDetail>(`/models/${modelId}`);
-    setDetail(d);
-    setEditName(d.model.name);
-    setEditCategoryId(d.model.categoryId);
-    setEditLevelId(d.model.levelId || "");
-    setEditIsTeam(d.model.isTeam || false);
-    setEditTeamId(d.model.teamId ?? "");
-    setEditNotes(d.model.notes ?? "");
-    setEditInternalNotes(isManager ? d.model.internalNotes ?? "" : "");
-    setExpandedId(modelId);
-    setIsCreating(false);
-    setAttachName("");
+    try {
+      const d = await api<ModelDetail>(`/models/${modelId}`);
+      setDetail(d);
+      setEditName(d.model.name);
+      setEditCategoryId(d.model.categoryId);
+      setEditLevelId(d.model.levelId || "");
+      setEditIsTeam(d.model.isTeam || false);
+      setEditTeamId(d.model.teamId ?? "");
+      setEditNotes(d.model.notes ?? "");
+      setEditInternalNotes(isManager ? d.model.internalNotes ?? "" : "");
+      setExpandedId(modelId);
+      setIsCreating(false);
+      setAttachName("");
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   function closePanel() {
@@ -238,9 +242,13 @@ export default function Models({ language }: ModelsProps) {
 
   async function deleteModel(modelId: string) {
     if (!(await confirm(t(language, "confirmDelete")))) return;
-    await api(`/models/${modelId}`, { method: "DELETE" });
-    if (expandedId === modelId) closePanel();
-    await load();
+    try {
+      await api(`/models/${modelId}`, { method: "DELETE" });
+      if (expandedId === modelId) closePanel();
+      await load();
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   async function resizeImageForUpload(file: File): Promise<File | Blob> {
@@ -311,9 +319,13 @@ export default function Models({ language }: ModelsProps) {
   async function deleteImage(imageId: string) {
     if (!detail?.model) return;
     if (!(await confirm(t(language, "confirmDelete")))) return;
-    await api(`/models/${detail.model.id}/images/${imageId}`, { method: "DELETE" });
-    const d = await api<ModelDetail>(`/models/${detail.model.id}`);
-    setDetail(d);
+    try {
+      await api(`/models/${detail.model.id}/images/${imageId}`, { method: "DELETE" });
+      const d = await api<ModelDetail>(`/models/${detail.model.id}`);
+      setDetail(d);
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   async function loadSettings() {

@@ -277,7 +277,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
               <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsEventSelect")}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelColumn")}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategoryColumn")}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Check-in</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCheckinColumn")}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -316,7 +316,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
               onClick={exportMyEnrollments}
               disabled={exportingMine}
             >
-              {exportingMine ? "..." : "Export mie iscrizioni"}
+              {exportingMine ? "..." : t(language, "enrollmentsExportMine")}
             </Button>
             <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
               {t(language, "enrollmentsButton")}
@@ -338,7 +338,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Stack spacing={2}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
-                <Typography variant="h6">Gestione iscrizioni evento</Typography>
+                <Typography variant="h6">{t(language, "enrollmentsManageTitle")}</Typography>
                 <Button
                   variant="outlined"
                   startIcon={<DownloadIcon />}
@@ -355,7 +355,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                   label={t(language, "enrollmentsEventSelect")}
                   onChange={(e) => setAdminEventId(e.target.value)}
                 >
-                  <MenuItem value="">Tutti gli eventi</MenuItem>
+                  <MenuItem value="">{t(language, "enrollmentsAllEvents")}</MenuItem>
                   {allEvents.map((ev) => (
                     <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
                   ))}
@@ -369,7 +369,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsEventSelect")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelColumn")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategoryColumn")}</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Check-in</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCheckinColumn")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsAbsentColumn")}</TableCell>
                     </TableRow>
                   </TableHead>

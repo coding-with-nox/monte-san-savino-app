@@ -552,7 +552,7 @@ export default function Judge({ language }: JudgeProps) {
                   setSelectedModels(new Set(activeExhibitor!.models.map(m => m.id)));
                 }
               }}>
-                {selectedModels.size === activeExhibitor!.models.length ? "Deseleziona tutti" : "Seleziona tutti"}
+                {selectedModels.size === activeExhibitor!.models.length ? t(language, "judgeDeselectAll") : t(language, "judgeSelectAll")}
               </Button>
             </Box>
           )}
@@ -636,13 +636,13 @@ export default function Judge({ language }: JudgeProps) {
           {!displayMode && (
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 1 }}>
               {selectedModels.size > 0
-                ? `${selectedModels.size} modell${selectedModels.size === 1 ? "o" : "i"} selezionat${selectedModels.size === 1 ? "o" : "i"}`
-                : "Nessun modello selezionato"}
+                ? t(language, selectedModels.size === 1 ? "judgeSelectedOne" : "judgeSelectedMany").replace("{n}", String(selectedModels.size))
+                : t(language, "judgeNoneSelected")}
             </Typography>
           )}
           {displayMode && activeExhibitor && (
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 1 }}>
-              {`Tutti i modelli (${activeExhibitor.models.length})`}
+              {t(language, "judgeAllModels").replace("{n}", String(activeExhibitor.models.length))}
             </Typography>
           )}
 

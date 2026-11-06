@@ -71,8 +71,10 @@ describe("decodeJwt", () => {
     expect(decodeJwt("%%%not-base64%%%")).toEqual({});
   });
 
-  it("throws for a malformed payload segment", () => {
-    expect(() => decodeJwt("a.@@@.c")).toThrow();
+  it("returns an empty object for a malformed payload segment, like for dot-less tokens", () => {
+    expect(decodeJwt("a.@@@.c")).toEqual({});
+    expect(decodeJwt("a.bm90LWpzb24.c")).toEqual({});
+    expect(decodeJwt("%%%not-base64%%%")).toEqual(decodeJwt("a.@@@.c"));
   });
 });
 

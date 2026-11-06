@@ -1,7 +1,7 @@
 import React from "react";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderWithProviders } from "../../test/renderWithProviders";
 
 const apiMock = vi.fn();
@@ -127,5 +127,77 @@ describe("Models", () => {
     renderWithProviders(<Models language="en" />);
     await screen.findByText("Space Marine");
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Enroll model" })[0]).toBeDisabled());
+  });
+
+  describe("error handling", () => {
+    let unhandled: unknown[];
+    const onUnhandled = (e: unknown) => { unhandled.push(e); };
+    beforeEach(() => {
+      unhandled = [];
+      process.on("unhandledRejection", onUnhandled);
+    });
+    afterEach(() => {
+      process.off("unhandledRejection", onUnhandled);
+    });
+
+    it("shows a toast and keeps the list when deleting a model fails", async () => {
+      setup();
+      const base = apiMock.getMockImplementation()!;
+      apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+        if (path === "/models/m1" && init?.method === "DELETE") throw new Error("Delete refused");
+        return base(path, init);
+      });
+      const user = userEvent.setup();
+      renderWithProviders(<Models language="en" />);
+      await screen.findByText("Space Marine");
+      const row = screen.getByText("Space Marine").closest("tr")!;
+      const buttons = row.querySelectorAll("button");
+      await user.click(buttons[buttons.length - 1]);
+      await user.click(await screen.findByRole("button", { name: "Confirm" }));
+      expect(await screen.findByText("Delete refused")).toBeInTheDocument();
+      expect(screen.getByText("Space Marine")).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+    });
+
+    it("shows a toast and keeps the image when deleting an image fails", async () => {
+      setup();
+      const base = apiMock.getMockImplementation()!;
+      apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+        if (path.includes("settings")) return { modelImages: "true", maxModelsPerUser: "" };
+        if (path === "/models/m1" && !init)
+          return { model: { ...modelList[0], notes: "my note" }, images: [{ id: "i1", url: "http://x/y.jpg" }] };
+        if (path === "/models/m1/images/i1" && init?.method === "DELETE") throw new Error("Image delete refused");
+        return base(path, init);
+      });
+      const user = userEvent.setup();
+      renderWithProviders(<Models language="en" />);
+      await user.click(await screen.findByText("Space Marine"));
+      await screen.findByText("http://x/y.jpg").catch(() => null);
+      const icons = await screen.findAllByTestId("DeleteIcon");
+      // last DeleteIcon belongs to the image row (rendered after the model row)
+      const imgDelete = icons[icons.length - 1].closest("button")!;
+      await user.click(imgDelete);
+      await user.click(await screen.findByRole("button", { name: "Confirm" }));
+      expect(await screen.findByText("Image delete refused")).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+    });
+
+    it("shows a toast and does not expand the row when opening a model fails", async () => {
+      setup();
+      const base = apiMock.getMockImplementation()!;
+      apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+        if (path === "/models/m1" && !init) throw new Error("Detail unavailable");
+        return base(path, init);
+      });
+      const user = userEvent.setup();
+      renderWithProviders(<Models language="en" />);
+      await user.click(await screen.findByText("Space Marine"));
+      expect(await screen.findByText("Detail unavailable")).toBeInTheDocument();
+      expect(screen.queryByDisplayValue("my note")).not.toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+    });
   });
 });

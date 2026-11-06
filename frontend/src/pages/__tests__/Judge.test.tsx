@@ -74,6 +74,27 @@ describe("Judge", () => {
     expect(await screen.findByText("Vote recorded.")).toBeInTheDocument();
   });
 
+  it("pluralizes the selection hint in English and Italian", async () => {
+    const user = userEvent.setup();
+    const view = renderWithProviders(<Judge language="en" />);
+    await user.click(await screen.findByText("12"));
+    expect(screen.getByText("All models (2)")).toBeInTheDocument();
+    await user.click(screen.getByText(/15\s+Dread/));
+    expect(screen.getByText("1 model selected")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Select all" }));
+    expect(screen.getByText("2 models selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deselect all" })).toBeInTheDocument();
+    view.unmount();
+
+    renderWithProviders(<Judge language="it" />);
+    await user.click(await screen.findByText("12"));
+    expect(screen.getByText("Tutti i modelli (2)")).toBeInTheDocument();
+    await user.click(screen.getByText(/15\s+Dread/));
+    expect(screen.getByText("1 modello selezionato")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Seleziona tutti" }));
+    expect(screen.getByText("2 modelli selezionati")).toBeInTheDocument();
+  });
+
   it("votes only for the selected model in individual mode", async () => {
     const user = userEvent.setup();
     renderWithProviders(<Judge language="en" />);

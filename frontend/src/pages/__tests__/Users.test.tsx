@@ -1,7 +1,7 @@
 import React from "react";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderWithProviders } from "../../test/renderWithProviders";
 
 const apiMock = vi.fn();
@@ -130,5 +130,92 @@ describe("Users", () => {
     await screen.findByText("mario@example.com");
     expect(screen.getByRole("button", { name: "Excel" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+  });
+
+  describe("error handling", () => {
+    let unhandled: unknown[];
+    const onUnhandled = (e: unknown) => { unhandled.push(e); };
+    beforeEach(() => {
+      unhandled = [];
+      process.on("unhandledRejection", onUnhandled);
+    });
+    afterEach(() => {
+      process.off("unhandledRejection", onUnhandled);
+    });
+
+    const profile = { id: "u1", email: "mario@example.com", role: "user", isActive: true, firstName: "Mario" };
+
+    function setupWith(failing: (path: string, init?: RequestInit) => string | null) {
+      apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+        const msg = failing(path, init);
+        if (msg) throw new Error(msg);
+        if (path === "/admin/users" && !init) return users;
+        if (path === "/events") return [];
+        if (path === "/admin/users/u1/profile" && !init) return profile;
+        return {};
+      });
+    }
+
+    async function flush() {
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+    }
+
+    it("shows a toast and leaves the switch unchanged when toggling active fails", async () => {
+      setupWith((path, init) => (init?.method === "PATCH" ? "Toggle refused" : null));
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await screen.findByText("mario@example.com");
+      const sw = screen.getAllByRole("checkbox")[0];
+      await user.click(sw);
+      expect(await screen.findByText("Toggle refused")).toBeInTheDocument();
+      expect(sw).toBeChecked();
+      await flush();
+    });
+
+    it("shows a toast when opening the edit dialog fails", async () => {
+      setupWith((path) => (path === "/admin/users/u1/profile" ? "Profile unavailable" : null));
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await user.click(await screen.findByText("mario@example.com"));
+      expect(await screen.findByText("Profile unavailable")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await flush();
+    });
+
+    it("shows a toast when reset password fails", async () => {
+      setupWith((path) => (path.endsWith("/reset-password") ? "Reset failed" : null));
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await user.click(await screen.findByText("mario@example.com"));
+      await user.click(await screen.findByRole("button", { name: "Reset password" }));
+      expect(await screen.findByText("Reset failed")).toBeInTheDocument();
+      await flush();
+    });
+
+    it("shows a toast when saving the profile fails and keeps the edit form open", async () => {
+      setupWith((path, init) => (path === "/admin/users/u1/profile" && init?.method === "PUT" ? "Save failed" : null));
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await user.click(await screen.findByText("mario@example.com"));
+      await user.click(await screen.findByRole("button", { name: "Edit" }));
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      expect(await screen.findByText("Save failed")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+      await flush();
+    });
+
+    it("shows a toast and keeps the role when updating the role fails", async () => {
+      setupWith((path, init) => (init?.method === "PATCH" ? "Role refused" : null));
+      const user = userEvent.setup();
+      renderWithProviders(<Users language="en" />);
+      await user.click(await screen.findByText("mario@example.com"));
+      const dialog = await screen.findByRole("dialog");
+      await user.click(within(dialog).getAllByRole("combobox")[0]);
+      await user.click(await screen.findByRole("option", { name: "staff" }));
+      expect(await screen.findByText("Role refused")).toBeInTheDocument();
+      expect(within(dialog).getAllByRole("combobox")[0]).toHaveTextContent("user");
+      await flush();
+    });
   });
 });

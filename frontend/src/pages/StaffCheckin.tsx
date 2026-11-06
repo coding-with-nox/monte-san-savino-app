@@ -21,8 +21,13 @@ export default function StaffCheckin({ language }: StaffCheckinProps) {
   const [enrollmentId, setEnrollmentId] = useState("");
 
   async function checkIn() {
+    const id = enrollmentId.trim();
+    if (!id) {
+      toast.error(t(language, "staffCheckinIdRequired"));
+      return;
+    }
     try {
-      await api(`/staff/checkin/${enrollmentId}`, { method: "POST" });
+      await api(`/staff/checkin/${encodeURIComponent(id)}`, { method: "POST" });
       toast.success(t(language, "staffCheckinCompleted"));
       setEnrollmentId("");
     } catch (err: any) {
@@ -31,8 +36,13 @@ export default function StaffCheckin({ language }: StaffCheckinProps) {
   }
 
   async function printBadge() {
+    const id = enrollmentId.trim();
+    if (!id) {
+      toast.error(t(language, "staffCheckinIdRequired"));
+      return;
+    }
     try {
-      const res = await api<{ message: string }>(`/staff/print/${enrollmentId}`);
+      const res = await api<{ message: string }>(`/staff/print/${encodeURIComponent(id)}`);
       toast.success(res.message);
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
@@ -44,7 +54,7 @@ export default function StaffCheckin({ language }: StaffCheckinProps) {
       {toast.node}
       <Stack spacing={3}>
         <Typography variant="h4">{t(language, "staffCheckinTitle")}</Typography>
-        <SectionCard title="Check-in">
+        <SectionCard title={t(language, "staffCheckinButton")}>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={6}>
               <TextField
