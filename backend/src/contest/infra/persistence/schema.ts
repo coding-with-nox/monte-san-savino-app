@@ -3,7 +3,8 @@ import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index, s
 export const levelsTable = pgTable("levels", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
-  sortOrder: integer("sort_order")
+  sortOrder: integer("sort_order"),
+  freeToEnter: boolean("free_to_enter").default(false).notNull()
 });
 
 export const memberRolesTable = pgTable("member_roles", {
@@ -24,7 +25,12 @@ export const categoriesTable = pgTable("categories", {
   eventId: uuid("event_id").notNull(),
   name: text("name").notNull(),
   status: text("status").default("open").notNull(),
-  seqId: serial("seq_id").notNull()
+  seqId: serial("seq_id").notNull(),
+  classNumber: text("class_number"),
+  levelId: uuid("level_id"),
+  classGroup: text("class_group"),
+  presentationOrder: integer("presentation_order"),
+  outOfCompetition: boolean("out_of_competition").default(false).notNull()
 });
 
 export const eventCampaignsTable = pgTable("event_campaigns", {
@@ -42,7 +48,8 @@ export const registrationsTable = pgTable("registrations", {
   modelId: uuid("model_id"),
   categoryId: uuid("category_id"),
   status: text("status").notNull(),
-  checkedIn: boolean("checked_in").default(false).notNull()
+  checkedIn: boolean("checked_in").default(false).notNull(),
+  absent: boolean("absent").default(false).notNull()
 });
 
 export const modelsTable = pgTable("models", {

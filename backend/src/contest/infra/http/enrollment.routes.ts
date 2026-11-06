@@ -48,7 +48,31 @@ export const adminEnrollmentRoutes = new Elysia({ prefix: "/admin/enrollments" }
     return await tenantDb.select().from(registrationsTable);
   }, {
     detail: {
-      summary: "Lista iscrizioni (admin)",
+      summary: "Lista iscrizioni (admin), include absent",
+      tags: ["Enrollments"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .patch("/:id/absent", async ({ tenantDb, params, body, set }) => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.id)) {
+      set.status = 422;
+      return { error: "id must be a valid uuid" };
+    }
+    const updated = await tenantDb
+      .update(registrationsTable)
+      .set({ absent: body.absent })
+      .where(eq(registrationsTable.id, params.id as any))
+      .returning({ id: registrationsTable.id });
+    if (!updated.length) {
+      set.status = 404;
+      return { error: "Enrollment not found" };
+    }
+    return { id: params.id, absent: body.absent };
+  }, {
+    params: t.Object({ id: t.String() }),
+    body: t.Object({ absent: t.Boolean() }),
+    detail: {
+      summary: "Segna iscrizione come assente/presente",
       tags: ["Enrollments"],
       security: [{ bearerAuth: [] }]
     }

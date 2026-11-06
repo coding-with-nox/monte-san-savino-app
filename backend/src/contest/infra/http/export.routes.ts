@@ -6,6 +6,7 @@ import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable } from "../persistence/schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
+import { classPrintRoutes } from "./class-print.routes";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 
 type ExportSettings = {
@@ -308,12 +309,20 @@ function formatModelCodeForExport(settings: ExportSettings, code: number | null 
   });
 }
 
-export function socialHref(kind: "instagram" | "facebook", value: string | null | undefined): string | null {
+const SOCIAL_BASE_URL: Record<string, string> = {
+  instagram: "https://instagram.com/",
+  facebook: "https://facebook.com/",
+  patreon: "https://www.patreon.com/",
+  pinterest: "https://www.pinterest.com/",
+  tiktok: "https://www.tiktok.com/@"
+};
+
+export function socialHref(kind: "instagram" | "facebook" | "patreon" | "pinterest" | "tiktok", value: string | null | undefined): string | null {
   const v = (value ?? "").trim();
   if (!v) return null;
   if (/^https?:\/\//i.test(v)) return v;
   if (/^[A-Za-z0-9._]+$/.test(v)) {
-    return kind === "instagram" ? `https://instagram.com/${v}` : `https://facebook.com/${v}`;
+    return `${SOCIAL_BASE_URL[kind]}${v}`;
   }
   return null;
 }
@@ -325,11 +334,17 @@ function renderLink(href: string | null, label: string | null | undefined) {
   return `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`;
 }
 
-export function renderSocialHtml(u: { instagram?: string | null; facebook?: string | null; website?: string | null }) {
+export function renderSocialHtml(u: {
+  instagram?: string | null; facebook?: string | null; website?: string | null;
+  patreon?: string | null; pinterest?: string | null; tiktok?: string | null;
+}) {
   const parts: string[] = [];
   if (u.instagram) parts.push(`IG: ${renderLink(socialHref("instagram", u.instagram), u.instagram)}`);
   if (u.facebook) parts.push(`FB: ${renderLink(socialHref("facebook", u.facebook), u.facebook)}`);
   if (u.website) parts.push(`Web: ${renderLink(u.website, u.website)}`);
+  if (u.patreon) parts.push(`Patreon: ${renderLink(socialHref("patreon", u.patreon), u.patreon)}`);
+  if (u.pinterest) parts.push(`Pinterest: ${renderLink(socialHref("pinterest", u.pinterest), u.pinterest)}`);
+  if (u.tiktok) parts.push(`TikTok: ${renderLink(socialHref("tiktok", u.tiktok), u.tiktok)}`);
   return parts.join("<br/>");
 }
 
@@ -442,7 +457,11 @@ const managerExportRoutes = new Elysia()
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
         displayNumber: modelsTable.displayNumber,
-        checkedIn: registrationsTable.checkedIn
+        checkedIn: registrationsTable.checkedIn,
+        absent: registrationsTable.absent,
+        patreon: userProfilesTable.patreon,
+        pinterest: userProfilesTable.pinterest,
+        tiktok: userProfilesTable.tiktok
       })
       .from(registrationsTable)
       .leftJoin(eventsTable, eq(eventsTable.id, registrationsTable.eventId))
@@ -462,7 +481,11 @@ const managerExportRoutes = new Elysia()
         partecipante: fullName(row.participant, row.participantLastName, row.email ?? row.userId),
         modello: row.modelName ?? "",
         categoria: row.categoryName ?? "",
-        checkIn: row.checkedIn ? "true" : "false"
+        checkIn: row.checkedIn ? "true" : "false",
+        assente: row.absent ? "true" : "false",
+        patreon: row.patreon ?? "",
+        pinterest: row.pinterest ?? "",
+        tiktok: row.tiktok ?? ""
       };
 
       if (exportSettings.includeParticipantEmail) {
@@ -551,7 +574,10 @@ const managerExportRoutes = new Elysia()
         lastName: userProfilesTable.lastName,
         instagram: userProfilesTable.instagram,
         facebook: userProfilesTable.facebook,
-        website: userProfilesTable.website
+        website: userProfilesTable.website,
+        patreon: userProfilesTable.patreon,
+        pinterest: userProfilesTable.pinterest,
+        tiktok: userProfilesTable.tiktok
       })
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
@@ -605,6 +631,9 @@ const managerExportRoutes = new Elysia()
       base.instagram = u.instagram ?? "";
       base.facebook = u.facebook ?? "";
       base.website = u.website ?? "";
+      base.patreon = u.patreon ?? "";
+      base.pinterest = u.pinterest ?? "";
+      base.tiktok = u.tiktok ?? "";
       return base;
     });
 
@@ -641,7 +670,10 @@ const managerExportRoutes = new Elysia()
         lastName: userProfilesTable.lastName,
         instagram: userProfilesTable.instagram,
         facebook: userProfilesTable.facebook,
-        website: userProfilesTable.website
+        website: userProfilesTable.website,
+        patreon: userProfilesTable.patreon,
+        pinterest: userProfilesTable.pinterest,
+        tiktok: userProfilesTable.tiktok
       })
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
@@ -931,7 +963,11 @@ const userExportRoutes = new Elysia()
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
         displayNumber: modelsTable.displayNumber,
-        checkedIn: registrationsTable.checkedIn
+        checkedIn: registrationsTable.checkedIn,
+        absent: registrationsTable.absent,
+        patreon: userProfilesTable.patreon,
+        pinterest: userProfilesTable.pinterest,
+        tiktok: userProfilesTable.tiktok
       })
       .from(registrationsTable)
       .leftJoin(eventsTable, eq(eventsTable.id, registrationsTable.eventId))
@@ -945,7 +981,11 @@ const userExportRoutes = new Elysia()
         eventName: row.eventName ?? "",
         modello: row.modelName ?? "",
         categoria: row.categoryName ?? "",
-        checkIn: row.checkedIn ? "true" : "false"
+        checkIn: row.checkedIn ? "true" : "false",
+        assente: row.absent ? "true" : "false",
+        patreon: row.patreon ?? "",
+        pinterest: row.pinterest ?? "",
+        tiktok: row.tiktok ?? ""
       };
       if (exportSettings.includeModelCode) {
         base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber);
@@ -1080,4 +1120,5 @@ const userExportRoutes = new Elysia()
 export const exportRoutes = new Elysia({ prefix: "/exports" })
   .use(tenantMiddleware)
   .use(managerExportRoutes)
+  .use(classPrintRoutes)
   .use(userExportRoutes);

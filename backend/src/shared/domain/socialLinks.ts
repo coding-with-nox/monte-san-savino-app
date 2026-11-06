@@ -1,6 +1,8 @@
 export const SOCIAL_MAX_LENGTH = 200;
 
-export type SocialField = "instagram" | "facebook" | "website";
+export type SocialField = "instagram" | "facebook" | "website" | "patreon" | "pinterest" | "tiktok";
+
+export const SOCIAL_FIELDS = ["instagram", "facebook", "website", "patreon", "pinterest", "tiktok"] as const;
 
 export type SocialNormalizeResult =
   | { ok: true; value: string | null }
@@ -31,7 +33,7 @@ function normalizeUrl(raw: string): string | null {
 /**
  * Normalizza un campo social.
  * - null/undefined/stringa vuota => null (campo svuotato)
- * - instagram/facebook: handle (con o senza "@", salvato SENZA "@") oppure URL http/https
+ * - instagram/facebook/patreon/pinterest/tiktok: handle (con o senza "@", salvato SENZA "@") oppure URL http/https
  * - website: URL http/https (un dominio nudo diventa https://dominio)
  * - qualunque altro schema (javascript:, data:, ...) e' rifiutato
  */
@@ -59,7 +61,7 @@ export function normalizeSocialPatch(body: Partial<Record<SocialField, unknown>>
   | { ok: true; patch: Partial<Record<SocialField, string | null>> }
   | { ok: false; error: string } {
   const patch: Partial<Record<SocialField, string | null>> = {};
-  for (const field of ["instagram", "facebook", "website"] as const) {
+  for (const field of SOCIAL_FIELDS) {
     if (body[field] === undefined) continue;
     const res = normalizeSocialValue(field, body[field]);
     if (!res.ok) return res;

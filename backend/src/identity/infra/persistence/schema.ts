@@ -20,5 +20,10 @@ export const userProfilesTable = pgTable("user_profiles", {
   avatarUrl: text("avatar_url"),
   instagram: text("instagram"),
   facebook: text("facebook"),
-  website: text("website")
+  website: text("website"),
+  patreon: text("patreon"),
+  pinterest: text("pinterest"),
+  tiktok: text("tiktok"),
+  country: text("country"),
+  publicProfile: boolean("public_profile").default(false).notNull()
 });

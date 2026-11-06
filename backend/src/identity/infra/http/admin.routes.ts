@@ -5,6 +5,7 @@ import { requireRole } from "./role.middleware";
 import { normalizeSocialPatch } from "../../../shared/domain/socialLinks";
 import { usersTable, userProfilesTable } from "../persistence/schema";
 import { BcryptHasher } from "../crypto/bcryptHasher";
+import { normalizeProfilePatch } from "../../domain/profileFields";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { EmailService } from "../../../shared/infra/email/emailService";
 
@@ -73,7 +74,12 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
         emergencyContactName: userProfilesTable.emergencyContactName,
         instagram: userProfilesTable.instagram,
         facebook: userProfilesTable.facebook,
-        website: userProfilesTable.website
+        website: userProfilesTable.website,
+        patreon: userProfilesTable.patreon,
+        pinterest: userProfilesTable.pinterest,
+        tiktok: userProfilesTable.tiktok,
+        country: userProfilesTable.country,
+        publicProfile: userProfilesTable.publicProfile
       })
       .from(usersTable)
       .leftJoin(userProfilesTable, eq(usersTable.id, userProfilesTable.userId))
@@ -97,7 +103,12 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
       set.status = 422;
       return { error: social.error };
     }
-    const values = { ...body, ...social.patch };
+    const profile = normalizeProfilePatch(body);
+    if (!profile.ok) {
+      set.status = 422;
+      return { error: profile.error };
+    }
+    const values = { ...body, ...social.patch, ...profile.patch };
     await tenantDb
       .insert(userProfilesTable)
       .values({ userId: params.userId as any, ...values })
@@ -118,7 +129,12 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
       emergencyContactName: t.Optional(t.String()),
       instagram: t.Optional(t.Union([t.String(), t.Null()])),
       facebook: t.Optional(t.Union([t.String(), t.Null()])),
-      website: t.Optional(t.Union([t.String(), t.Null()]))
+      website: t.Optional(t.Union([t.String(), t.Null()])),
+      patreon: t.Optional(t.Union([t.String(), t.Null()])),
+      pinterest: t.Optional(t.Union([t.String(), t.Null()])),
+      tiktok: t.Optional(t.Union([t.String(), t.Null()])),
+      country: t.Optional(t.Union([t.String(), t.Null()])),
+      publicProfile: t.Optional(t.Boolean())
     }),
     detail: {
       summary: "Aggiorna profilo utente (admin)",

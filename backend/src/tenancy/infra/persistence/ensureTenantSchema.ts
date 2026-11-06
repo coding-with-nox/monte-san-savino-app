@@ -170,6 +170,30 @@ export async function ensureTenantSchema() {
         ADD COLUMN IF NOT EXISTS facebook text,
         ADD COLUMN IF NOT EXISTS website text;
     `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS user_profiles
+        ADD COLUMN IF NOT EXISTS patreon text,
+        ADD COLUMN IF NOT EXISTS pinterest text,
+        ADD COLUMN IF NOT EXISTS tiktok text,
+        ADD COLUMN IF NOT EXISTS country text,
+        ADD COLUMN IF NOT EXISTS public_profile boolean NOT NULL DEFAULT false;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS registrations
+        ADD COLUMN IF NOT EXISTS absent boolean NOT NULL DEFAULT false;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS levels
+        ADD COLUMN IF NOT EXISTS free_to_enter boolean NOT NULL DEFAULT false;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS categories
+        ADD COLUMN IF NOT EXISTS class_number text,
+        ADD COLUMN IF NOT EXISTS level_id uuid,
+        ADD COLUMN IF NOT EXISTS class_group text,
+        ADD COLUMN IF NOT EXISTS presentation_order integer,
+        ADD COLUMN IF NOT EXISTS out_of_competition boolean NOT NULL DEFAULT false;
+    `);
     // Backfill display_number from code for models that have code but no display_number
     await pool.query(`
       UPDATE models SET display_number = code
