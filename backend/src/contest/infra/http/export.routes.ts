@@ -8,6 +8,7 @@ import { categoriesTable, eventsTable, modelsTable, registrationsTable, settings
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
 import { classPrintRoutes } from "./class-print.routes";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
+import { exportLimitError, exportMaxRows, mapInChunks, QR_CHUNK_SIZE } from "./exportLimits";
 
 type ExportSettings = {
   includeModelCode: boolean;
@@ -424,9 +425,13 @@ async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSetting
     .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
     .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
     .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId))
-    .where(conds.length ? and(...conds) : undefined);
+    .where(conds.length ? and(...conds) : undefined)
+    .limit(exportMaxRows() + 1);
 
-  return Promise.all((rows as any[]).map(async (row) => ({
+  // null = over EXPORT_MAX_ROWS (callers answer 413); checked before generating any QR code
+  if (exportLimitError((rows as any[]).length)) return null;
+
+  return mapInChunks(rows as any[], QR_CHUNK_SIZE, async (row) => ({
     utente: fullName(row.firstName, row.lastName, row.userEmail) || row.userEmail || "",
     categoria: row.categoryName ?? "",
     nomeModello: row.modelName ?? "",
@@ -434,7 +439,7 @@ async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSetting
     note: row.notes ?? "",
     qrPayload: modelQrPayload(row.modelId),
     qr: await modelQrDataUrl(row.modelId)
-  })));
+  }));
 }
 
 const managerExportRoutes = new Elysia()
@@ -470,9 +475,11 @@ const managerExportRoutes = new Elysia()
       .leftJoin(modelsTable, eq(modelsTable.id, registrationsTable.modelId))
       .leftJoin(categoriesTable, eq(categoriesTable.id, registrationsTable.categoryId));
 
-    const rows = eventId
-      ? await queryBuilder.where(eq(registrationsTable.eventId, eventId as any))
-      : await queryBuilder;
+    const rows = await (eventId
+      ? queryBuilder.where(eq(registrationsTable.eventId, eventId as any)).limit(exportMaxRows() + 1)
+      : queryBuilder.limit(exportMaxRows() + 1));
+    const tooLarge = exportLimitError(rows.length);
+    if (tooLarge) { set.status = 413; return tooLarge; }
 
     const excelRows = rows.map((row: any) => {
       const base: Record<string, string> = {
@@ -527,9 +534,11 @@ const managerExportRoutes = new Elysia()
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId));
-    const rows = categoryId
-      ? await baseQuery.where(eq(modelsTable.categoryId, categoryId as any))
-      : await baseQuery;
+    const rows = await (categoryId
+      ? baseQuery.where(eq(modelsTable.categoryId, categoryId as any)).limit(exportMaxRows() + 1)
+      : baseQuery.limit(exportMaxRows() + 1));
+    const tooLarge = exportLimitError(rows.length);
+    if (tooLarge) { set.status = 413; return tooLarge; }
 
     const excelRows = rows.map((row: any) => {
       const base: Record<string, string> = {
@@ -582,7 +591,10 @@ const managerExportRoutes = new Elysia()
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
       .leftJoin(userProfilesTable, eq(userProfilesTable.userId, registrationsTable.userId))
-      .where(eq(registrationsTable.eventId, eventId as any));
+      .where(eq(registrationsTable.eventId, eventId as any))
+      .limit(exportMaxRows() + 1);
+    const usersTooLarge = exportLimitError((allUserRows as any[]).length);
+    if (usersTooLarge) { set.status = 413; return usersTooLarge; }
     const seenUserIds = new Set<string>();
     const users = (allUserRows as any[]).filter((u) => {
       if (seenUserIds.has(u.userId)) return false;
@@ -602,7 +614,10 @@ const managerExportRoutes = new Elysia()
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .where(eq(categoriesTable.eventId, eventId as any));
+      .where(eq(categoriesTable.eventId, eventId as any))
+      .limit(exportMaxRows() + 1);
+    const modelsTooLarge = exportLimitError((models as any[]).length);
+    if (modelsTooLarge) { set.status = 413; return modelsTooLarge; }
 
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
@@ -678,7 +693,10 @@ const managerExportRoutes = new Elysia()
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
       .leftJoin(userProfilesTable, eq(userProfilesTable.userId, registrationsTable.userId))
-      .where(eq(registrationsTable.eventId, eventId as any));
+      .where(eq(registrationsTable.eventId, eventId as any))
+      .limit(exportMaxRows() + 1);
+    const usersTooLargePdf = exportLimitError((allUserRowsPdf as any[]).length);
+    if (usersTooLargePdf) { set.status = 413; return usersTooLargePdf; }
     const seenUserIdsPdf = new Set<string>();
     const users = (allUserRowsPdf as any[]).filter((u) => {
       if (seenUserIdsPdf.has(u.userId)) return false;
@@ -697,7 +715,10 @@ const managerExportRoutes = new Elysia()
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .where(eq(categoriesTable.eventId, eventId as any));
+      .where(eq(categoriesTable.eventId, eventId as any))
+      .limit(exportMaxRows() + 1);
+    const modelsTooLarge = exportLimitError((models as any[]).length);
+    if (modelsTooLarge) { set.status = 413; return modelsTooLarge; }
 
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
@@ -790,9 +811,13 @@ const managerExportRoutes = new Elysia()
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
       .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
       .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId));
-    const rows = (filters.length ? await baseQuery.where(and(...filters)) : await baseQuery) as any[];
+    const rows = (await (filters.length
+      ? baseQuery.where(and(...filters)).limit(exportMaxRows() + 1)
+      : baseQuery.limit(exportMaxRows() + 1))) as any[];
+    const tooLarge = exportLimitError(rows.length);
+    if (tooLarge) { set.status = 413; return tooLarge; }
 
-    const cards = await Promise.all(rows.map(async (row) => {
+    const cards = await mapInChunks(rows, QR_CHUNK_SIZE, async (row) => {
       const code = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber);
       const qr = await modelQrDataUrl(row.id);
       return `<section class="card">
@@ -806,7 +831,7 @@ const managerExportRoutes = new Elysia()
           ${row.notes ? `<p><strong>Note:</strong> ${escapeHtml(row.notes)}</p>` : ""}
         </div>
       </section>`;
-    }));
+    });
 
     set.headers["content-type"] = "text/html; charset=utf-8";
     set.headers["content-disposition"] = `inline; filename="models-print.html"`;
@@ -848,7 +873,9 @@ const managerExportRoutes = new Elysia()
       return { error: parsed.error };
     }
     const exportSettings = await loadExportSettings(tenantDb);
-    return await getLabelRows(tenantDb, parsed.filters, exportSettings);
+    const labelRows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
+    if (!labelRows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
+    return labelRows;
   }, {
     query: exportFilterQuerySchema,
     detail: {
@@ -866,6 +893,7 @@ const managerExportRoutes = new Elysia()
 
     const exportSettings = await loadExportSettings(tenantDb);
     const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
+    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
     setXlsxHeaders(set, buildFileName(exportSettings, "labels", filtersFileSuffix(parsed.filters)));
     return toXlsx(buildSheetName(exportSettings, "Labels"), rows.map(({ qr: _qr, ...rest }) => rest));
   }, {
@@ -894,6 +922,7 @@ const managerExportRoutes = new Elysia()
 
     const exportSettings = await loadExportSettings(tenantDb);
     const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
+    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
     const bodyRows = rows
       .map((row) => `<tr><td>${escapeHtml(row.utente)}</td><td>${escapeHtml(row.categoria)}</td><td>${escapeHtml(row.nomeModello)}</td><td>${escapeHtml(row.codice)}</td><td>${escapeHtml(row.note)}</td><td><img class="qr" alt="${escapeHtml(row.qrPayload)}" src="${escapeHtml(row.qr)}" width="80" height="80"/></td></tr>`)
       .join("");

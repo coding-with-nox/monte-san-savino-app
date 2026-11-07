@@ -10,12 +10,17 @@ process.env.RATE_LIMIT_ENABLED ??= "false";
 
 import { buildApp } from "../bootstrap/app";
 
+/** Minimal shape needed by the helpers (avoids TS2589 from ReturnType<typeof buildApp>). */
+export interface Handler {
+  handle(req: Request): Promise<Response>;
+}
+
 export function buildTestApp() {
   return buildApp();
 }
 
 export async function postJson(
-  app: ReturnType<typeof buildApp>,
+  app: Handler,
   path: string,
   body: unknown
 ): Promise<Response> {
@@ -29,7 +34,7 @@ export async function postJson(
 }
 
 export async function getJson(
-  app: ReturnType<typeof buildApp>,
+  app: Handler,
   path: string,
   token?: string
 ): Promise<Response> {

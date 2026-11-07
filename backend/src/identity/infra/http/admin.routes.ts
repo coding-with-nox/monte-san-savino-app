@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import crypto from "node:crypto";
 import { requireRole } from "./role.middleware";
 import { normalizeSocialPatch } from "../../../shared/domain/socialLinks";
@@ -55,13 +56,17 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
       security: [{ bearerAuth: [] }]
     }
   })
-  .get("/", async ({ tenantDb }) => {
-    return await tenantDb.select({
-      id: usersTable.id,
-      email: usersTable.email,
-      role: usersTable.role,
-      isActive: usersTable.isActive
-    }).from(usersTable);
+  .get("/", async ({ tenantDb, query, set }) => {
+    return await withPagination(
+      { query: query as any, set: set as any },
+      async () => Number((await tenantDb.select({ n: sql<number>`count(*)::int` }).from(usersTable))[0]?.n ?? 0),
+      (page) => applyPage(tenantDb.select({
+        id: usersTable.id,
+        email: usersTable.email,
+        role: usersTable.role,
+        isActive: usersTable.isActive
+      }).from(usersTable).$dynamic(), usersTable.id, page)
+    );
   }, {
     detail: {
       summary: "Lista utenti",

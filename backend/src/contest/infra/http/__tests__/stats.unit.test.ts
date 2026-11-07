@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { buildStatsOverview, type StatsInput } from "../stats.routes";
 
-const base: StatsInput = { users: [], models: [], categories: [], awards: [], mentions: [] };
+const base: StatsInput = { usersByCountryRaw: [], users: [], modelsByUser: [], modelsByCategory: [], categories: [], awardsByMedal: [], mentionsByTitle: [] };
 
 describe("buildStatsOverview", () => {
   it("handles empty input", () => {
@@ -13,20 +13,25 @@ describe("buildStatsOverview", () => {
   });
 
   const input: StatsInput = {
+    usersByCountryRaw: [{ country: "IT", count: 2 }, { country: " ", count: 1 }, { country: "DE", count: 1 }],
     users: [
-      { id: "u1", email: "a@x.it", firstName: "Anna", lastName: "Rossi", country: "IT" },
-      { id: "u2", email: "b@x.it", firstName: null, lastName: null, country: " " },
-      { id: "u3", email: "c@x.it", firstName: "Carl", country: "DE" },
-      { id: "u4", email: "d@x.it", country: "IT" }
+      { id: "u1", email: "a@x.it", firstName: "Anna", lastName: "Rossi" },
+      { id: "u2", email: "b@x.it", firstName: null, lastName: null },
+      { id: "u3", email: "c@x.it", firstName: "Carl" },
+      { id: "u4", email: "d@x.it" }
     ],
-    models: [
-      { userId: "u1", categoryId: "c1" }, { userId: "u1", categoryId: "c1" },
-      { userId: "u3", categoryId: "c2" }
-    ],
+    modelsByUser: [{ userId: "u1", count: 2 }, { userId: "u3", count: 1 }, { userId: "ghost", count: 9 }],
+    modelsByCategory: [{ categoryId: "c1", count: 2 }, { categoryId: "c2", count: 1 }],
     categories: [{ id: "c1", name: "A" }, { id: "c2", name: "B" }, { id: "c3", name: "Empty" }],
-    awards: [{ medalLabel: "Oro" }, { medalLabel: "Argento" }, { medalLabel: "Oro" }],
-    mentions: [{ title: "Best" }, { title: "Best" }, { title: "Other" }]
+    awardsByMedal: [{ medalLabel: "Oro", count: 2 }, { medalLabel: "Argento", count: 1 }],
+    mentionsByTitle: [{ title: "Best", count: 2 }, { title: "Other", count: 1 }]
   };
+
+  it("merges raw countries that normalise to the same bucket", () => {
+    const r = buildStatsOverview({ ...base, usersByCountryRaw: [{ country: null, count: 2 }, { country: "  ", count: 1 }, { country: "", count: 3 }] });
+    expect(r.usersByCountry).toEqual([{ country: "N/D", count: 6 }]);
+    expect(r.usersTotal).toBe(6);
+  });
 
   it("aggregates and sorts", () => {
     const r = buildStatsOverview(input);

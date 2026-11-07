@@ -5,13 +5,18 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 import { categoriesTable, eventsTable, modelsTable, registrationsTable } from "../persistence/schema";
 import { planEnrollment } from "../../domain/enrollment";
 import { isEventEnrollmentClosed } from "./enrollment-guard";
+import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { domainErrorHandler } from "../../../shared/infra/http/domainErrorHandler";
 
 export const eventRoutes = new Elysia({ prefix: "/events" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
-  .get("/", async ({ tenantDb }) => {
-    return await tenantDb.select().from(eventsTable);
+  .get("/", async ({ tenantDb, query, set }) => {
+    return await withPagination(
+      { query: query as any, set: set as any },
+      async () => Number((await tenantDb.select({ n: sql<number>`count(*)::int` }).from(eventsTable))[0]?.n ?? 0),
+      (page) => applyPage(tenantDb.select().from(eventsTable).$dynamic(), eventsTable.id, page)
+    );
   }, {
     detail: {
       summary: "Lista eventi",

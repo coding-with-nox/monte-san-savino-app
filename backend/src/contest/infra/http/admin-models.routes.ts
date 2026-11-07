@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, modelsTable, registrationsTable } from "../persistence/schema";
@@ -23,11 +24,12 @@ export async function validateCategoryMove(tenantDb: any, currentCategoryId: str
 export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
-  .get("/", async ({ tenantDb, query }) => {
+  .get("/", async ({ tenantDb, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
-    if (!eventId) {
-      const rows = await tenantDb
+    const where = eventId ? eq(categoriesTable.eventId, eventId as any) : undefined;
+    const base = () => {
+      const q = tenantDb
         .select({
           id: modelsTable.id,
           userId: modelsTable.userId,
@@ -43,33 +45,26 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
           internalNotes: modelsTable.internalNotes,
           categorySeqId: categoriesTable.seqId
         })
-        .from(modelsTable)
-        .leftJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId));
-      return rows.map((row: any) => {
-        const { categorySeqId, ...rest } = row;
-        return { ...rest, code: formatModelCode(row.code, categorySeqId, row.displayNumber, codeFormat) || null };
-      });
-    }
-    const rows = await tenantDb
-      .select({
-        id: modelsTable.id,
-        userId: modelsTable.userId,
-        categoryId: modelsTable.categoryId,
-        name: modelsTable.name,
-        description: modelsTable.description,
-        code: modelsTable.code,
-        imageUrl: modelsTable.imageUrl,
-        levelId: modelsTable.levelId,
-        displayNumber: modelsTable.displayNumber,
-        isTeam: modelsTable.isTeam,
-        notes: modelsTable.notes,
-        internalNotes: modelsTable.internalNotes,
-        categorySeqId: categoriesTable.seqId
-      })
-      .from(modelsTable)
-      .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .where(eq(categoriesTable.eventId, eventId as any));
-    return rows.map((row: any) => {
+        .from(modelsTable);
+      // Without eventId keep models whose category is missing (left join); with it the event filter implies inner join.
+      return (eventId
+        ? q.innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+        : q.leftJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+      ).where(where).$dynamic();
+    };
+    const result = await withPagination(
+      { query: query as any, set: set as any },
+      async () => {
+        const c = tenantDb.select({ n: sql<number>`count(*)::int` }).from(modelsTable);
+        const rows = await (eventId
+          ? c.innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId)).where(where)
+          : c);
+        return Number((rows as any[])[0]?.n ?? 0);
+      },
+      (page) => applyPage(base(), modelsTable.id, page)
+    );
+    if (!Array.isArray(result)) return result;
+    return result.map((row: any) => {
       const { categorySeqId, ...rest } = row;
       return { ...rest, code: formatModelCode(row.code, categorySeqId, row.displayNumber, codeFormat) || null };
     });

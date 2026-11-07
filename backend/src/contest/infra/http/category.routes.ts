@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable } from "../persistence/schema";
@@ -10,12 +11,14 @@ export const categoryRoutes = new Elysia({ prefix: "/categories" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
   .use(domainErrorHandler)
-  .get("/", async ({ tenantDb, query }) => {
+  .get("/", async ({ tenantDb, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
-    if (eventId) {
-      return await tenantDb.select().from(categoriesTable).where(eq(categoriesTable.eventId, eventId as any));
-    }
-    return await tenantDb.select().from(categoriesTable);
+    const where = eventId ? eq(categoriesTable.eventId, eventId as any) : undefined;
+    return await withPagination(
+      { query: query as any, set: set as any },
+      async () => Number((await tenantDb.select({ n: sql<number>`count(*)::int` }).from(categoriesTable).where(where))[0]?.n ?? 0),
+      (page) => applyPage(tenantDb.select().from(categoriesTable).where(where).$dynamic(), categoriesTable.id, page)
+    );
   }, {
     detail: {
       summary: "Lista categorie",

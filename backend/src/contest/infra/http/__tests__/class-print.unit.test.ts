@@ -31,14 +31,16 @@ describe("class print", () => {
 
 describe("stats overview", () => {
   it("aggregates and returns empty arrays when no data", () => {
-    const empty = buildStatsOverview({ users: [], models: [], categories: [], awards: [], mentions: [] });
+    const empty = buildStatsOverview({ usersByCountryRaw: [], users: [], modelsByUser: [], modelsByCategory: [], categories: [], awardsByMedal: [], mentionsByTitle: [] });
     expect(empty).toEqual({ usersTotal: 0, usersByCountry: [], modelsPerUser: [], modelsPerCategory: [], medals: [], zeroModelUsers: [], honorsSummary: [] });
     const r = buildStatsOverview({
-      users: [{ id: "a", email: "a@x", firstName: "A", country: "IT" }, { id: "b", email: "b@x" }],
-      models: [{ userId: "a", categoryId: "c1" }, { userId: "a", categoryId: "c1" }],
+      usersByCountryRaw: [{ country: "IT", count: 1 }, { country: null, count: 1 }],
+      users: [{ id: "a", email: "a@x", firstName: "A" }, { id: "b", email: "b@x" }],
+      modelsByUser: [{ userId: "a", count: 2 }],
+      modelsByCategory: [{ categoryId: "c1", count: 2 }],
       categories: [{ id: "c1", name: "K" }, { id: "c2", name: "Z" }],
-      awards: [{ medalLabel: "Gold" }, { medalLabel: "Gold" }, { medalLabel: "Silver" }],
-      mentions: [{ title: "Best" }]
+      awardsByMedal: [{ medalLabel: "Gold", count: 2 }, { medalLabel: "Silver", count: 1 }],
+      mentionsByTitle: [{ title: "Best", count: 1 }]
     });
     expect(r.usersTotal).toBe(2);
     expect(r.modelsPerUser).toEqual([{ userId: "a", name: "A", count: 2 }]);

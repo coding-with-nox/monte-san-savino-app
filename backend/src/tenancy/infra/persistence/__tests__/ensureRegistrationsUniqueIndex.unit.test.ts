@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { ensureRegistrationsUniqueIndex } from "../ensureTenantSchema";
+import { ensureRegistrationsUniqueIndex, buildPerformanceIndexStatements, PERFORMANCE_INDEXES, SCHEMA_MAINTENANCE_LOCK_KEY } from "../ensureTenantSchema";
 
 function fakePool(opts: { table?: boolean; index?: boolean; dups?: number }) {
   const queries: string[] = [];
@@ -31,5 +31,21 @@ describe("ensureRegistrationsUniqueIndex", () => {
   it("skips when table missing or index exists", async () => {
     expect(await ensureRegistrationsUniqueIndex(fakePool({ table: false }), log())).toBe("skipped-no-table");
     expect(await ensureRegistrationsUniqueIndex(fakePool({ index: true }), log())).toBe("exists");
+  });
+});
+
+describe("performance indexes", () => {
+  it("generates idempotent, table-guarded statements for every index", () => {
+    const stmts = buildPerformanceIndexStatements();
+    expect(stmts.length).toBe(PERFORMANCE_INDEXES.length);
+    for (const [i, st] of stmts.entries()) {
+      const { name, table, column } = PERFORMANCE_INDEXES[i];
+      expect(st).toContain(`to_regclass('public.${table}')`);
+      expect(st).toContain(`CREATE INDEX IF NOT EXISTS ${name} ON ${table} (${column})`);
+    }
+    expect(new Set(PERFORMANCE_INDEXES.map((x) => x.name)).size).toBe(PERFORMANCE_INDEXES.length);
+  });
+  it("lock key is a bigint-safe integer string", () => {
+    expect(BigInt(SCHEMA_MAINTENANCE_LOCK_KEY) < 2n ** 63n).toBe(true);
   });
 });

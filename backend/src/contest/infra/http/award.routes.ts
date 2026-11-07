@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import {
@@ -10,6 +10,34 @@ import {
   modelsTable,
   votesTable
 } from "../persistence/schema";
+
+type CountRow = { categoryId: string; count: number };
+
+/** Pure assembly of the monitoring response from per-category aggregate counts. */
+export function buildMonitoringRows(
+  cats: { id: string; name: string; status: string }[],
+  counts: { models: CountRow[]; judges: CountRow[]; scored: CountRow[]; completions: CountRow[] }
+) {
+  const toMap = (rows: CountRow[]) => new Map(rows.map((r) => [r.categoryId, Number(r.count)]));
+  const models = toMap(counts.models);
+  const judges = toMap(counts.judges);
+  const scored = toMap(counts.scored);
+  const completions = toMap(counts.completions);
+  return cats.map((cat) => {
+    const totalModels = models.get(cat.id) ?? 0;
+    const scoredModels = scored.get(cat.id) ?? 0;
+    return {
+      categoryId: cat.id,
+      categoryName: cat.name,
+      status: cat.status,
+      totalModels,
+      scoredModels,
+      percentComplete: totalModels > 0 ? Math.round((scoredModels / totalModels) * 100) : 0,
+      totalJudges: judges.get(cat.id) ?? 0,
+      completedJudges: completions.get(cat.id) ?? 0
+    };
+  });
+}
 
 export const awardRoutes = new Elysia({ prefix: "/awards" })
   .use(tenantMiddleware)
@@ -198,64 +226,50 @@ export const awardRoutes = new Elysia({ prefix: "/awards" })
       .where(eq(categoriesTable.eventId, params.eventId as any));
 
     if (cats.length === 0) return [];
+    const catIds = cats.map((c) => c.id);
+    const eventId = params.eventId;
 
-    return await Promise.all(cats.map(async (cat) => {
-      // Count models in category
-      const models = await tenantDb
-        .select({ id: modelsTable.id })
+    // One aggregate query per metric for the whole event (instead of 4-5 queries per category).
+    const [modelRows, judgeRows, scoredRows, completionRows] = await Promise.all([
+      tenantDb
+        .select({ categoryId: modelsTable.categoryId, count: sql<number>`count(*)::int` })
         .from(modelsTable)
-        .where(eq(modelsTable.categoryId, cat.id as any));
-      const totalModels = models.length;
-
-      // Count judges assigned to this category (direct + event-wide)
-      const judges = await tenantDb
-        .select({ judgeId: judgeAssignmentsTable.judgeId })
-        .from(judgeAssignmentsTable)
-        .where(or(
-          eq(judgeAssignmentsTable.categoryId, cat.id as any),
-          and(
-            isNull(judgeAssignmentsTable.categoryId),
-            eq(judgeAssignmentsTable.eventId, cat.eventId as any)
-          )
-        ));
-      const totalJudges = judges.length;
-
-      // Count distinct models that received at least one vote from assigned judges
-      let scoredModels = 0;
-      if (totalModels > 0 && totalJudges > 0) {
-        const judgeIds = judges.map(j => j.judgeId);
-        const modelIds = models.map(m => m.id);
-        const votes = await tenantDb
-          .select({ judgeId: votesTable.judgeId, modelId: votesTable.modelId })
-          .from(votesTable)
-          .where(and(
-            inArray(votesTable.judgeId, judgeIds as any),
-            inArray(votesTable.modelId, modelIds as any)
-          ));
-        scoredModels = new Set(votes.map(v => v.modelId)).size;
-      }
-
-      // Count judge completions for this category
-      const completions = await tenantDb
-        .select({ id: judgeCompletionsTable.id })
+        .where(inArray(modelsTable.categoryId, catIds as any))
+        .groupBy(modelsTable.categoryId),
+      // Judges assigned to a category: direct assignment + event-wide (category_id IS NULL) ones, DISTINCT judges.
+      tenantDb
+        .select({ categoryId: categoriesTable.id, count: sql<number>`count(distinct ${judgeAssignmentsTable.judgeId})::int` })
+        .from(categoriesTable)
+        .innerJoin(judgeAssignmentsTable, or(
+          eq(judgeAssignmentsTable.categoryId, categoriesTable.id),
+          and(isNull(judgeAssignmentsTable.categoryId), eq(judgeAssignmentsTable.eventId, categoriesTable.eventId))
+        ))
+        .where(eq(categoriesTable.eventId, eventId as any))
+        .groupBy(categoriesTable.id),
+      // Distinct models with at least one vote from a judge assigned to that model's category.
+      tenantDb
+        .select({ categoryId: modelsTable.categoryId, count: sql<number>`count(distinct ${votesTable.modelId})::int` })
+        .from(votesTable)
+        .innerJoin(modelsTable, eq(modelsTable.id, votesTable.modelId))
+        .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+        .where(and(
+          inArray(modelsTable.categoryId, catIds as any),
+          sql`exists (
+            select 1 from ${judgeAssignmentsTable} ja
+            where ja.judge_id = ${votesTable.judgeId}
+              and (ja.category_id = ${modelsTable.categoryId}
+                   or (ja.category_id is null and ja.event_id = ${categoriesTable.eventId}))
+          )`
+        ))
+        .groupBy(modelsTable.categoryId),
+      tenantDb
+        .select({ categoryId: judgeCompletionsTable.categoryId, count: sql<number>`count(*)::int` })
         .from(judgeCompletionsTable)
-        .where(eq(judgeCompletionsTable.categoryId, cat.id as any));
+        .where(inArray(judgeCompletionsTable.categoryId, catIds as any))
+        .groupBy(judgeCompletionsTable.categoryId)
+    ]);
 
-      const percentComplete = totalModels > 0
-        ? Math.round((scoredModels / totalModels) * 100)
-        : 0;
-
-      return {
-        categoryId: cat.id,
-        categoryName: cat.name,
-        status: cat.status,
-        totalModels,
-        scoredModels,
-        percentComplete,
-        totalJudges,
-        completedJudges: completions.length
-      };
-    }));
+    return buildMonitoringRows(cats as any, { models: modelRows, judges: judgeRows, scored: scoredRows, completions: completionRows });
   }, {
     params: t.Object({ eventId: t.String() }),
     detail: {

@@ -42,10 +42,49 @@ export async function ensureRegistrationsUniqueIndex(
   return "created";
 }
 
+/**
+ * Constant key for the schema-maintenance advisory lock. Arbitrary but fixed (ASCII "MSSA" + "SCHM"),
+ * shared by every replica so only one at a time runs the startup maintenance (repair UPDATEs, DDL).
+ */
+export const SCHEMA_MAINTENANCE_LOCK_KEY = "5062000001234567";
+
+/** Secondary (non-unique) indexes for FK-like lookup columns. Names match schema.ts. */
+export const PERFORMANCE_INDEXES: ReadonlyArray<{ name: string; table: string; column: string }> = [
+  { name: "ix_registrations_user_id", table: "registrations", column: "user_id" },
+  { name: "ix_registrations_event_id", table: "registrations", column: "event_id" },
+  { name: "ix_registrations_model_id", table: "registrations", column: "model_id" },
+  { name: "ix_models_category_id", table: "models", column: "category_id" },
+  { name: "ix_models_user_id", table: "models", column: "user_id" },
+  { name: "ix_categories_event_id", table: "categories", column: "event_id" },
+  { name: "ix_model_images_model_id", table: "model_images", column: "model_id" },
+  { name: "ix_model_team_members_model_id", table: "model_team_members", column: "model_id" },
+  { name: "ix_team_mates_team_id", table: "team_mates", column: "team_id" },
+  { name: "ix_special_mentions_event_id", table: "special_mentions", column: "event_id" },
+  { name: "ix_payments_registration_id", table: "payments", column: "registration_id" }
+];
+
+/** Idempotent; skips tables that do not exist (guarded with to_regclass). */
+export function buildPerformanceIndexStatements(): string[] {
+  return PERFORMANCE_INDEXES.map(
+    ({ name, table, column }) => `
+      DO $$
+      BEGIN
+        IF to_regclass('public.${table}') IS NOT NULL THEN
+          CREATE INDEX IF NOT EXISTS ${name} ON ${table} (${column});
+        END IF;
+      END $$;
+    `
+  );
+}
+
 export async function ensureTenantSchema() {
   const cfg = getTenantDbConfigFromEnv();
-  const pool = new Pool(cfg);
+  // Single dedicated connection: advisory locks are per-session, so lock/maintenance/unlock must share one client.
+  const pool = new Pool({ ...cfg, max: 1 });
+  let locked = false;
   try {
+    await pool.query("SELECT pg_advisory_lock($1::bigint)", [SCHEMA_MAINTENANCE_LOCK_KEY]);
+    locked = true;
     await pool.query(`
       ALTER TABLE IF EXISTS judge_assignments
       ADD COLUMN IF NOT EXISTS category_id uuid;
@@ -373,7 +412,13 @@ export async function ensureTenantSchema() {
     `);
 
     await ensureRegistrationsUniqueIndex(pool);
+
+    for (const stmt of buildPerformanceIndexStatements()) await pool.query(stmt);
   } finally {
-    await pool.end();
+    try {
+      if (locked) await pool.query("SELECT pg_advisory_unlock($1::bigint)", [SCHEMA_MAINTENANCE_LOCK_KEY]);
+    } finally {
+      await pool.end();
+    }
   }
 }

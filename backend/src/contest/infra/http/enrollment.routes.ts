@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { registrationsTable } from "../persistence/schema";
@@ -70,12 +71,14 @@ export const userEnrollmentRoutes = new Elysia({ prefix: "/enrollments" })
 export const adminEnrollmentRoutes = new Elysia({ prefix: "/admin/enrollments" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
-  .get("/", async ({ tenantDb, query }) => {
+  .get("/", async ({ tenantDb, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
-    if (eventId) {
-      return await tenantDb.select().from(registrationsTable).where(eq(registrationsTable.eventId, eventId as any));
-    }
-    return await tenantDb.select().from(registrationsTable);
+    const where = eventId ? eq(registrationsTable.eventId, eventId as any) : undefined;
+    return await withPagination(
+      { query: query as any, set: set as any },
+      async () => Number((await tenantDb.select({ n: sql<number>`count(*)::int` }).from(registrationsTable).where(where))[0]?.n ?? 0),
+      (page) => applyPage(tenantDb.select().from(registrationsTable).where(where).$dynamic(), registrationsTable.id, page)
+    );
   }, {
     detail: {
       summary: "Lista iscrizioni (admin), include absent",
