@@ -24,6 +24,7 @@ jobs:
           cp start-prod.ps1 package/start-prod.ps1
           cp PACKAGE.md package/README.md
           cp docker/nginx/default.conf package/docker/nginx/default.conf
+          cp docker/nginx/security-headers.conf package/docker/nginx/security-headers.conf
           cp docker/postgres/01-init-tenant.sh package/docker/postgres/01-init-tenant.sh
 
       - name: Upload package

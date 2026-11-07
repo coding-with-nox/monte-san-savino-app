@@ -33,20 +33,42 @@ import { awardBracketsRoutes } from "../contest/infra/http/award-brackets.routes
 import { adminImportRoutes } from "../contest/infra/http/import.routes";
 import { adminStatsRoutes } from "../contest/infra/http/stats.routes";
 
+type Env = Record<string, string | undefined>;
+
+/** Swagger only outside production, unless ENABLE_SWAGGER=true. */
+export function isSwaggerEnabled(env: Env = process.env): boolean {
+  return env.NODE_ENV !== "production" || env.ENABLE_SWAGGER === "true";
+}
+
+/**
+ * CORS origin policy. Returns null (no CORS headers at all) in production when CORS_ORIGIN is
+ * empty (same-origin behind nginx); permissive (reflect) outside production; else the allowlist.
+ */
+export function resolveCorsOrigin(env: Env = process.env): string[] | true | null {
+  const origins = (env.CORS_ORIGIN ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+  if (origins.length > 0) return origins;
+  return env.NODE_ENV === "production" ? null : true;
+}
+
+export const SECURITY_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer"
+} as const;
+
 export function buildApp() {
-  const rawCorsOrigin = process.env.CORS_ORIGIN ?? "";
-  const corsOrigins = rawCorsOrigin
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  const corsOrigin = resolveCorsOrigin();
 
   return new Elysia()
+    // Base security headers on every response (incl. errors); handlers may override/extend.
+    .onRequest(({ set }) => {
+      Object.assign(set.headers, SECURITY_HEADERS);
+    })
     .use(loggerMiddleware)
-    .use(cors({
-      origin: corsOrigins.length > 0 ? corsOrigins : true,
+    .use(corsOrigin === null ? new Elysia() : cors({
+      origin: corsOrigin,
       allowedHeaders: ["Authorization", "Content-Type"]
     }))
-    .use(swagger({
+    .use(!isSwaggerEnabled() ? new Elysia() : swagger({
       path: "/docs",
       documentation: {
         info: {

@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
+import { checkEnrollmentOpen } from "./enrollment-guard";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable, votesTable, judgeCompletionsTable } from "../persistence/schema";
 
@@ -73,50 +74,6 @@ async function generateModelCode(tenantDb: any): Promise<number> {
 function isCodeConflict(err: unknown): boolean {
   const msg = String((err as any)?.message ?? "");
   return msg.includes("ux_models_code") || msg.includes("models_code_key");
-}
-
-async function checkEnrollmentOpen(
-  tenantDb: any,
-  categoryId: string,
-  set: any
-): Promise<{ blocked: boolean }> {
-  const [catRow] = await tenantDb
-    .select({ eventId: categoriesTable.eventId })
-    .from(categoriesTable)
-    .where(eq(categoriesTable.id, categoryId as any))
-    .limit(1);
-
-  if (!catRow) {
-    set.status = 422;
-    set.body = { error: "Invalid category" };
-    return { blocked: true };
-  }
-
-  const campaigns = await tenantDb
-    .select({ enrollmentCloseDate: eventCampaignsTable.enrollmentCloseDate })
-    .from(eventCampaignsTable)
-    .where(eq(eventCampaignsTable.eventId, catRow.eventId as any));
-
-  const now = new Date();
-  const isClosed = campaigns.length > 0 && campaigns.some((c: any) => {
-    if (!c.enrollmentCloseDate) return false;
-    // Parse as end-of-day Italy time (UTC+1/+2): append T23:59:59+01:00 if date-only string
-    const raw = c.enrollmentCloseDate as string;
-    const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(raw)
-      ? `${raw}T23:59:59+01:00`
-      : raw;
-    const closeDate = new Date(dateStr);
-    if (isNaN(closeDate.getTime())) return false;
-    return closeDate < now;
-  });
-
-  if (isClosed) {
-    set.status = 403;
-    set.body = { error: "Enrollment period is closed" };
-    return { blocked: true };
-  }
-
-  return { blocked: false };
 }
 
 export const modelRoutes = new Elysia({ prefix: "/models" })

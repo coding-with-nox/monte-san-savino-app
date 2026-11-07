@@ -1,12 +1,16 @@
-version: "3.9"
+# Local development infrastructure (Postgres + MinIO). Not for production: use the root docker-compose.yml.
+# Required variables (no defaults, compose fails if unset): POSTGRES_PASSWORD, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD.
+# Put them in backend/.env (gitignored) or export them. Ports are bound to loopback only.
+# The backend (outside compose) must use the same values: PG_PASSWORD=$POSTGRES_PASSWORD,
+# MINIO_ACCESS_KEY=$MINIO_ROOT_USER, MINIO_SECRET_KEY=$MINIO_ROOT_PASSWORD.
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -14,11 +18,11 @@ services:
     image: minio/minio
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     volumes:
       - miniodata:/data
 

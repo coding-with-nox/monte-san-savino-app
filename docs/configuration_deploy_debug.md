@@ -212,3 +212,18 @@ docker compose --profile demo up -d
 - Porte 5432/9001/3000 non piu' raggiungibili dall'host (3000 solo via `http://localhost:8080/api`);
   MinIO 9000 solo su 127.0.0.1 (se `MINIO_PUBLIC_URL` punta a un host esterno le immagini non si caricano).
 - Database che contengono utenti di test con `Password1!` (seed precedente): cambiare/disattivare quelle password.
+
+## Header di sicurezza, CSP e container non-root
+
+- nginx invia CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`
+  da `docker/nginx/security-headers.conf` (montato in `/etc/nginx/snippets/`; copia identica in
+  `frontend/security-headers.conf` per l'immagine, la CI verifica che coincidano). HSTS e' commentato:
+  attivalo solo con HTTPS.
+- **Operatore**: in quel file sostituisci `http://localhost:9000` (in `img-src` e `connect-src`) con
+  l'origine di `MINIO_PUBLIC_URL` (schema://host[:porta]). Con Helm il file e' nell'immagine: monta
+  una ConfigMap su `/etc/nginx/snippets/security-headers.conf` oppure ricostruisci l'immagine.
+- Il frontend carica Roboto/Material Symbols da Google Fonts (consentiti in CSP); self-hosting richiede
+  modifiche in `frontend/` e permetterebbe di rimuovere `fonts.googleapis.com`/`fonts.gstatic.com`.
+- Il frontend ora usa `nginxinc/nginx-unprivileged` (utente non root) e ascolta sulla porta **8080** del
+  container: il mapping compose deve essere `8080:8080` (non `8080:80`); Helm e' gia' aggiornato.
+  Il backend gira come utente `bun`.

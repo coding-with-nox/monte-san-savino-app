@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index, serial } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index, serial, bigserial } from "drizzle-orm/pg-core";
 
 export const levelsTable = pgTable("levels", {
   id: uuid("id").primaryKey(),
@@ -90,7 +90,9 @@ export const votesTable = pgTable("votes", {
   judgeId: uuid("judge_id").notNull(),
   modelId: uuid("model_id").notNull(),
   rank: integer("rank").notNull(),
-  createdAt: timestamp("created_at").defaultNow()
+  createdAt: timestamp("created_at").defaultNow(),
+  // Monotonic tiebreaker: "latest vote" = ORDER BY created_at DESC, seq DESC (votes are append-only)
+  seq: bigserial("seq", { mode: "number" }).notNull()
 }, (t) => ({
   byJudgeModel: index("ix_votes_judge_model").on(t.judgeId, t.modelId),
   byModelCreatedAt: index("ix_votes_model_created_at").on(t.modelId, t.createdAt)

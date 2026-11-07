@@ -100,7 +100,7 @@ export const awardRoutes = new Elysia({ prefix: "/awards" })
           })
           .from(votesTable)
           .where(inArray(votesTable.modelId, modelIds as any))
-          .orderBy(desc(votesTable.createdAt), desc(votesTable.id));
+          .orderBy(desc(votesTable.createdAt), desc(votesTable.seq));
 
         const latestRankByModel = new Map<string, Map<string, number>>();
         for (const vote of votes) {

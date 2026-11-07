@@ -5,6 +5,36 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 import { registrationsTable } from "../persistence/schema";
 import { usersTable, userProfilesTable } from "../../../identity/infra/persistence/schema";
 import QRCode from "qrcode";
+import { escapeHtml } from "../../../shared/domain/escapeHtml";
+import { isUuid } from "../../../shared/domain/imageUpload";
+
+export const BADGE_HEADERS = {
+  "content-type": "text/html; charset=utf-8",
+  "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+  "x-content-type-options": "nosniff"
+} as const;
+
+export function renderBadgeHtml(input: { name: string; city?: string | null; enrollmentId: string; qrDataUrl: string }): string {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Badge</title>
+<style>
+  @page { size: 86mm 54mm; margin: 0; }
+  body { margin: 0; font-family: Arial, sans-serif; }
+  .badge { width: 86mm; height: 54mm; padding: 4mm; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border: 1px solid #ccc; }
+  .badge h1 { font-size: 14pt; margin: 0 0 2mm; text-align: center; }
+  .badge p { font-size: 9pt; margin: 0 0 1mm; color: #555; }
+  .badge img { margin-top: 2mm; }
+</style></head><body>
+<div class="badge">
+  <h1>${escapeHtml(input.name)}</h1>
+  <p>${escapeHtml(input.city ?? "")}</p>
+  <p>ID: ${escapeHtml(input.enrollmentId.slice(0, 8))}</p>
+  <img src="${escapeHtml(input.qrDataUrl)}" width="100" height="100" />
+</div>
+</body></html>`;
+}
 
 export const userEnrollmentRoutes = new Elysia({ prefix: "/enrollments" })
   .use(tenantMiddleware)
@@ -81,8 +111,20 @@ export const adminEnrollmentRoutes = new Elysia({ prefix: "/admin/enrollments" }
 export const staffCheckinRoutes = new Elysia({ prefix: "/staff" })
   .use(tenantMiddleware)
   .use(requireRole("staff"))
-  .post("/checkin/:enrollmentId", async ({ tenantDb, params }) => {
-    await tenantDb.update(registrationsTable).set({ checkedIn: true }).where(eq(registrationsTable.id, params.enrollmentId as any));
+  .post("/checkin/:enrollmentId", async ({ tenantDb, params, set }) => {
+    if (!isUuid(params.enrollmentId)) {
+      set.status = 422;
+      return { error: "enrollmentId must be a valid uuid" };
+    }
+    const updated = await tenantDb
+      .update(registrationsTable)
+      .set({ checkedIn: true })
+      .where(eq(registrationsTable.id, params.enrollmentId as any))
+      .returning({ id: registrationsTable.id });
+    if (!updated.length) {
+      set.status = 404;
+      return { error: "Enrollment not found" };
+    }
     return { checkedIn: true };
   }, {
     params: t.Object({ enrollmentId: t.String() }),
@@ -93,6 +135,10 @@ export const staffCheckinRoutes = new Elysia({ prefix: "/staff" })
     }
   })
   .get("/print/:enrollmentId", async ({ tenantDb, params, set }) => {
+    if (!isUuid(params.enrollmentId)) {
+      set.status = 422;
+      return { error: "enrollmentId must be a valid uuid" };
+    }
     // Fetch enrollment + user profile for badge
     const [enrollment] = await tenantDb
       .select()
@@ -119,27 +165,9 @@ export const staffCheckinRoutes = new Elysia({ prefix: "/staff" })
 
     const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || profile?.email || "Participant";
 
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Badge</title>
-<style>
-  @page { size: 86mm 54mm; margin: 0; }
-  body { margin: 0; font-family: Arial, sans-serif; }
-  .badge { width: 86mm; height: 54mm; padding: 4mm; box-sizing: border-box;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    border: 1px solid #ccc; }
-  .badge h1 { font-size: 14pt; margin: 0 0 2mm; text-align: center; }
-  .badge p { font-size: 9pt; margin: 0 0 1mm; color: #555; }
-  .badge img { margin-top: 2mm; }
-</style></head><body>
-<div class="badge">
-  <h1>${name}</h1>
-  <p>${profile?.city ?? ""}</p>
-  <p>ID: ${enrollment.id.slice(0, 8)}</p>
-  <img src="${qrDataUrl}" width="100" height="100" />
-</div>
-</body></html>`;
+    const html = renderBadgeHtml({ name, city: profile?.city, enrollmentId: enrollment.id, qrDataUrl });
 
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, BADGE_HEADERS);
     return html;
   }, {
     params: t.Object({ enrollmentId: t.String() }),

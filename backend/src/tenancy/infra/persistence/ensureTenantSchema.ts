@@ -1,5 +1,46 @@
 import { Pool } from "pg";
 import { getTenantDbConfigFromEnv } from "../tenantDbFactory";
+import { logger } from "../../../shared/infra/logger/logger";
+
+const REGISTRATIONS_UNIQUE_INDEX = "ux_registrations_user_event_model";
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Creates the uniqueness guard on registrations (user, event, model-or-nil) ONLY when the table has
+ * no duplicates; otherwise it logs a warning and leaves dedup to the enrollment code
+ * (advisory lock + conditional insert). Returns what happened, for tests/observability.
+ */
+export async function ensureRegistrationsUniqueIndex(
+  pool: { query: (sql: string) => Promise<{ rows: any[] }> },
+  log: { warn: (obj: any, msg?: string) => void; info: (obj: any, msg?: string) => void } = logger
+): Promise<"skipped-no-table" | "exists" | "created" | "duplicates"> {
+  const t = await pool.query(`SELECT to_regclass('public.registrations') AS t, to_regclass('public.${REGISTRATIONS_UNIQUE_INDEX}') AS i`);
+  if (!t.rows[0]?.t) return "skipped-no-table";
+  if (t.rows[0]?.i) return "exists";
+  const dup = await pool.query(`
+    SELECT COALESCE(SUM(c - 1), 0)::int AS duplicate_rows
+    FROM (
+      SELECT COUNT(*) AS c
+      FROM registrations
+      GROUP BY user_id, event_id, COALESCE(model_id, '${NIL_UUID}'::uuid)
+      HAVING COUNT(*) > 1
+    ) d
+  `);
+  const duplicateRows = Number(dup.rows[0]?.duplicate_rows ?? 0);
+  if (duplicateRows > 0) {
+    log.warn(
+      { duplicateRows, index: REGISTRATIONS_UNIQUE_INDEX },
+      `registrations contains ${duplicateRows} duplicate row(s) (same user, event, model): unique index NOT created. Remove the duplicates manually and restart to create it; meanwhile enrollment deduplicates in code.`
+    );
+    return "duplicates";
+  }
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ${REGISTRATIONS_UNIQUE_INDEX}
+    ON registrations (user_id, event_id, COALESCE(model_id, '${NIL_UUID}'::uuid))
+  `);
+  log.info({ index: REGISTRATIONS_UNIQUE_INDEX }, "registrations unique index created");
+  return "created";
+}
 
 export async function ensureTenantSchema() {
   const cfg = getTenantDbConfigFromEnv();
@@ -103,6 +144,22 @@ export async function ensureTenantSchema() {
     `);
     await pool.query(`
       DROP INDEX IF EXISTS ux_votes_judge_model;
+    `);
+
+    // Deterministic "latest vote": monotonic tiebreaker. Votes stay append-only (no unique constraint).
+    // ADD COLUMN ... bigserial on an existing table rewrites it once (fills existing rows from the
+    // sequence); IF NOT EXISTS makes it idempotent and safe if several instances start concurrently.
+    // Guarded by an explicit existence check (like categories.seq_id) so no orphan sequence is created.
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.votes') IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'votes' AND column_name = 'seq'
+        ) THEN
+          ALTER TABLE votes ADD COLUMN IF NOT EXISTS seq bigserial;
+        END IF;
+      END $$;
     `);
 
     // Remove old team tables
@@ -314,6 +371,8 @@ export async function ensureTenantSchema() {
     await pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ux_awards_category_model ON awards (category_id, model_id)
     `);
+
+    await ensureRegistrationsUniqueIndex(pool);
   } finally {
     await pool.end();
   }

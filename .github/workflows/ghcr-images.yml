@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   test-backend:
@@ -31,6 +30,9 @@ jobs:
       PG_PORT: 5432
       PG_USER: postgres
       PG_PASSWORD: postgres
+      JWT_SECRET: ci-only-test-secret-not-for-production-0123456789
+      RATE_LIMIT_ENABLED: "false"
+      # NODE_ENV intentionally NOT production (production checks reject weak/default settings)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -73,6 +75,9 @@ jobs:
 
   build-backend:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     needs: [test-backend, test-frontend]
     steps:
       - name: Checkout
@@ -106,6 +111,9 @@ jobs:
 
   build-frontend:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     needs: [test-backend, test-frontend]
     steps:
       - name: Checkout
