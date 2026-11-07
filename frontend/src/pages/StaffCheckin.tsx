@@ -7,6 +7,7 @@ import {
   Typography
 } from "@mui/material";
 import { api } from "../lib/api";
+import { openHtmlExport } from "../lib/exports";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
@@ -42,10 +43,11 @@ export default function StaffCheckin({ language }: StaffCheckinProps) {
       return;
     }
     try {
-      const res = await api<{ message: string }>(`/staff/print/${encodeURIComponent(id)}`);
-      toast.success(res.message);
+      await openHtmlExport(`/staff/print/${encodeURIComponent(id)}`);
     } catch (err: any) {
-      toast.error(err?.message ?? String(err));
+      const status = err?.status;
+      const fallback = status === 404 ? t(language, "staffBadgeNotFound") : status === 422 ? t(language, "staffBadgeUnavailable") : "";
+      toast.error(err?.message || fallback || String(err));
     }
   }
 

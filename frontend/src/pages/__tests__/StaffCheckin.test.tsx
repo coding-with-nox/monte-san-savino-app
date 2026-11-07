@@ -36,14 +36,47 @@ describe("StaffCheckin", () => {
     expect(screen.getByLabelText("Enrollment ID")).toHaveValue("bad");
   });
 
-  it("prints the badge and shows the server message", async () => {
-    apiMock.mockResolvedValueOnce({ message: "Badge sent to printer" });
+  it("fetches the badge HTML through the authenticated api and opens it in a new tab", async () => {
+    apiMock.mockResolvedValueOnce("<html><body>BADGE</body></html>");
+    const createUrl = vi.fn(() => "blob:badge");
+    const openSpy = vi.fn();
+    vi.stubGlobal("open", openSpy);
+    window.URL.createObjectURL = createUrl as any;
+    window.URL.revokeObjectURL = vi.fn();
     const user = userEvent.setup();
     renderWithProviders(<StaffCheckin language="en" />);
     await user.type(screen.getByLabelText("Enrollment ID"), "e9");
     await user.click(screen.getByRole("button", { name: "Print badge" }));
+    await waitFor(() => expect(openSpy).toHaveBeenCalledWith("blob:badge", "_blank", "noopener,noreferrer"));
     expect(apiMock).toHaveBeenCalledWith("/staff/print/e9");
-    expect(await screen.findByText("Badge sent to printer")).toBeInTheDocument();
+    const blob = (createUrl.mock.calls[0] as unknown as [Blob])[0];
+    expect(blob.type).toContain("text/html");
+    const text = await new Promise<string>((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.readAsText(blob);
+    });
+    expect(text).toContain("BADGE");
+    expect(screen.queryByText("Check-in completed.")).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the backend message when the badge is not found (404)", async () => {
+    apiMock.mockRejectedValueOnce(Object.assign(new Error("Enrollment not found"), { status: 404 }));
+    const user = userEvent.setup();
+    renderWithProviders(<StaffCheckin language="en" />);
+    await user.type(screen.getByLabelText("Enrollment ID"), "e9");
+    await user.click(screen.getByRole("button", { name: "Print badge" }));
+    expect(await screen.findByText("Enrollment not found")).toBeInTheDocument();
+  });
+
+  it("falls back to a clear message for an empty 422 error", async () => {
+    apiMock.mockRejectedValueOnce(Object.assign(new Error(""), { status: 422 }));
+    const user = userEvent.setup();
+    renderWithProviders(<StaffCheckin language="en" />);
+    await user.type(screen.getByLabelText("Enrollment ID"), "e9");
+    await user.click(screen.getByRole("button", { name: "Print badge" }));
+    expect(await screen.findByText("Badge not available for this enrollment.")).toBeInTheDocument();
   });
 
   it("shows an error when printing fails", async () => {

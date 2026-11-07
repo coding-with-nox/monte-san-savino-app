@@ -447,6 +447,11 @@ export const translations = {
     judgeSelectedOne: "{n} modello selezionato",
     judgeSelectedMany: "{n} modelli selezionati",
     staffCheckinIdRequired: "Inserisci l'ID iscrizione.",
+    modelImageUnsupported: "Formato immagine non supportato dal browser. Usa JPEG, PNG o WebP.",
+    modelImageNotFound: "Modello non trovato.",
+    modelImageRejected: "Immagine rifiutata: tipo di file non valido.",
+    staffBadgeNotFound: "Iscrizione non trovata.",
+    staffBadgeUnavailable: "Badge non disponibile per questa iscrizione.",
     importTooLarge: "File troppo grande (max 256 KB, 2000 righe)",
   },
   en: {
@@ -895,6 +900,11 @@ export const translations = {
     judgeSelectedOne: "{n} model selected",
     judgeSelectedMany: "{n} models selected",
     staffCheckinIdRequired: "Enter the enrollment ID.",
+    modelImageUnsupported: "Image format not supported by the browser. Use JPEG, PNG or WebP.",
+    modelImageNotFound: "Model not found.",
+    modelImageRejected: "Image rejected: invalid file type.",
+    staffBadgeNotFound: "Enrollment not found.",
+    staffBadgeUnavailable: "Badge not available for this enrollment.",
     importTooLarge: "File too large (max 256 KB, 2000 rows)"
   }
 } as const;

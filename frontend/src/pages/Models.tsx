@@ -71,6 +71,8 @@ interface ModelsProps {
   language: Language;
 }
 
+const ALLOWED_UPLOAD_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
 export default function Models({ language }: ModelsProps) {
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
@@ -254,10 +256,16 @@ export default function Models({ language }: ModelsProps) {
   async function resizeImageForUpload(file: File): Promise<File | Blob> {
     const maxDimension = 1920;
     const targetMaxBytes = 1.5 * 1024 * 1024;
-    const outputType = file.type === "image/png" ? "image/jpeg" : (file.type || "image/jpeg");
-    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) return file;
+    const isAllowed = ALLOWED_UPLOAD_TYPES.includes(file.type);
+    // Canvas can only encode jpeg/png/webp; "image/jpg" is not a real MIME type for toBlob.
+    const outputType = file.type === "image/webp" ? "image/webp" : "image/jpeg";
     let bitmap: ImageBitmap;
-    try { bitmap = await createImageBitmap(file); } catch { return file; }
+    try {
+      bitmap = await createImageBitmap(file);
+    } catch {
+      if (isAllowed) return file;
+      throw new Error(t(language, "modelImageUnsupported"));
+    }
     let { width, height } = bitmap;
     const needsResize = width > maxDimension || height > maxDimension;
     if (needsResize) {
@@ -269,19 +277,25 @@ export default function Models({ language }: ModelsProps) {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    if (!ctx) { bitmap.close(); return file; }
+    if (!ctx) {
+      bitmap.close();
+      if (isAllowed) return file;
+      throw new Error(t(language, "modelImageUnsupported"));
+    }
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
-    if (!needsResize && file.size <= targetMaxBytes) return file;
+    if (isAllowed && !needsResize && file.size <= targetMaxBytes) return file;
     const qualities = [0.85, 0.75, 0.65, 0.55];
     let candidate: Blob | null = null;
     for (const quality of qualities) {
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, outputType, quality));
-      if (!blob) continue;
+      if (!blob || !ALLOWED_UPLOAD_TYPES.includes(blob.type)) continue;
       candidate = blob;
       if (blob.size <= targetMaxBytes) break;
     }
-    return candidate || file;
+    if (candidate) return candidate;
+    if (isAllowed) return file;
+    throw new Error(t(language, "modelImageUnsupported"));
   }
 
   async function uploadFile(file: File) {
@@ -289,7 +303,8 @@ export default function Models({ language }: ModelsProps) {
     setUploading(true);
     try {
       const optimizedFile = await resizeImageForUpload(file);
-      const contentType = optimizedFile.type || file.type || "image/jpeg";
+      const contentType = optimizedFile.type;
+      if (!ALLOWED_UPLOAD_TYPES.includes(contentType)) throw new Error(t(language, "modelImageUnsupported"));
       const { uploadUrl, publicUrl } = await api<{ uploadUrl: string; publicUrl: string }>(
         `/models/${detail.model.id}/image-upload`,
         { method: "POST", body: JSON.stringify({ contentType }) }
@@ -300,7 +315,9 @@ export default function Models({ language }: ModelsProps) {
       setDetail(d);
       setAttachName("");
     } catch (err: any) {
-      toast.error(err?.message ?? String(err));
+      const status = err?.status;
+      const fallback = status === 404 ? t(language, "modelImageNotFound") : status === 422 ? t(language, "modelImageRejected") : "";
+      toast.error(err?.message || fallback || String(err));
     } finally {
       setUploading(false);
     }
