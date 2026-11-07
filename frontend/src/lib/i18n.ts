@@ -338,6 +338,10 @@ export const translations = {
     // Judging
     judgeCompleteButton: "Giudizio Completato",
     judgeWaitingOthers: "In attesa degli altri giudici...",
+    judgeError: "Errore",
+    judgeCategoryNotAssigned: "Questa categoria non ti è stata assegnata o non esiste.",
+    judgeCompleteConflict: "Non tutti i modelli della categoria sono stati votati.",
+    judgePollError: "Impossibile aggiornare lo stato dei giudici. Nuovo tentativo in corso...",
     judgeShowAll: "Mostra anche già votati",
     judgeHideJudged: "Nascondi già votati",
     judgeAllDone: "Tutti i giudici hanno completato",
@@ -782,6 +786,10 @@ export const translations = {
     // Judging
     judgeCompleteButton: "Judging Complete",
     judgeWaitingOthers: "Waiting for other judges...",
+    judgeError: "Error",
+    judgeCategoryNotAssigned: "This category is not assigned to you or does not exist.",
+    judgeCompleteConflict: "Not all models in the category have been voted.",
+    judgePollError: "Unable to refresh the judges' status. Retrying...",
     judgeShowAll: "Show already voted",
     judgeHideJudged: "Hide already voted",
     judgeAllDone: "All judges completed",

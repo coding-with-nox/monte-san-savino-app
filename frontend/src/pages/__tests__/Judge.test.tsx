@@ -1,7 +1,7 @@
 import React from "react";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderWithProviders } from "../../test/renderWithProviders";
 
 const apiMock = vi.fn();
@@ -129,5 +129,116 @@ describe("Judge", () => {
     });
     renderWithProviders(<Judge language="en" />);
     expect(await screen.findByText("No judge assignment")).toBeInTheDocument();
+  });
+});
+
+describe("Judge completion", () => {
+  const judged = (id: string, userId: string, categoryId: string, n: number) =>
+    ({ ...base, id, code: n, displayNumber: n, categoryId, categoryName: categoryId, currentRank: 2, userId, name: id });
+  let completionCalls: string[];
+  let completionImpl: (path: string) => Promise<any>;
+  let completeImpl: () => Promise<any>;
+  let allModels: any[];
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    completionCalls = [];
+    completionImpl = async () => ({ allDone: false, totalJudges: 2, completedJudges: 1 });
+    completeImpl = async () => ({ completed: true, allDone: false, totalJudges: 2, completedJudges: 1 });
+    // c1 fully judged; c2 has an unjudged model. The mock ignores categoryId like an old backend.
+    allModels = [judged("a", "u1", "c1", 1), { ...judged("b", "u2", "c2", 2), currentRank: null }];
+    apiMock.mockReset();
+    apiMock.mockImplementation(async (path: string) => {
+      if (path === "/judge/events") return [{ eventId: "e1", eventName: "MSS 2026" }];
+      if (path.startsWith("/public/categories")) return [{ id: "c1", name: "Historical" }, { id: "c2", name: "Sci-Fi" }];
+      if (path.startsWith("/judge/models")) return allModels;
+      if (path.endsWith("/complete")) return completeImpl();
+      if (path.endsWith("/completion")) { completionCalls.push(path); return completionImpl(path); }
+      return {};
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function selectCategory(user: ReturnType<typeof userEvent.setup>, name: string) {
+    await screen.findByText("MSS 2026");
+    const boxes = screen.getAllByRole("combobox");
+    await user.click(boxes[1]);
+    await user.click(await screen.findByRole("option", { name }));
+  }
+
+  async function startPolling(user: ReturnType<typeof userEvent.setup>) {
+    renderWithProviders(<Judge language="en" />);
+    await selectCategory(user, "Historical");
+    await user.click(await screen.findByRole("button", { name: "Judging Complete" }));
+    await screen.findByText(/Waiting for other judges/);
+  }
+
+  it("computes 'all judged' on the selected category only", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderWithProviders(<Judge language="en" />);
+    await selectCategory(user, "Historical");
+    expect(await screen.findByRole("button", { name: "Judging Complete" })).toBeInTheDocument();
+    await selectCategory(user, "Sci-Fi");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Judging Complete" })).not.toBeInTheDocument());
+  });
+
+  it("stops polling when the category changes", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await startPolling(user);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(completionCalls.length).toBe(1);
+    await selectCategory(user, "Sci-Fi");
+    const before = completionCalls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+    expect(completionCalls.length).toBe(before);
+    expect(screen.queryByText(/Waiting for other judges/)).not.toBeInTheDocument();
+  });
+
+  it("ignores a late completion response after the category changed", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    let release: (v: any) => void = () => {};
+    completionImpl = () => new Promise((r) => { release = r; });
+    await startPolling(user);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(completionCalls.length).toBe(1);
+    await selectCategory(user, "Sci-Fi");
+    await act(async () => { release({ allDone: true, totalJudges: 2, completedJudges: 2 }); });
+    expect(screen.queryByText("All judges have completed")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Waiting for other judges/)).not.toBeInTheDocument();
+  });
+
+  it("pauses polling while the tab is hidden and shows a non-blocking error on failures", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await startPolling(user);
+    const vis = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+    expect(completionCalls.length).toBe(0);
+    vis.mockReturnValue("visible");
+    completionImpl = async () => { throw new Error("network"); };
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(await screen.findByText(/Unable to refresh the judges/)).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for other judges/)).toBeInTheDocument();
+    vis.mockRestore();
+  });
+
+  it("shows the backend message on 409", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    completeImpl = async () => { throw Object.assign(new Error("3 models not voted yet"), { status: 409 }); };
+    renderWithProviders(<Judge language="en" />);
+    await selectCategory(user, "Historical");
+    await user.click(await screen.findByRole("button", { name: "Judging Complete" }));
+    expect(await screen.findByText("3 models not voted yet")).toBeInTheDocument();
+  });
+
+  it("shows a clear message on 403/404 for unassigned categories", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    completeImpl = async () => { throw Object.assign(new Error("Forbidden"), { status: 403 }); };
+    renderWithProviders(<Judge language="en" />);
+    await selectCategory(user, "Historical");
+    await user.click(await screen.findByRole("button", { name: "Judging Complete" }));
+    expect(await screen.findByText(/not assigned to you/)).toBeInTheDocument();
   });
 });
