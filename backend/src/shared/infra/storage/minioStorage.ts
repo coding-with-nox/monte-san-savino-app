@@ -42,7 +42,8 @@ export class MinioStorage implements ObjectStorage {
   async getUploadUrl(input: { key: string; contentType: string; maxBytes?: number }) {
     await this.ensureBucket();
     const uploadUrl = await this.client.presignedPutObject(this.bucket, input.key, UPLOAD_URL_EXPIRY_SECONDS);
-    const publicUrl = `${(process.env.MINIO_PUBLIC_URL ?? "http://localhost:9000")}/${this.bucket}/${input.key}`;
+    const publicBase = (process.env.MINIO_PUBLIC_URL ?? "http://localhost:9000").replace(/\/+$/, "");
+    const publicUrl = `${publicBase}/${this.bucket}/${input.key}`;
     return { uploadUrl, publicUrl };
   }
 }

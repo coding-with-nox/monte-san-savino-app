@@ -4,7 +4,13 @@ import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { checkEnrollmentOpen } from "./enrollment-guard";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
+import { isAllowedImageUrl, allowedImageBase } from "../../../shared/domain/imageUrl";
 import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable, votesTable, judgeCompletionsTable } from "../persistence/schema";
+
+/** True when a client-supplied image URL is absent or allowed (evaluated per request so env changes apply). */
+export function isImageUrlAcceptable(url: unknown): boolean {
+  return url === undefined || url === null || isAllowedImageUrl(url, allowedImageBase());
+}
 
 async function getCategorySeqId(tenantDb: any, categoryId: string): Promise<number | null> {
   const [row] = await tenantDb
@@ -122,6 +128,11 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (user?.role !== "manager" && user?.role !== "admin") {
       const guard = await checkEnrollmentOpen(tenantDb, body.categoryId, set);
       if (guard.blocked) return (set as any).body;
+    }
+
+    if (!isImageUrlAcceptable(body.imageUrl)) {
+      set.status = 422;
+      return { error: "Invalid image url" };
     }
 
     if (body.isTeam) {
@@ -277,6 +288,10 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       if (guard.blocked) return (set as any).body;
     }
 
+    if (!isImageUrlAcceptable(body.imageUrl)) {
+      set.status = 422;
+      return { error: "Invalid image url" };
+    }
     if (body.isTeam === true && !body.teamId) {
       set.status = 422;
       return { error: "teamId required for team models" };
@@ -385,6 +400,10 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (user?.role !== "manager" && user?.role !== "admin") {
       const guard = await checkEnrollmentOpen(tenantDb, existingModel.categoryId, set);
       if (guard.blocked) return (set as any).body;
+    }
+    if (!isAllowedImageUrl(body.url, allowedImageBase())) {
+      set.status = 422;
+      return { error: "Invalid image url" };
     }
     const imageId = crypto.randomUUID();
     await tenantDb.insert(modelImagesTable).values({ id: imageId, modelId: params.modelId, url: body.url });

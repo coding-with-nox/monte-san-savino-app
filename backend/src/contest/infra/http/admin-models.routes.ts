@@ -4,6 +4,7 @@ import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, modelsTable, registrationsTable } from "../persistence/schema";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
+import { isImageUrlAcceptable } from "./model.routes";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -88,6 +89,10 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
     if (!current) {
       set.status = 404;
       return { error: "Model not found" };
+    }
+    if (!isImageUrlAcceptable((body as any).imageUrl)) {
+      set.status = 422;
+      return { error: "Invalid image url" };
     }
     const move = await validateCategoryMove(tenantDb, current.categoryId, (body as any).categoryId);
     if (!move.ok) {
