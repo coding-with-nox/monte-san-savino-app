@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { api, ApiError, API_BASE } from "../api";
+import { api, ApiError, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "../api";
 import { getToken, setSession } from "../auth";
 
 const fetchMock = vi.fn();
@@ -115,6 +115,34 @@ describe("api()", () => {
     await expect(api("/models")).rejects.toMatchObject({ status: 401, message: "Session expired" });
     expect(getToken()).toBeNull();
     expect(window.location.href).toBe("/login");
+  });
+
+  it("on session expiry dispatches auth:logout and does not hard-redirect when a listener handles it", async () => {
+    const listener = vi.fn((e: Event) => { (e as CustomEvent<AuthLogoutDetail>).detail.handled = true; });
+    window.addEventListener(AUTH_LOGOUT_EVENT, listener);
+    try {
+      setSession("old", "ref", 3600);
+      fetchMock.mockResolvedValueOnce(textRes(401, "")).mockResolvedValueOnce(textRes(401, ""));
+      await expect(api("/models")).rejects.toMatchObject({ status: 401, message: "Session expired" });
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(getToken()).toBeNull();
+      expect(window.location.href).toBe("/");
+    } finally {
+      window.removeEventListener(AUTH_LOGOUT_EVENT, listener);
+    }
+  });
+
+  it("falls back to a hard redirect when a listener does not handle the event", async () => {
+    const listener = vi.fn();
+    window.addEventListener(AUTH_LOGOUT_EVENT, listener);
+    try {
+      fetchMock.mockResolvedValueOnce(textRes(401, ""));
+      await expect(api("/models")).rejects.toMatchObject({ message: "Session expired" });
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(window.location.href).toBe("/login");
+    } finally {
+      window.removeEventListener(AUTH_LOGOUT_EVENT, listener);
+    }
   });
 
   it("on 401 without refresh token throws Session expired", async () => {

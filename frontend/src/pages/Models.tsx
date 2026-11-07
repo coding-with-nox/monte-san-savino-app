@@ -581,7 +581,7 @@ export default function Models({ language }: ModelsProps) {
                         {imagesEnabled && (
                           <TableCell sx={{ width: 72, p: 1 }}>
                             {model.imageUrl ? (
-                              <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
+                              <Avatar variant="rounded" src={model.imageUrl} imgProps={{ loading: "lazy", decoding: "async" }} sx={{ width: 40, height: 40 }} />
                             ) : (
                               <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: "action.hover" }}>
                                 <ImageIcon fontSize="small" color="disabled" />

@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes, Link as RouterLink, useLocation } from "react-router-dom";
+﻿import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Navigate, Route, Routes, Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   AppBar,
   Avatar,
@@ -54,21 +54,22 @@ function FigurineIcon(props: React.ComponentProps<typeof SvgIcon>) {
   );
 }
 import Login from "./pages/Login";
-import Judge from "./pages/Judge";
-import Profile from "./pages/Profile";
-import Dashboard from "./pages/Dashboard";
-import Enrollments from "./pages/Enrollments";
-import StaffCheckin from "./pages/StaffCheckin";
-import Models from "./pages/Models";
-import Teams from "./pages/Teams";
-import PublicEvents from "./pages/PublicEvents";
-import Admin from "./pages/Admin";
-import Users from "./pages/Users";
-import Settings from "./pages/Settings";
-import Labels from "./pages/Labels";
-import Stats from "./pages/Stats";
-import Podium from "./pages/Podium";
-import { api, API_BASE } from "./lib/api";
+const Judge = lazy(() => import("./pages/Judge"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Enrollments = lazy(() => import("./pages/Enrollments"));
+const StaffCheckin = lazy(() => import("./pages/StaffCheckin"));
+const Models = lazy(() => import("./pages/Models"));
+const Teams = lazy(() => import("./pages/Teams"));
+const PublicEvents = lazy(() => import("./pages/PublicEvents"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Users = lazy(() => import("./pages/Users"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Labels = lazy(() => import("./pages/Labels"));
+const Stats = lazy(() => import("./pages/Stats"));
+const Podium = lazy(() => import("./pages/Podium"));
+import PageSkeleton from "./components/PageSkeleton";
+import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
 import { buildTheme } from "./lib/theme";
@@ -100,7 +101,27 @@ export default function App() {
   const [appName, setAppName] = useState("Miniatures Contest");
   const [backendDown, setBackendDown] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [avatarMenuAnchor, setAvatarMenuAnchor] = useState<null | HTMLElement>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Session expiry (api.ts) and manual logout: client-side navigation, no full reload.
+  const endSession = useCallback(() => {
+    clearToken();
+    setAvatarMenuAnchor(null);
+    setDrawerOpen(false);
+    navigate("/login", { replace: true });
+  }, [navigate]);
+
+  useEffect(() => {
+    const onLogout = (event: Event) => {
+      const detail = (event as CustomEvent<AuthLogoutDetail>).detail;
+      if (detail) detail.handled = true;
+      endSession();
+    };
+    window.addEventListener(AUTH_LOGOUT_EVENT, onLogout);
+    return () => window.removeEventListener(AUTH_LOGOUT_EVENT, onLogout);
+  }, [endSession]);
 
   useEffect(() => {
     window.localStorage.setItem("theme", themeMode);
@@ -162,7 +183,6 @@ export default function App() {
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
 
   const role = getRole();
-  const [avatarMenuAnchor, setAvatarMenuAnchor] = useState<null | HTMLElement>(null);
 
   const userInitial = (() => {
     const token = getToken();
@@ -174,11 +194,7 @@ export default function App() {
     } catch { return "?"; }
   })();
 
-  const handleLogout = () => {
-    setAvatarMenuAnchor(null);
-    clearToken();
-    window.location.href = "/login";
-  };
+  const handleLogout = endSession;
 
   const allNavItems = [
     { label: t(language, "navHome"), path: "/", minRole: "user" as Role },
@@ -354,6 +370,7 @@ export default function App() {
           {drawerContent}
         </Drawer>
         <Box sx={{ pb: isMobile && role ? "56px" : 0 }}>
+          <Suspense fallback={<PageSkeleton variant="table" />}>
           <Routes>
             <Route
               path="/login"
@@ -379,6 +396,7 @@ export default function App() {
             <Route path="/settings" element={<Protected><RequireRole min="admin"><Settings language={language} /></RequireRole></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </Box>
         {isMobile && role && (
           <BottomNavigation
