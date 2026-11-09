@@ -9,7 +9,7 @@ export class VoteRepositoryDrizzle {
       .select()
       .from(votesTable)
       .where(and(eq(votesTable.judgeId, judgeId as any), eq(votesTable.modelId, modelId as any)))
-      .orderBy(desc(votesTable.createdAt), desc(votesTable.id))
+      .orderBy(desc(votesTable.createdAt), desc(votesTable.seq))
       .limit(1);
     if (!rows.length) return null;
     const r = rows[0];
@@ -25,7 +25,7 @@ export class VoteRepositoryDrizzle {
       .select()
       .from(votesTable)
       .where(and(eq(votesTable.judgeId, judgeId as any), eq(votesTable.modelId, modelId as any)))
-      .orderBy(desc(votesTable.createdAt), desc(votesTable.id));
+      .orderBy(desc(votesTable.createdAt), desc(votesTable.seq));
     return rows.map((r: any) => new Vote(r.id, r.judgeId, r.modelId, r.rank as any, r.createdAt ?? new Date()));
   }
   async listByCategory(categoryId: string): Promise<Vote[]> {

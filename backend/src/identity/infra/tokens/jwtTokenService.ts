@@ -1,9 +1,22 @@
 import { SignJWT, jwtVerify } from "jose";
 
-const DEFAULT_ACCESS_TTL_SECONDS = 86400;
+const DEFAULT_ACCESS_TTL_SECONDS = 15 * 60;
 const DEFAULT_REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
 
-function secret() { return new TextEncoder().encode(process.env.JWT_SECRET ?? "dev-secret-change-me"); }
+export const MIN_JWT_SECRET_LENGTH = 32;
+
+export function requireJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
+  const value = env.JWT_SECRET;
+  if (value === undefined || value.trim() === "") {
+    throw new Error("JWT_SECRET environment variable is required and must not be empty");
+  }
+  if (value.length < MIN_JWT_SECRET_LENGTH) {
+    throw new Error(`JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters long`);
+  }
+  return value;
+}
+
+function secret() { return new TextEncoder().encode(requireJwtSecret()); }
 
 function secondsFromEnv(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -33,7 +46,7 @@ export class JwtTokenService {
   }
 
   async verify(token: string) {
-    const { payload } = await jwtVerify(token, secret());
+    const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
     return payload;
   }
 }

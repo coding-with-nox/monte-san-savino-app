@@ -9,24 +9,25 @@
 # Differenze rispetto a docker-compose.yml:
 #   • backend  : sorgenti montati, hot-reload (bun --hot), ispettore su :9229
 #   • frontend : Vite dev server (:5173) con proxy → backend:3000
-#   • db-init  : esegue 02-test-data.sh SOLO se la tabella users è vuota
+#   • db-seed  : OPT-IN (--profile demo): 02-test-data.sh SOLO se users è vuota,
+#                richiede DEMO_PASSWORD_HASH; tutte le porte sono su 127.0.0.1
 #   • adminer  : GUI leggera per PostgreSQL su :8888
 #   • minio    : console MinIO su :9001 (invariata)
 # ---------------------------------------------------------------------------
 services:
 
   # -------------------------------------------------------------------------
-  # PostgreSQL (identico alla prod, porta esposta per accesso diretto)
+  # PostgreSQL (identico alla prod, porta esposta solo su 127.0.0.1)
   # -------------------------------------------------------------------------
   postgres:
     image: postgres:16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata_debug:/var/lib/postgresql/data
     healthcheck:
@@ -42,11 +43,11 @@ services:
     image: minio/minio
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     volumes:
       - miniodata_debug:/data
 
@@ -61,7 +62,7 @@ services:
         condition: service_healthy
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
       PGHOST: postgres
       PGPORT: 5432
@@ -73,15 +74,19 @@ services:
     restart: "no"
 
   # One-shot psql client: loads seed data into the same postgres service database.
+  # DEMO ONLY (opt-in): `docker compose -f docker-compose.debug.yml --profile demo up`.
+  # Needs DEMO_PASSWORD_HASH (argon2id hash, no default); runs only on an empty DB.
   db-seed:
+    profiles: ["demo"]
     image: postgres:16
     depends_on:
       backend:
         condition: service_started
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       TENANT_DB_NAME: ${TENANT_DB_NAME:-tenant_db_1}
+      DEMO_PASSWORD_HASH: ${DEMO_PASSWORD_HASH:-}
       PGHOST: postgres
       PGPORT: 5432
     volumes:
@@ -112,23 +117,23 @@ services:
         condition: service_started
     environment:
       NODE_ENV: development
-      JWT_SECRET: ${JWT_SECRET:-debug-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       PG_HOST: postgres
       PG_PORT: 5432
       PG_DB: ${TENANT_DB_NAME:-tenant_db_1}
       PG_USER: ${POSTGRES_USER:-postgres}
-      PG_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     volumes:
       - ./backend:/app
       # node_modules separato per evitare conflitti host/container
       - backend_modules:/app/node_modules
     ports:
-      - "3000:3000"
-      - "9229:9229"
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:9229:9229"
     command: >
       sh -c "bun install &&
              bun --hot --inspect=0.0.0.0:9229 src/bootstrap/server.ts"
@@ -146,6 +151,7 @@ services:
         condition: service_started
       db-seed:
         condition: service_completed_successfully
+        required: false   # esiste solo con --profile demo
     environment:
       # Sovrascrive il target del proxy Vite (vite.config.ts lo legge da process.env)
       VITE_PROXY_TARGET: http://backend:3000
@@ -153,7 +159,7 @@ services:
       - ./frontend:/app
       - frontend_modules:/app/node_modules
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     command: >
       sh -c "npm ci &&
              npx vite --host 0.0.0.0 --port 5173"
@@ -168,7 +174,7 @@ services:
     depends_on:
       - postgres
     ports:
-      - "8888:8080"
+      - "127.0.0.1:8888:8080"
     environment:
       ADMINER_DEFAULT_SERVER: postgres
 

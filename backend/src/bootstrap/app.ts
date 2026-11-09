@@ -13,7 +13,6 @@ import { modelRoutes } from "../contest/infra/http/model.routes";
 import { eventRoutes, enrollmentRoutes } from "../contest/infra/http/event.routes";
 import { categoryRoutes } from "../contest/infra/http/category.routes";
 import { userEnrollmentRoutes, adminEnrollmentRoutes, staffCheckinRoutes } from "../contest/infra/http/enrollment.routes";
-import { paymentRoutes } from "../contest/infra/http/payment.routes";
 import { publicRoutes } from "../contest/infra/http/public.routes";
 import { exportRoutes } from "../contest/infra/http/export.routes";
 import { awardRoutes } from "../contest/infra/http/award.routes";
@@ -31,21 +30,45 @@ import { reminderRoutes } from "../contest/infra/http/reminder.routes";
 import { adminMemberRolesRoutes, publicMemberRolesRoutes } from "../contest/infra/http/member-roles.routes";
 import { teamRoutes } from "../contest/infra/http/team.routes";
 import { awardBracketsRoutes } from "../contest/infra/http/award-brackets.routes";
+import { adminImportRoutes } from "../contest/infra/http/import.routes";
+import { adminStatsRoutes } from "../contest/infra/http/stats.routes";
+
+type Env = Record<string, string | undefined>;
+
+/** Swagger only outside production, unless ENABLE_SWAGGER=true. */
+export function isSwaggerEnabled(env: Env = process.env): boolean {
+  return env.NODE_ENV !== "production" || env.ENABLE_SWAGGER === "true";
+}
+
+/**
+ * CORS origin policy. Returns null (no CORS headers at all) in production when CORS_ORIGIN is
+ * empty (same-origin behind nginx); permissive (reflect) outside production; else the allowlist.
+ */
+export function resolveCorsOrigin(env: Env = process.env): string[] | true | null {
+  const origins = (env.CORS_ORIGIN ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+  if (origins.length > 0) return origins;
+  return env.NODE_ENV === "production" ? null : true;
+}
+
+export const SECURITY_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer"
+} as const;
 
 export function buildApp() {
-  const rawCorsOrigin = process.env.CORS_ORIGIN ?? "";
-  const corsOrigins = rawCorsOrigin
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  const corsOrigin = resolveCorsOrigin();
 
   return new Elysia()
+    // Base security headers on every response (incl. errors); handlers may override/extend.
+    .onRequest(({ set }) => {
+      Object.assign(set.headers, SECURITY_HEADERS);
+    })
     .use(loggerMiddleware)
-    .use(cors({
-      origin: corsOrigins.length > 0 ? corsOrigins : true,
+    .use(corsOrigin === null ? new Elysia() : cors({
+      origin: corsOrigin,
       allowedHeaders: ["Authorization", "Content-Type"]
     }))
-    .use(swagger({
+    .use(!isSwaggerEnabled() ? new Elysia() : swagger({
       path: "/docs",
       documentation: {
         info: {
@@ -114,7 +137,11 @@ export function buildApp() {
     .use(userEnrollmentRoutes)
     .use(adminEnrollmentRoutes)
     .use(staffCheckinRoutes)
-    .use(paymentRoutes)
+    // /payments DISABLED: unused by the frontend and insecure as written. To re-enable it needs:
+    // (1) ownership check (the registration must belong to the caller), (2) webhook signature
+    // verification (no unauthenticated status changes), (3) amount computed server-side from the
+    // event/category fee (never from the client body), (4) a DB transaction for payment + registration update.
+    // .use(paymentRoutes)
     .use(publicRoutes)
     .use(exportRoutes)
     .use(awardRoutes)
@@ -135,5 +162,7 @@ export function buildApp() {
     .use(eventCampaignsRoutes)
     .use(reminderRoutes)
     .use(teamRoutes)
-    .use(awardBracketsRoutes);
+    .use(awardBracketsRoutes)
+    .use(adminImportRoutes)
+    .use(adminStatsRoutes);
 }

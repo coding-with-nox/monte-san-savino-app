@@ -1,11 +1,20 @@
 import React from "react";
-import { Grid, Stack, TextField } from "@mui/material";
+import { FormControlLabel, FormHelperText, Grid, InputAdornment, MenuItem, Stack, Switch, TextField } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
 import PhoneIcon from "@mui/icons-material/Phone";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
+import ShareIcon from "@mui/icons-material/Share";
+import InstagramIcon from "@mui/icons-material/Instagram";
+import FacebookIcon from "@mui/icons-material/Facebook";
+import LanguageIcon from "@mui/icons-material/Language";
+import PinterestIcon from "@mui/icons-material/Pinterest";
+import MusicNoteIcon from "@mui/icons-material/MusicNote";
+import VolunteerActivismIcon from "@mui/icons-material/VolunteerActivism";
 import { MuiTelInput, matchIsValidTel } from "mui-tel-input";
 import { Language, t } from "../lib/i18n";
 import SectionCard from "./SectionCard";
+import { safeHttpUrl } from "../lib/social";
+import { countryOptions } from "../lib/countries";
 
 export type EditableProfile = {
   email?: string;
@@ -16,6 +25,14 @@ export type EditableProfile = {
   city?: string | null;
   emergencyContact?: string | null;
   emergencyContactName?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  website?: string | null;
+  patreon?: string | null;
+  pinterest?: string | null;
+  tiktok?: string | null;
+  country?: string | null;
+  publicProfile?: boolean | null;
 };
 
 type ProfileEditSectionsProps = {
@@ -39,6 +56,15 @@ export default function ProfileEditSections({
   onEmergencyPhoneErrorChange,
   showIdentityFields = true
 }: ProfileEditSectionsProps) {
+  const socialFields = [
+    { key: "instagram" as const, label: t(language, "profileInstagram"), icon: <InstagramIcon /> },
+    { key: "facebook" as const, label: t(language, "profileFacebook"), icon: <FacebookIcon /> },
+    { key: "website" as const, label: t(language, "profileWebsite"), icon: <LanguageIcon /> },
+    { key: "patreon" as const, label: t(language, "profilePatreon"), icon: <VolunteerActivismIcon /> },
+    { key: "pinterest" as const, label: t(language, "profilePinterest"), icon: <PinterestIcon /> },
+    { key: "tiktok" as const, label: t(language, "profileTiktok"), icon: <MusicNoteIcon /> }
+  ];
+  const countries = React.useMemo(() => countryOptions(language), [language]);
   return (
     <Stack spacing={3}>
       <SectionCard icon={<PersonIcon />} title={t(language, "profilePersonalSection")}>
@@ -122,6 +148,55 @@ export default function ProfileEditSections({
               onChange={(e) => onChange({ ...value, city: e.target.value })}
               fullWidth
             />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              select
+              label={t(language, "profileCountry")}
+              value={value.country ?? ""}
+              onChange={(e) => onChange({ ...value, country: e.target.value || null })}
+              fullWidth
+            >
+              <MenuItem value="">{t(language, "profileCountryNone")}</MenuItem>
+              {countries.map((c) => (
+                <MenuItem key={c.code} value={c.code}>{c.name}</MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+        </Grid>
+      </SectionCard>
+
+      <SectionCard icon={<ShareIcon />} title={t(language, "profileSocialSection")}>
+        <Grid container spacing={2}>
+          {socialFields.map((f) => {
+            const current = value[f.key] ?? "";
+            const invalid = current.trim() !== "" && safeHttpUrl(current) === null;
+            return (
+              <Grid item xs={12} sm={6} key={f.key}>
+                <TextField
+                  label={f.label}
+                  value={current}
+                  onChange={(e) => onChange({ ...value, [f.key]: e.target.value })}
+                  fullWidth
+                  error={invalid}
+                  helperText={invalid ? t(language, "profileSocialInvalid") : ""}
+                  inputProps={{ inputMode: "url", maxLength: 300 }}
+                  InputProps={{ startAdornment: <InputAdornment position="start">{f.icon}</InputAdornment> }}
+                />
+              </Grid>
+            );
+          })}
+          <Grid item xs={12}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={value.publicProfile ?? false}
+                  onChange={(e) => onChange({ ...value, publicProfile: e.target.checked })}
+                />
+              }
+              label={t(language, "profilePublic")}
+            />
+            <FormHelperText>{t(language, "profilePublicHelp")}</FormHelperText>
           </Grid>
         </Grid>
       </SectionCard>

@@ -62,7 +62,7 @@ export default function PublicEvents({ language }: PublicEventsProps) {
               ))}
             </List>
             {events.length === 0 && (
-              <EmptyState title="Nessun evento" description="Non ci sono eventi pubblici al momento." />
+              <EmptyState title={t(language, "emptyEventsTitle")} description={t(language, "emptyEventsDescription")} />
             )}
           </CardContent>
         </Card>

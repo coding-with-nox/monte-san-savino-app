@@ -5,3 +5,30 @@
 body {
   margin: 0;
 }
+
+/* Print: hide app chrome and interactive controls, keep content readable on paper */
+@media print {
+  .MuiAppBar-root,
+  .MuiBottomNavigation-root,
+  .MuiDrawer-root,
+  .MuiSnackbar-root,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .MuiPaper-root,
+  .MuiCard-root {
+    box-shadow: none !important;
+    border: 1px solid #ccc;
+    background: #fff !important;
+  }
+
+  .MuiContainer-root {
+    max-width: 100% !important;
+  }
+}

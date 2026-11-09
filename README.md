@@ -56,11 +56,14 @@ monte-san-savino-app/
 
 This runs `docker compose -f docker-compose.yml -f docker-compose.dev.yml up`, starting:
 
-- PostgreSQL — `:5432`
-- MinIO — API `:9000`, console `:9001`
-- Backend — `:3000`
-- Frontend — `:5173`
-- Adminer — `:8888`
+- PostgreSQL — `127.0.0.1:5432`
+- MinIO — API `127.0.0.1:9000`, console `127.0.0.1:9001`
+- Backend — `127.0.0.1:3000`
+- Frontend — `127.0.0.1:5173`
+- Adminer — `127.0.0.1:8888`
+
+All host ports are bound to loopback only. `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`,
+`MINIO_ROOT_PASSWORD` and `JWT_SECRET` are required in `.env` (no defaults, see `.env.example`).
 
 In dev mode the backend runs `bunx drizzle-kit push` (sync schema) then `bun --hot` for hot-reload, and seeds demo data on startup when `NODE_ENV != production`.
 
@@ -130,18 +133,22 @@ Deployment guides:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JWT_SECRET` | — | Required: JWT signing key |
+| `JWT_SECRET` | — | Required, no default (obbligatorio, senza default): JWT signing key; the server refuses to start without it |
 | `PORT` | `3000` | API listen port |
 | `NODE_ENV` | — | Skips demo seeding when set to `production` |
 | `PG_HOST` | `localhost` | PostgreSQL host |
 | `PG_PORT` | `5432` | PostgreSQL port |
 | `PG_DB` | `tenant_db_1` | Database name |
 | `PG_USER` | `postgres` | DB user |
-| `PG_PASSWORD` | `postgres` | DB password |
+| `PG_PASSWORD` | — | Required, no default: DB password (compose passes `POSTGRES_PASSWORD`) |
 | `MINIO_ENDPOINT` | `localhost` | MinIO endpoint |
 | `MINIO_PORT` | `9000` | MinIO port |
 | `MINIO_ACCESS_KEY` | — | MinIO access key |
 | `MINIO_SECRET_KEY` | — | MinIO secret key |
+
+> **Migration note:** `JWT_SECRET` no longer has a default. If your `.env` (or Helm values) still contains
+> `change-me`, replace it with a random value (`openssl rand -base64 48`); existing JWTs become invalid
+> on change. See `docs/configuration_deploy_debug.md`.
 
 ### Frontend
 

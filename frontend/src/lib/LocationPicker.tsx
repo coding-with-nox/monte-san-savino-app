@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Stack, TextField, Typography } from "@mui/material";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import type { LatLngExpression } from "leaflet";
+import "leaflet/dist/leaflet.css";
+import "./leafletSetup";
 import { Language, t } from "./i18n";
 
 interface LocationPickerProps {

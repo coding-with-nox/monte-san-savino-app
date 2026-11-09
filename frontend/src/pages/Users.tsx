@@ -9,6 +9,7 @@ import {
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   Grid,
   IconButton,
   InputLabel,
@@ -16,6 +17,7 @@ import {
   Paper,
   Select,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -36,9 +38,15 @@ import { api, ApiError } from "../lib/api";
 import { downloadAuthenticatedFile } from "../lib/download";
 import { Language, t } from "../lib/i18n";
 import ActiveSwitch from "../lib/ActiveSwitch";
+import { getRole, getUserId, roleAtLeast, type Role } from "../lib/auth";
 import ProfileEditSections from "../components/ProfileEditSections";
 import PageContainer from "../components/PageContainer";
 import EmptyState from "../components/EmptyState";
+import PageSkeleton from "../components/PageSkeleton";
+import PrintActions from "../components/PrintActions";
+import SocialLinks from "../components/SocialLinks";
+import { hasInvalidSocial, socialPayload } from "../lib/social";
+import { countryName, countryOptions } from "../lib/countries";
 import useToast from "../components/useToast";
 
 type User = { id: string; email: string; role: string; isActive: boolean };
@@ -55,27 +63,57 @@ type UserProfile = {
   city?: string | null;
   emergencyContact?: string | null;
   emergencyContactName?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  website?: string | null;
+  patreon?: string | null;
+  pinterest?: string | null;
+  tiktok?: string | null;
+  country?: string | null;
+  publicProfile?: boolean | null;
 };
 
 interface UsersProps {
   language: Language;
 }
 
-const roles = ["user", "staff", "judge", "manager", "admin"];
+const roles: Role[] = ["user", "staff", "judge", "manager", "admin"];
+
+// Roles the current user may assign: admin all, anyone else only roles strictly below their own.
+function assignableRoles(me: Role | null): Role[] {
+  if (!me) return [];
+  if (me === "admin") return roles;
+  return roles.filter((r) => !roleAtLeast(r, me));
+}
+
+// Non-admins cannot act on users whose role is >= their own (the backend answers 403).
+function canManageRole(me: Role | null, target: string): boolean {
+  if (!me) return false;
+  if (me === "admin") return true;
+  return !roleAtLeast(target as Role, me);
+}
 
 export default function Users({ language }: UsersProps) {
   const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<Event[]>([]);
   const [exportEventId, setExportEventId] = useState("");
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const toast = useToast();
+  const myRole = getRole();
+  const myId = getUserId();
+  const myAssignableRoles = assignableRoles(myRole);
+  const isSelf = (id: string) => !!myId && id === myId;
+  const canAct = (u: { id: string; role: string }) => canManageRole(myRole, u.role) && !isSelf(u.id);
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [createEmail, setCreateEmail] = useState("");
   const [createPassword, setCreatePassword] = useState("");
   const [createRole, setCreateRole] = useState("user");
+  const [createCountry, setCreateCountry] = useState("");
+  const [createPublic, setCreatePublic] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Edit dialog
@@ -94,8 +132,14 @@ export default function Users({ language }: UsersProps) {
     setEvents(await api<Event[]>("/events"));
   }
 
+  // Deep link from the statistics page: /users?open=<userId> opens that user's card.
   useEffect(() => {
-    load().catch((err) => toast.error(err.message));
+    const openId = new URLSearchParams(window.location.search).get("open");
+    if (openId) void openEditDialog(openId);
+  }, []);
+
+  useEffect(() => {
+    load().catch((err) => toast.error(err.message)).finally(() => setLoading(false));
     loadEvents().catch((err) => toast.error(err.message));
   }, []);
 
@@ -103,7 +147,9 @@ export default function Users({ language }: UsersProps) {
   function openCreateDialog() {
     setCreateEmail("");
     setCreatePassword("");
-    setCreateRole("user");
+    setCreateRole(myAssignableRoles.includes("user") ? "user" : (myAssignableRoles[0] ?? "user"));
+    setCreateCountry("");
+    setCreatePublic(false);
     setCreateOpen(true);
   }
 
@@ -115,7 +161,9 @@ export default function Users({ language }: UsersProps) {
         body: JSON.stringify({
           email: createEmail.trim(),
           password: createPassword,
-          role: createRole
+          role: createRole,
+          country: createCountry || null,
+          publicProfile: createPublic
         })
       });
       setCreateOpen(false);
@@ -133,7 +181,13 @@ export default function Users({ language }: UsersProps) {
 
   // --- Edit dialog ---
   async function openEditDialog(userId: string) {
-    const profile = await api<UserProfile>(`/admin/users/${userId}/profile`);
+    let profile: UserProfile;
+    try {
+      profile = await api<UserProfile>(`/admin/users/${userId}/profile`);
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+      return;
+    }
     setEditProfile(profile);
     setProfileForm({
       firstName: profile.firstName,
@@ -141,7 +195,15 @@ export default function Users({ language }: UsersProps) {
       phone: profile.phone,
       city: profile.city,
       emergencyContact: profile.emergencyContact,
-      emergencyContactName: profile.emergencyContactName
+      emergencyContactName: profile.emergencyContactName,
+      instagram: profile.instagram,
+      facebook: profile.facebook,
+      website: profile.website,
+      patreon: profile.patreon,
+      pinterest: profile.pinterest,
+      tiktok: profile.tiktok,
+      country: profile.country,
+      publicProfile: profile.publicProfile
     });
     setEditingFields(false);
     setPhoneError(false);
@@ -159,9 +221,14 @@ export default function Users({ language }: UsersProps) {
 
   async function updateRole(role: string) {
     if (!editProfile) return;
-    await api(`/admin/users/${editProfile.id}`, { method: "PATCH", body: JSON.stringify({ role }) });
-    setEditProfile({ ...editProfile, role });
-    await load();
+    try {
+      await api(`/admin/users/${editProfile.id}`, { method: "PATCH", body: JSON.stringify({ role }) });
+      setEditProfile({ ...editProfile, role });
+      await load();
+    } catch (err: any) {
+      // state is only updated after the API succeeds, so there is nothing to roll back
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   async function toggleActive() {
@@ -171,23 +238,31 @@ export default function Users({ language }: UsersProps) {
 
   async function toggleUserActive(userId: string, currentActive: boolean) {
     const newActive = !currentActive;
-    await api(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ isActive: newActive }) });
-    if (editProfile && editProfile.id === userId) {
-      setEditProfile({ ...editProfile, isActive: newActive });
+    try {
+      await api(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ isActive: newActive }) });
+      if (editProfile && editProfile.id === userId) {
+        setEditProfile({ ...editProfile, isActive: newActive });
+      }
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: newActive } : u));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
     }
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: newActive } : u));
   }
 
   async function resetPassword() {
     if (!editProfile) return;
-    const res = await api<{ temporaryPassword: string; emailSent: boolean }>(`/admin/users/${editProfile.id}/reset-password`, { method: "POST" });
-    let msg = `${t(language, "adminTempPassword")}: ${res.temporaryPassword}`;
-    if (res.emailSent) {
-      msg += ` - ${t(language, "adminEmailSent")}`;
-    } else {
-      msg += ` - ${t(language, "adminEmailNotSent")}`;
+    try {
+      await api<{ emailSent: boolean }>(`/admin/users/${editProfile.id}/reset-password`, { method: "POST" });
+      toast.success(t(language, "adminResetEmailSent"));
+    } catch (err: any) {
+      if (err instanceof ApiError && err.status === 503) {
+        toast.error(t(language, "adminResetEmailNotConfigured"));
+      } else if (err instanceof ApiError && err.status === 403) {
+        toast.error(err.message || t(language, "adminActionForbidden"));
+      } else {
+        toast.error(err?.message ?? String(err));
+      }
     }
-    toast.info(msg);
   }
 
   async function saveProfile() {
@@ -200,14 +275,27 @@ export default function Users({ language }: UsersProps) {
       setEmergencyPhoneError(true);
       return;
     }
-    await api(`/admin/users/${editProfile.id}/profile`, {
-      method: "PUT",
-      body: JSON.stringify(profileForm)
-    });
-    setEditingFields(false);
-    const updated = await api<UserProfile>(`/admin/users/${editProfile.id}/profile`);
-    setEditProfile(updated);
-    toast.success(t(language, "adminProfileSaved"));
+    if (hasInvalidSocial(profileForm)) {
+      toast.error(t(language, "profileSocialInvalid"));
+      return;
+    }
+    try {
+      await api(`/admin/users/${editProfile.id}/profile`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...profileForm,
+          ...socialPayload(profileForm),
+          country: profileForm.country || null,
+          publicProfile: profileForm.publicProfile ?? false
+        })
+      });
+      setEditingFields(false);
+      const updated = await api<UserProfile>(`/admin/users/${editProfile.id}/profile`);
+      setEditProfile(updated);
+      toast.success(t(language, "adminProfileSaved"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   async function exportUsersExcel() {
@@ -285,9 +373,11 @@ export default function Users({ language }: UsersProps) {
             </Button>
           </Stack>
         </Stack>
-        {users.length === 0 && (
-          <EmptyState title="Nessun utente" />
+        {loading && <PageSkeleton variant="table" />}
+        {!loading && users.length === 0 && (
+          <EmptyState title={t(language, "emptyUsersTitle")} />
         )}
+        {!loading && (
         <TableContainer component={Paper} variant="outlined">
           <Table>
             <TableHead>
@@ -308,6 +398,7 @@ export default function Users({ language }: UsersProps) {
                       <ActiveSwitch
                         checked={user.isActive}
                         onChange={() => toggleUserActive(user.id, user.isActive)}
+                        disabled={!canAct(user)}
                         activeLabel={t(language, "adminUserActive")}
                         inactiveLabel={t(language, "adminUserInactive")}
                       />
@@ -326,6 +417,7 @@ export default function Users({ language }: UsersProps) {
             </TableBody>
           </Table>
         </TableContainer>
+        )}
       </Stack>
 
       {/* Create User Dialog */}
@@ -350,9 +442,23 @@ export default function Users({ language }: UsersProps) {
             <FormControl fullWidth>
               <InputLabel>{t(language, "usersRolePlaceholder")}</InputLabel>
               <Select value={createRole} label={t(language, "usersRolePlaceholder")} onChange={(e) => setCreateRole(e.target.value)}>
-                {roles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                {myAssignableRoles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
               </Select>
             </FormControl>
+            <TextField
+              select
+              label={t(language, "profileCountry")}
+              value={createCountry}
+              onChange={(e) => setCreateCountry(e.target.value)}
+              fullWidth
+            >
+              <MenuItem value="">{t(language, "profileCountryNone")}</MenuItem>
+              {countryOptions(language).map((c) => <MenuItem key={c.code} value={c.code}>{c.name}</MenuItem>)}
+            </TextField>
+            <FormControlLabel
+              control={<Switch checked={createPublic} onChange={(e) => setCreatePublic(e.target.checked)} />}
+              label={t(language, "profilePublic")}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -388,19 +494,28 @@ export default function Users({ language }: UsersProps) {
                       value={editProfile.role}
                       label={t(language, "usersRolePlaceholder")}
                       onChange={(e) => updateRole(e.target.value)}
+                      disabled={!canAct(editProfile)}
                     >
-                      {roles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                      {(myAssignableRoles.includes(editProfile.role as Role) ? myAssignableRoles : [...myAssignableRoles, editProfile.role]).map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
                     </Select>
                   </FormControl>
                   <ActiveSwitch
                     checked={editProfile.isActive}
                     onChange={toggleActive}
+                    disabled={!canAct(editProfile)}
                     activeLabel={t(language, "adminUserActive")}
                     inactiveLabel={t(language, "adminUserInactive")}
                   />
-                  <Button variant="outlined" size="small" startIcon={<LockResetIcon />} onClick={resetPassword}>
-                    {t(language, "adminResetPasswordButton")}
-                  </Button>
+                  {canManageRole(myRole, editProfile.role) && (
+                    <Button variant="outlined" size="small" startIcon={<LockResetIcon />} onClick={resetPassword}>
+                      {t(language, "adminResetPasswordButton")}
+                    </Button>
+                  )}
+                  {/* Print shortcuts for this user's models/labels (userId, optionally narrowed by the selected event) */}
+                  <PrintActions
+                    language={language}
+                    params={{ userId: editProfile.id, eventId: exportEventId || undefined }}
+                  />
                 </Stack>
 
                 <Divider />
@@ -427,6 +542,22 @@ export default function Users({ language }: UsersProps) {
                     <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileCity")}</Typography>
                       <Typography>{editProfile.city || "-"}</Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="caption" color="text.secondary">{t(language, "profileCountry")}</Typography>
+                      <Typography>{countryName(editProfile.country, language) || "-"}</Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="caption" color="text.secondary">{t(language, "profileSocialSection")}</Typography>
+                      <SocialLinks
+                        language={language}
+                        instagram={editProfile.instagram}
+                        facebook={editProfile.facebook}
+                        website={editProfile.website}
+                        patreon={editProfile.patreon}
+                        pinterest={editProfile.pinterest}
+                        tiktok={editProfile.tiktok}
+                      />
                     </Grid>
                   </Grid>
                 )}
@@ -459,7 +590,15 @@ export default function Users({ language }: UsersProps) {
                       phone: editProfile.phone,
                       city: editProfile.city,
                       emergencyContact: editProfile.emergencyContact,
-                      emergencyContactName: editProfile.emergencyContactName
+                      emergencyContactName: editProfile.emergencyContactName,
+                      instagram: editProfile.instagram,
+                      facebook: editProfile.facebook,
+                      website: editProfile.website,
+                      patreon: editProfile.patreon,
+                      pinterest: editProfile.pinterest,
+                      tiktok: editProfile.tiktok,
+                      country: editProfile.country,
+                      publicProfile: editProfile.publicProfile
                     });
                   }}>
                     {t(language, "profileEditButton")}

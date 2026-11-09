@@ -38,10 +38,14 @@ import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import ImageIcon from "@mui/icons-material/Image";
 import { api } from "../lib/api";
+import { getRole, roleAtLeast } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import EmptyState from "../components/EmptyState";
+import PageSkeleton from "../components/PageSkeleton";
+import PrintActions from "../components/PrintActions";
+import { useConfirm } from "../components/ConfirmDialog";
 import useToast from "../components/useToast";
 
 type Model = {
@@ -54,6 +58,10 @@ type Model = {
   imageUrl?: string | null;
   isTeam: boolean;
   displayNumber?: number | null;
+  /** Visible to owner, judges and managers. */
+  notes?: string | null;
+  /** Managers/admins only: never rendered for other roles. */
+  internalNotes?: string | null;
 };
 type Level = { id: string; name: string; sortOrder?: number | null };
 type ModelDetail = { model: Model & { teamId?: string | null }; images: { id: string; url: string }[] };
@@ -63,8 +71,16 @@ interface ModelsProps {
   language: Language;
 }
 
+const ALLOWED_UPLOAD_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
 export default function Models({ language }: ModelsProps) {
   const [models, setModels] = useState<Model[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { confirm, node: confirmNode } = useConfirm(language);
+  const role = getRole();
+  const isManager = role ? roleAtLeast(role, "manager") : false;
+  const [editNotes, setEditNotes] = useState("");
+  const [editInternalNotes, setEditInternalNotes] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ModelDetail | null>(null);
@@ -86,7 +102,13 @@ export default function Models({ language }: ModelsProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
-    setModels(await api<Model[]>("/models"));
+    try {
+      setModels(await api<Model[]>("/models"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   // Task 06: stampa scheda utente
@@ -96,6 +118,7 @@ export default function Models({ language }: ModelsProps) {
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const url = window.URL.createObjectURL(blob);
       window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
     }
@@ -126,16 +149,22 @@ export default function Models({ language }: ModelsProps) {
       setDetail(null);
       return;
     }
-    const d = await api<ModelDetail>(`/models/${modelId}`);
-    setDetail(d);
-    setEditName(d.model.name);
-    setEditCategoryId(d.model.categoryId);
-    setEditLevelId(d.model.levelId || "");
-    setEditIsTeam(d.model.isTeam || false);
-    setEditTeamId(d.model.teamId ?? "");
-    setExpandedId(modelId);
-    setIsCreating(false);
-    setAttachName("");
+    try {
+      const d = await api<ModelDetail>(`/models/${modelId}`);
+      setDetail(d);
+      setEditName(d.model.name);
+      setEditCategoryId(d.model.categoryId);
+      setEditLevelId(d.model.levelId || "");
+      setEditIsTeam(d.model.isTeam || false);
+      setEditTeamId(d.model.teamId ?? "");
+      setEditNotes(d.model.notes ?? "");
+      setEditInternalNotes(isManager ? d.model.internalNotes ?? "" : "");
+      setExpandedId(modelId);
+      setIsCreating(false);
+      setAttachName("");
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   function closePanel() {
@@ -152,6 +181,8 @@ export default function Models({ language }: ModelsProps) {
     setEditLevelId("");
     setEditIsTeam(false);
     setEditTeamId("");
+    setEditNotes("");
+    setEditInternalNotes("");
     setIsCreating(true);
     setAttachName("");
   }
@@ -166,7 +197,10 @@ export default function Models({ language }: ModelsProps) {
           categoryId: editCategoryId,
           levelId: editLevelId,
           isTeam: editIsTeam,
-          teamId: editIsTeam ? editTeamId : null
+          teamId: editIsTeam ? editTeamId : null,
+          notes: editNotes.trim() || null,
+          // internalNotes is sent only by managers/admins; other roles never touch it
+          ...(isManager ? { internalNotes: editInternalNotes.trim() || null } : {})
         })
       });
       setIsCreating(false);
@@ -181,7 +215,7 @@ export default function Models({ language }: ModelsProps) {
   async function saveModelChanges() {
     if (!detail?.model) return;
     if (editCategoryId !== detail.model.categoryId) {
-      const ok = window.confirm(t(language, "modelsCategoryChangeWarning"));
+      const ok = await confirm(t(language, "modelsCategoryChangeWarning"), { destructive: false });
       if (!ok) return;
     }
     setSavingModel(true);
@@ -193,7 +227,10 @@ export default function Models({ language }: ModelsProps) {
           categoryId: editCategoryId,
           levelId: editLevelId,
           isTeam: editIsTeam,
-          teamId: editIsTeam ? editTeamId : null
+          teamId: editIsTeam ? editTeamId : null,
+          notes: editNotes.trim() || null,
+          // internalNotes is sent only by managers/admins; other roles never touch it
+          ...(isManager ? { internalNotes: editInternalNotes.trim() || null } : {})
         })
       });
       closePanel();
@@ -206,19 +243,29 @@ export default function Models({ language }: ModelsProps) {
   }
 
   async function deleteModel(modelId: string) {
-    if (!window.confirm(t(language, "confirmDelete"))) return;
-    await api(`/models/${modelId}`, { method: "DELETE" });
-    if (expandedId === modelId) closePanel();
-    await load();
+    if (!(await confirm(t(language, "confirmDelete")))) return;
+    try {
+      await api(`/models/${modelId}`, { method: "DELETE" });
+      if (expandedId === modelId) closePanel();
+      await load();
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   async function resizeImageForUpload(file: File): Promise<File | Blob> {
     const maxDimension = 1920;
     const targetMaxBytes = 1.5 * 1024 * 1024;
-    const outputType = file.type === "image/png" ? "image/jpeg" : (file.type || "image/jpeg");
-    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) return file;
+    const isAllowed = ALLOWED_UPLOAD_TYPES.includes(file.type);
+    // Canvas can only encode jpeg/png/webp; "image/jpg" is not a real MIME type for toBlob.
+    const outputType = file.type === "image/webp" ? "image/webp" : "image/jpeg";
     let bitmap: ImageBitmap;
-    try { bitmap = await createImageBitmap(file); } catch { return file; }
+    try {
+      bitmap = await createImageBitmap(file);
+    } catch {
+      if (isAllowed) return file;
+      throw new Error(t(language, "modelImageUnsupported"));
+    }
     let { width, height } = bitmap;
     const needsResize = width > maxDimension || height > maxDimension;
     if (needsResize) {
@@ -230,19 +277,25 @@ export default function Models({ language }: ModelsProps) {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    if (!ctx) { bitmap.close(); return file; }
+    if (!ctx) {
+      bitmap.close();
+      if (isAllowed) return file;
+      throw new Error(t(language, "modelImageUnsupported"));
+    }
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
-    if (!needsResize && file.size <= targetMaxBytes) return file;
+    if (isAllowed && !needsResize && file.size <= targetMaxBytes) return file;
     const qualities = [0.85, 0.75, 0.65, 0.55];
     let candidate: Blob | null = null;
     for (const quality of qualities) {
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, outputType, quality));
-      if (!blob) continue;
+      if (!blob || !ALLOWED_UPLOAD_TYPES.includes(blob.type)) continue;
       candidate = blob;
       if (blob.size <= targetMaxBytes) break;
     }
-    return candidate || file;
+    if (candidate) return candidate;
+    if (isAllowed) return file;
+    throw new Error(t(language, "modelImageUnsupported"));
   }
 
   async function uploadFile(file: File) {
@@ -250,7 +303,8 @@ export default function Models({ language }: ModelsProps) {
     setUploading(true);
     try {
       const optimizedFile = await resizeImageForUpload(file);
-      const contentType = optimizedFile.type || file.type || "image/jpeg";
+      const contentType = optimizedFile.type;
+      if (!ALLOWED_UPLOAD_TYPES.includes(contentType)) throw new Error(t(language, "modelImageUnsupported"));
       const { uploadUrl, publicUrl } = await api<{ uploadUrl: string; publicUrl: string }>(
         `/models/${detail.model.id}/image-upload`,
         { method: "POST", body: JSON.stringify({ contentType }) }
@@ -261,7 +315,9 @@ export default function Models({ language }: ModelsProps) {
       setDetail(d);
       setAttachName("");
     } catch (err: any) {
-      toast.error(err?.message ?? String(err));
+      const status = err?.status;
+      const fallback = status === 404 ? t(language, "modelImageNotFound") : status === 422 ? t(language, "modelImageRejected") : "";
+      toast.error(err?.message || fallback || String(err));
     } finally {
       setUploading(false);
     }
@@ -279,10 +335,14 @@ export default function Models({ language }: ModelsProps) {
 
   async function deleteImage(imageId: string) {
     if (!detail?.model) return;
-    if (!window.confirm(t(language, "confirmDelete"))) return;
-    await api(`/models/${detail.model.id}/images/${imageId}`, { method: "DELETE" });
-    const d = await api<ModelDetail>(`/models/${detail.model.id}`);
-    setDetail(d);
+    if (!(await confirm(t(language, "confirmDelete")))) return;
+    try {
+      await api(`/models/${detail.model.id}/images/${imageId}`, { method: "DELETE" });
+      const d = await api<ModelDetail>(`/models/${detail.model.id}`);
+      setDetail(d);
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
 
   async function loadSettings() {
@@ -355,6 +415,34 @@ export default function Models({ language }: ModelsProps) {
                   ))}
                 </Select>
               </FormControl>
+            )}
+            <TextField
+              label={t(language, "modelsNotesLabel")}
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              fullWidth
+              multiline
+              minRows={2}
+              size="small"
+              inputProps={{ maxLength: 2000 }}
+            />
+            {isManager && (
+              <TextField
+                label={t(language, "modelsInternalNotesLabel")}
+                value={editInternalNotes}
+                onChange={(e) => setEditInternalNotes(e.target.value)}
+                fullWidth
+                multiline
+                minRows={2}
+                size="small"
+                color="warning"
+                inputProps={{ maxLength: 2000 }}
+              />
+            )}
+            {!isCreating && detail?.model && (
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <PrintActions language={language} params={{ modelId: detail.model.id }} />
+              </Stack>
             )}
             <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || (isCreating && !editLevelId)} fullWidth>
               {savingModel ? t(language, "modelsUploading") : isCreating ? t(language, "modelsCreateButton") : t(language, "modelsSaveButton")}
@@ -440,6 +528,7 @@ export default function Models({ language }: ModelsProps) {
   return (
     <PageContainer maxWidth="lg">
       {toast.node}
+      {confirmNode}
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
@@ -461,8 +550,9 @@ export default function Models({ language }: ModelsProps) {
           </Paper>
         </Collapse>
         <SectionCard title={t(language, "modelsTitle")}>
-          {models.length === 0 && (
-            <EmptyState title="Nessun modello" description="Aggiungi il tuo primo modello per iniziare." />
+          {loading && <PageSkeleton variant="table" rows={4} />}
+          {!loading && models.length === 0 && (
+            <EmptyState title={t(language, "emptyModelsTitle")} description={t(language, "emptyModelsDescription")} />
           )}
           {models.length > 0 && (
             <TableContainer component={Paper} variant="outlined">
@@ -491,7 +581,7 @@ export default function Models({ language }: ModelsProps) {
                         {imagesEnabled && (
                           <TableCell sx={{ width: 72, p: 1 }}>
                             {model.imageUrl ? (
-                              <Avatar variant="rounded" src={model.imageUrl} sx={{ width: 40, height: 40 }} />
+                              <Avatar variant="rounded" src={model.imageUrl} imgProps={{ loading: "lazy", decoding: "async" }} sx={{ width: 40, height: 40 }} />
                             ) : (
                               <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: "action.hover" }}>
                                 <ImageIcon fontSize="small" color="disabled" />

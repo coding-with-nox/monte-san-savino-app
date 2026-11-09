@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { judgeAssignmentsTable } from "../persistence/schema";
@@ -7,12 +8,14 @@ import { judgeAssignmentsTable } from "../persistence/schema";
 export const judgeAdminRoutes = new Elysia({ prefix: "/admin/judges" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
-  .get("/assignments", async ({ tenantDb, query }) => {
+  .get("/assignments", async ({ tenantDb, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
-    if (eventId) {
-      return await tenantDb.select().from(judgeAssignmentsTable).where(eq(judgeAssignmentsTable.eventId, eventId as any));
-    }
-    return await tenantDb.select().from(judgeAssignmentsTable);
+    const where = eventId ? eq(judgeAssignmentsTable.eventId, eventId as any) : undefined;
+    return await withPagination(
+      { query: query as any, set: set as any },
+      async () => Number((await tenantDb.select({ n: sql<number>`count(*)::int` }).from(judgeAssignmentsTable).where(where))[0]?.n ?? 0),
+      (page) => applyPage(tenantDb.select().from(judgeAssignmentsTable).where(where).$dynamic(), judgeAssignmentsTable.id, page)
+    );
   }, {
     detail: {
       summary: "Lista assegnazioni giudici",

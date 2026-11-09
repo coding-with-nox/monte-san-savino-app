@@ -20,6 +20,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
+import PageSkeleton from "../components/PageSkeleton";
 import useToast from "../components/useToast";
 
 // ---- Types ----
@@ -37,6 +38,8 @@ type JudgeModel = {
   userId: string;
   name: string | null;
   description: string | null;
+  /** Public model notes (owner/judges/managers). internalNotes is never sent to judges. */
+  notes?: string | null;
 };
 
 type Exhibitor = {
@@ -89,6 +92,12 @@ function groupByExhibitor(models: JudgeModel[]): Exhibitor[] {
   }));
 }
 
+function errorMessage(err: any, language: Language, categoryScoped = false): string {
+  const status = err?.status;
+  if (categoryScoped && (status === 403 || status === 404)) return t(language, "judgeCategoryNotAssigned");
+  return err?.message || t(language, "judgeError");
+}
+
 function exhibitorFullyJudged(ex: Exhibitor): boolean {
   return ex.models.every((m) => m.currentRank !== null);
 }
@@ -113,7 +122,14 @@ export default function Judge({ language }: JudgeProps) {
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [categoryId, setCategoryId] = useState("");
   const [models, setModels] = useState<JudgeModel[]>([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const toast = useToast();
+
+  useEffect(() => {
+    if (eventsLoaded && !modelsLoading) setReady(true);
+  }, [eventsLoaded, modelsLoading]);
 
   // -- home screen --
   const [showAll, setShowAll] = useState(false);
@@ -124,7 +140,12 @@ export default function Judge({ language }: JudgeProps) {
     totalJudges: number;
     completedJudges: number;
   } | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [polling, setPolling] = useState(false);
+  const [pollError, setPollError] = useState(false);
+  // Latest selection, used to discard responses that arrive after a change of event/category.
+  const selectionRef = useRef({ eventId: "", categoryId: "" });
+  selectionRef.current = { eventId, categoryId };
+  const modelsReqRef = useRef(0);
 
   // -- score screen --
   const [screen, setScreen] = useState<Screen>("home");
@@ -139,9 +160,14 @@ export default function Judge({ language }: JudgeProps) {
     try {
       const res = await api<JudgeEvent[]>("/judge/events");
       setEvents(res);
-      if (res.length > 0) setEventId(res[0].eventId);
+      if (res.length > 0) {
+        setModelsLoading(true);
+        setEventId(res[0].eventId);
+      }
     } catch (err: any) {
-      toast.error(err.message || "Error");
+      toast.error(errorMessage(err, language));
+    } finally {
+      setEventsLoaded(true);
     }
   }
 
@@ -158,32 +184,72 @@ export default function Judge({ language }: JudgeProps) {
     const query = new URLSearchParams();
     if (eventId) query.set("eventId", eventId);
     if (categoryId) query.set("categoryId", categoryId);
+    const reqId = ++modelsReqRef.current;
+    setModelsLoading(true);
     try {
-      setModels(await api<JudgeModel[]>(`/judge/models?${query.toString()}`));
+      const res = await api<JudgeModel[]>(`/judge/models?${query.toString()}`);
+      if (reqId === modelsReqRef.current) setModels(res);
     } catch (err: any) {
-      toast.error(err.message || "Error");
+      if (reqId === modelsReqRef.current) toast.error(errorMessage(err, language, !!categoryId));
+    } finally {
+      if (reqId === modelsReqRef.current) setModelsLoading(false);
     }
   }
 
   useEffect(() => {
     loadEvents();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
   useEffect(() => {
     setCategoryId("");
     setCompletionState(null);
+    setPolling(false);
+    setPollError(false);
     loadCategories(eventId);
     loadModels();
   }, [eventId]);
 
   useEffect(() => {
     setCompletionState(null);
+    setPolling(false);
+    setPollError(false);
     loadModels();
   }, [categoryId]);
 
+  // Completion polling: bound to the selected category, stopped on change/unmount,
+  // late responses ignored, paused while the tab is hidden.
+  useEffect(() => {
+    if (!polling || !categoryId) return;
+    let cancelled = false;
+    const cid = categoryId;
+    const id = setInterval(async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      try {
+        const poll = await api<any>(`/judge/categories/${cid}/completion`);
+        if (cancelled || selectionRef.current.categoryId !== cid) return;
+        setPollError(false);
+        setCompletionState({ allDone: poll.allDone, totalJudges: poll.totalJudges, completedJudges: poll.completedJudges });
+        if (poll.allDone || poll.status === "closed") setPolling(false);
+      } catch (err: any) {
+        if (cancelled || selectionRef.current.categoryId !== cid) return;
+        if (err?.status === 403 || err?.status === 404) {
+          setPolling(false);
+          toast.error(t(language, "judgeCategoryNotAssigned"));
+        } else {
+          setPollError(true);
+        }
+      }
+    }, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [polling, categoryId]);
+
   // ---- Derived state ----
-  const allExhibitors = groupByExhibitor(models);
+  // Defensive: keep only the selected category even if the backend ignores the filter.
+  const visibleModels = categoryId ? models.filter((m) => m.categoryId === categoryId) : models;
+  const allExhibitors = groupByExhibitor(visibleModels);
 
   const displayedExhibitors = allExhibitors.filter((ex) => {
     if (!showAll && exhibitorFullyJudged(ex)) return false;
@@ -196,27 +262,25 @@ export default function Judge({ language }: JudgeProps) {
   // ---- Complete ----
   async function handleComplete() {
     if (!categoryId) return;
+    const cid = categoryId;
     setCompleting(true);
     try {
       const res = await api<{ completed: boolean; allDone: boolean; totalJudges: number; completedJudges: number }>(
-        `/judge/categories/${categoryId}/complete`,
+        `/judge/categories/${cid}/complete`,
         { method: "POST" }
       );
+      if (selectionRef.current.categoryId !== cid) return;
       setCompletionState({ allDone: res.allDone, totalJudges: res.totalJudges, completedJudges: res.completedJudges });
-      if (!res.allDone) {
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(async () => {
-          try {
-            const poll = await api<any>(`/judge/categories/${categoryId}/completion`);
-            setCompletionState({ allDone: poll.allDone, totalJudges: poll.totalJudges, completedJudges: poll.completedJudges });
-            if (poll.allDone || poll.status === "closed") {
-              if (pollRef.current) clearInterval(pollRef.current);
-            }
-          } catch {}
-        }, 5000);
-      }
+      setPollError(false);
+      setPolling(!res.allDone);
     } catch (err: any) {
-      toast.error(err.message || "Error");
+      if (selectionRef.current.categoryId !== cid) return;
+      if (err?.status === 409) {
+        // Backend explains which/how many models are still unvoted: show its message.
+        toast.error(err.message || t(language, "judgeCompleteConflict"));
+      } else {
+        toast.error(errorMessage(err, language, true));
+      }
     } finally {
       setCompleting(false);
     }
@@ -272,8 +336,9 @@ export default function Judge({ language }: JudgeProps) {
       const query = new URLSearchParams();
       if (eventId) query.set("eventId", eventId);
       if (categoryId) query.set("categoryId", categoryId);
-      const fresh = await api<JudgeModel[]>(`/judge/models?${query.toString()}`);
-      setModels(fresh);
+      const freshAll = await api<JudgeModel[]>(`/judge/models?${query.toString()}`);
+      const fresh = categoryId ? freshAll.filter((m) => m.categoryId === categoryId) : freshAll;
+      setModels(freshAll);
       const grouped = groupByExhibitor(fresh);
       const updated = grouped.find((ex) => ex.userId === activeExhibitor.userId);
       if (updated) {
@@ -283,7 +348,7 @@ export default function Judge({ language }: JudgeProps) {
       setSelectedScore(null);
       setDisplayMode(true);
     } catch (err: any) {
-      toast.error(err.message || "Error");
+      toast.error(errorMessage(err, language));
     } finally {
       setSubmitting(false);
     }
@@ -302,7 +367,8 @@ export default function Judge({ language }: JudgeProps) {
       {/* ============================================================
           SCREEN 1: Home – Exhibitor grid
          ============================================================ */}
-      {screen === "home" && (
+      {screen === "home" && !ready && <PageSkeleton variant="cards" rows={8} />}
+      {screen === "home" && ready && (
         <Stack spacing={2}>
           {/* Top controls row */}
           <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
@@ -375,6 +441,12 @@ export default function Judge({ language }: JudgeProps) {
                   : `${t(language, "judgeWaitingOthers")} (${completionState.completedJudges}/${completionState.totalJudges} ${t(language, "judgeCompletedCount")})`}
               </Typography>
             </Paper>
+          )}
+
+          {pollError && (
+            <Typography variant="body2" color="warning.main">
+              {t(language, "judgePollError")}
+            </Typography>
           )}
 
           {/* "All judged" message in subtractive mode */}
@@ -533,7 +605,7 @@ export default function Judge({ language }: JudgeProps) {
                   setSelectedModels(new Set(activeExhibitor!.models.map(m => m.id)));
                 }
               }}>
-                {selectedModels.size === activeExhibitor!.models.length ? "Deseleziona tutti" : "Seleziona tutti"}
+                {selectedModels.size === activeExhibitor!.models.length ? t(language, "judgeDeselectAll") : t(language, "judgeSelectAll")}
               </Button>
             </Box>
           )}
@@ -587,7 +659,14 @@ export default function Judge({ language }: JudgeProps) {
                       }}
                       onClick={(e) => e.stopPropagation()}
                     />
-                    <Typography variant="body2">{label}</Typography>
+                    <Box>
+                      <Typography variant="body2">{label}</Typography>
+                      {model.notes && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", whiteSpace: "pre-wrap" }}>
+                          {t(language, "judgeModelNotes")}: {model.notes}
+                        </Typography>
+                      )}
+                    </Box>
                   </Box>
                   {model.currentRank !== null && (
                     <Chip
@@ -610,13 +689,13 @@ export default function Judge({ language }: JudgeProps) {
           {!displayMode && (
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 1 }}>
               {selectedModels.size > 0
-                ? `${selectedModels.size} modell${selectedModels.size === 1 ? "o" : "i"} selezionat${selectedModels.size === 1 ? "o" : "i"}`
-                : "Nessun modello selezionato"}
+                ? t(language, selectedModels.size === 1 ? "judgeSelectedOne" : "judgeSelectedMany").replace("{n}", String(selectedModels.size))
+                : t(language, "judgeNoneSelected")}
             </Typography>
           )}
           {displayMode && activeExhibitor && (
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 1 }}>
-              {`Tutti i modelli (${activeExhibitor.models.length})`}
+              {t(language, "judgeAllModels").replace("{n}", String(activeExhibitor.models.length))}
             </Typography>
           )}
 

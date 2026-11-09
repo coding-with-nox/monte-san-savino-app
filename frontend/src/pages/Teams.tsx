@@ -30,6 +30,7 @@ import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import EmptyState from "../components/EmptyState";
+import PageSkeleton from "../components/PageSkeleton";
 import useToast from "../components/useToast";
 
 type TeamMate = { id?: string; name: string; surname: string; role: string; email?: string };
@@ -50,6 +51,7 @@ interface TeamsProps {
 
 export default function Teams({ language }: TeamsProps) {
   const [teams, setTeams] = useState<Team[]>([]);
+  const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -76,6 +78,8 @@ export default function Teams({ language }: TeamsProps) {
       setTeams(await api<Team[]>("/teams"));
     } catch {
       setTeams([]);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -363,10 +367,11 @@ export default function Teams({ language }: TeamsProps) {
           </Collapse>
 
           <SectionCard title={t(language, "teamsTitle")}>
-          {teams.length === 0 && (
+          {loading && <PageSkeleton variant="table" rows={4} />}
+          {!loading && teams.length === 0 && (
             <EmptyState title={t(language, "teamsNoTeams")} description="" />
           )}
-          {teams.length > 0 && (
+          {!loading && teams.length > 0 && (
             <TableContainer component={Paper} variant="outlined">
               <Table>
                 <TableHead>

@@ -24,15 +24,25 @@ export function clearToken() {
 }
 
 export function decodeJwt(token: string): any {
-  const parts = token.split(".");
-  if (parts.length < 2) { try { return JSON.parse(atob(token)); } catch { return {}; } }
-  const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-  const padded = payload.padEnd(payload.length + (4 - (payload.length % 4)) % 4, "=");
-  return JSON.parse(atob(padded));
+  // Uniform contract: any undecodable token yields an empty object (never throws).
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return JSON.parse(atob(token));
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(payload.length + (4 - (payload.length % 4)) % 4, "=");
+    return JSON.parse(atob(padded));
+  } catch {
+    return {};
+  }
 }
 export function getRole(): Role | null {
   const t = getToken(); if (!t) return null;
   try { return (decodeJwt(t).role as Role) ?? null; } catch { return null; }
+}
+export function getUserId(): string | null {
+  const t = getToken(); if (!t) return null;
+  const sub = decodeJwt(t).sub;
+  return typeof sub === "string" ? sub : null;
 }
 const order: Role[] = ["user","staff","judge","manager","admin"];
 export function roleAtLeast(actual: Role, minimum: Role) { return order.indexOf(actual) >= order.indexOf(minimum); }

@@ -10,7 +10,8 @@
     "drizzle:push": "bunx drizzle-kit push",
     "seed": "bun src/bootstrap/seed.ts",
     "test:setup": "PG_DB=tenant_db_test bunx drizzle-kit push",
-    "test": "bun test"
+    "test": "bun test",
+    "test:coverage": "bun test --coverage"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.0.0",

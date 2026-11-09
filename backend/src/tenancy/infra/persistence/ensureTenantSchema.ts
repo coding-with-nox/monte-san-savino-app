@@ -1,10 +1,90 @@
 import { Pool } from "pg";
 import { getTenantDbConfigFromEnv } from "../tenantDbFactory";
+import { logger } from "../../../shared/infra/logger/logger";
+
+const REGISTRATIONS_UNIQUE_INDEX = "ux_registrations_user_event_model";
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Creates the uniqueness guard on registrations (user, event, model-or-nil) ONLY when the table has
+ * no duplicates; otherwise it logs a warning and leaves dedup to the enrollment code
+ * (advisory lock + conditional insert). Returns what happened, for tests/observability.
+ */
+export async function ensureRegistrationsUniqueIndex(
+  pool: { query: (sql: string) => Promise<{ rows: any[] }> },
+  log: { warn: (obj: any, msg?: string) => void; info: (obj: any, msg?: string) => void } = logger
+): Promise<"skipped-no-table" | "exists" | "created" | "duplicates"> {
+  const t = await pool.query(`SELECT to_regclass('public.registrations') AS t, to_regclass('public.${REGISTRATIONS_UNIQUE_INDEX}') AS i`);
+  if (!t.rows[0]?.t) return "skipped-no-table";
+  if (t.rows[0]?.i) return "exists";
+  const dup = await pool.query(`
+    SELECT COALESCE(SUM(c - 1), 0)::int AS duplicate_rows
+    FROM (
+      SELECT COUNT(*) AS c
+      FROM registrations
+      GROUP BY user_id, event_id, COALESCE(model_id, '${NIL_UUID}'::uuid)
+      HAVING COUNT(*) > 1
+    ) d
+  `);
+  const duplicateRows = Number(dup.rows[0]?.duplicate_rows ?? 0);
+  if (duplicateRows > 0) {
+    log.warn(
+      { duplicateRows, index: REGISTRATIONS_UNIQUE_INDEX },
+      `registrations contains ${duplicateRows} duplicate row(s) (same user, event, model): unique index NOT created. Remove the duplicates manually and restart to create it; meanwhile enrollment deduplicates in code.`
+    );
+    return "duplicates";
+  }
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ${REGISTRATIONS_UNIQUE_INDEX}
+    ON registrations (user_id, event_id, COALESCE(model_id, '${NIL_UUID}'::uuid))
+  `);
+  log.info({ index: REGISTRATIONS_UNIQUE_INDEX }, "registrations unique index created");
+  return "created";
+}
+
+/**
+ * Constant key for the schema-maintenance advisory lock. Arbitrary but fixed (ASCII "MSSA" + "SCHM"),
+ * shared by every replica so only one at a time runs the startup maintenance (repair UPDATEs, DDL).
+ */
+export const SCHEMA_MAINTENANCE_LOCK_KEY = "5062000001234567";
+
+/** Secondary (non-unique) indexes for FK-like lookup columns. Names match schema.ts. */
+export const PERFORMANCE_INDEXES: ReadonlyArray<{ name: string; table: string; column: string }> = [
+  { name: "ix_registrations_user_id", table: "registrations", column: "user_id" },
+  { name: "ix_registrations_event_id", table: "registrations", column: "event_id" },
+  { name: "ix_registrations_model_id", table: "registrations", column: "model_id" },
+  { name: "ix_models_category_id", table: "models", column: "category_id" },
+  { name: "ix_models_user_id", table: "models", column: "user_id" },
+  { name: "ix_categories_event_id", table: "categories", column: "event_id" },
+  { name: "ix_model_images_model_id", table: "model_images", column: "model_id" },
+  { name: "ix_model_team_members_model_id", table: "model_team_members", column: "model_id" },
+  { name: "ix_team_mates_team_id", table: "team_mates", column: "team_id" },
+  { name: "ix_special_mentions_event_id", table: "special_mentions", column: "event_id" },
+  { name: "ix_payments_registration_id", table: "payments", column: "registration_id" }
+];
+
+/** Idempotent; skips tables that do not exist (guarded with to_regclass). */
+export function buildPerformanceIndexStatements(): string[] {
+  return PERFORMANCE_INDEXES.map(
+    ({ name, table, column }) => `
+      DO $$
+      BEGIN
+        IF to_regclass('public.${table}') IS NOT NULL THEN
+          CREATE INDEX IF NOT EXISTS ${name} ON ${table} (${column});
+        END IF;
+      END $$;
+    `
+  );
+}
 
 export async function ensureTenantSchema() {
   const cfg = getTenantDbConfigFromEnv();
-  const pool = new Pool(cfg);
+  // Single dedicated connection: advisory locks are per-session, so lock/maintenance/unlock must share one client.
+  const pool = new Pool({ ...cfg, max: 1 });
+  let locked = false;
   try {
+    await pool.query("SELECT pg_advisory_lock($1::bigint)", [SCHEMA_MAINTENANCE_LOCK_KEY]);
+    locked = true;
     await pool.query(`
       ALTER TABLE IF EXISTS judge_assignments
       ADD COLUMN IF NOT EXISTS category_id uuid;
@@ -105,6 +185,22 @@ export async function ensureTenantSchema() {
       DROP INDEX IF EXISTS ux_votes_judge_model;
     `);
 
+    // Deterministic "latest vote": monotonic tiebreaker. Votes stay append-only (no unique constraint).
+    // ADD COLUMN ... bigserial on an existing table rewrites it once (fills existing rows from the
+    // sequence); IF NOT EXISTS makes it idempotent and safe if several instances start concurrently.
+    // Guarded by an explicit existence check (like categories.seq_id) so no orphan sequence is created.
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.votes') IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'votes' AND column_name = 'seq'
+        ) THEN
+          ALTER TABLE votes ADD COLUMN IF NOT EXISTS seq bigserial;
+        END IF;
+      END $$;
+    `);
+
     // Remove old team tables
     await pool.query(`DROP TABLE IF EXISTS team_members CASCADE;`);
     await pool.query(`DROP TABLE IF EXISTS team_roles CASCADE;`);
@@ -158,6 +254,41 @@ export async function ensureTenantSchema() {
         ADD COLUMN IF NOT EXISTS level_id uuid,
         ADD COLUMN IF NOT EXISTS display_number integer,
         ADD COLUMN IF NOT EXISTS is_team boolean NOT NULL DEFAULT false;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS models
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS internal_notes text;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS user_profiles
+        ADD COLUMN IF NOT EXISTS instagram text,
+        ADD COLUMN IF NOT EXISTS facebook text,
+        ADD COLUMN IF NOT EXISTS website text;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS user_profiles
+        ADD COLUMN IF NOT EXISTS patreon text,
+        ADD COLUMN IF NOT EXISTS pinterest text,
+        ADD COLUMN IF NOT EXISTS tiktok text,
+        ADD COLUMN IF NOT EXISTS country text,
+        ADD COLUMN IF NOT EXISTS public_profile boolean NOT NULL DEFAULT false;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS registrations
+        ADD COLUMN IF NOT EXISTS absent boolean NOT NULL DEFAULT false;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS levels
+        ADD COLUMN IF NOT EXISTS free_to_enter boolean NOT NULL DEFAULT false;
+    `);
+    await pool.query(`
+      ALTER TABLE IF EXISTS categories
+        ADD COLUMN IF NOT EXISTS class_number text,
+        ADD COLUMN IF NOT EXISTS level_id uuid,
+        ADD COLUMN IF NOT EXISTS class_group text,
+        ADD COLUMN IF NOT EXISTS presentation_order integer,
+        ADD COLUMN IF NOT EXISTS out_of_competition boolean NOT NULL DEFAULT false;
     `);
     // Backfill display_number from code for models that have code but no display_number
     await pool.query(`
@@ -279,7 +410,15 @@ export async function ensureTenantSchema() {
     await pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ux_awards_category_model ON awards (category_id, model_id)
     `);
+
+    await ensureRegistrationsUniqueIndex(pool);
+
+    for (const stmt of buildPerformanceIndexStatements()) await pool.query(stmt);
   } finally {
-    await pool.end();
+    try {
+      if (locked) await pool.query("SELECT pg_advisory_unlock($1::bigint)", [SCHEMA_MAINTENANCE_LOCK_KEY]);
+    } finally {
+      await pool.end();
+    }
   }
 }

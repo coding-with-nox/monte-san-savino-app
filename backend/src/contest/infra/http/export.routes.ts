@@ -1,10 +1,14 @@
 import { Elysia, t } from "elysia";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import QRCode from "qrcode";
+import { escapeHtml } from "../../../shared/domain/escapeHtml";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable } from "../persistence/schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
+import { classPrintRoutes } from "./class-print.routes";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
+import { exportLimitError, exportMaxRows, mapInChunks, QR_CHUNK_SIZE } from "./exportLimits";
 
 type ExportSettings = {
   includeModelCode: boolean;
@@ -306,9 +310,107 @@ function formatModelCodeForExport(settings: ExportSettings, code: number | null 
   });
 }
 
-async function getLabelRows(tenantDb: any, eventId: string, exportSettings: ExportSettings) {
+const SOCIAL_BASE_URL: Record<string, string> = {
+  instagram: "https://instagram.com/",
+  facebook: "https://facebook.com/",
+  patreon: "https://www.patreon.com/",
+  pinterest: "https://www.pinterest.com/",
+  tiktok: "https://www.tiktok.com/@"
+};
+
+export function socialHref(kind: "instagram" | "facebook" | "patreon" | "pinterest" | "tiktok", value: string | null | undefined): string | null {
+  const v = (value ?? "").trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[A-Za-z0-9._]+$/.test(v)) {
+    return `${SOCIAL_BASE_URL[kind]}${v}`;
+  }
+  return null;
+}
+
+function renderLink(href: string | null, label: string | null | undefined) {
+  const text = (label ?? "").trim();
+  if (!text) return "";
+  if (!href || !/^https?:\/\//i.test(href)) return escapeHtml(text);
+  return `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`;
+}
+
+export function renderSocialHtml(u: {
+  instagram?: string | null; facebook?: string | null; website?: string | null;
+  patreon?: string | null; pinterest?: string | null; tiktok?: string | null;
+}) {
+  const parts: string[] = [];
+  if (u.instagram) parts.push(`IG: ${renderLink(socialHref("instagram", u.instagram), u.instagram)}`);
+  if (u.facebook) parts.push(`FB: ${renderLink(socialHref("facebook", u.facebook), u.facebook)}`);
+  if (u.website) parts.push(`Web: ${renderLink(u.website, u.website)}`);
+  if (u.patreon) parts.push(`Patreon: ${renderLink(socialHref("patreon", u.patreon), u.patreon)}`);
+  if (u.pinterest) parts.push(`Pinterest: ${renderLink(socialHref("pinterest", u.pinterest), u.pinterest)}`);
+  if (u.tiktok) parts.push(`TikTok: ${renderLink(socialHref("tiktok", u.tiktok), u.tiktok)}`);
+  return parts.join("<br/>");
+}
+
+export function modelQrPayload(modelId: string) {
+  return `model:${modelId}`;
+}
+
+async function modelQrDataUrl(modelId: string) {
+  return QRCode.toDataURL(modelQrPayload(modelId), { margin: 1, width: 160, errorCorrectionLevel: "M" });
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type ExportFilters = { eventId?: string; categoryId?: string; userId?: string; modelId?: string };
+export type ExportFiltersResult =
+  | { ok: true; filters: ExportFilters }
+  | { ok: false; status: 422; error: string };
+
+/**
+ * Parses optional, combinable export filters (all uuid). Invalid uuid -> 422.
+ * With requireEventUnlessScoped, eventId is mandatory unless userId or modelId is present.
+ */
+export function parseExportFilters(
+  query: Record<string, unknown> | undefined,
+  opts: { requireEventUnlessScoped?: boolean } = {}
+): ExportFiltersResult {
+  const filters: ExportFilters = {};
+  for (const key of ["eventId", "categoryId", "userId", "modelId"] as const) {
+    const raw = query?.[key];
+    if (raw === undefined || raw === null || raw === "") continue;
+    const value = String(raw);
+    if (!UUID_RE.test(value)) return { ok: false, status: 422, error: `${key} must be a valid uuid` };
+    filters[key] = value;
+  }
+  if (opts.requireEventUnlessScoped && !filters.eventId && !filters.userId && !filters.modelId) {
+    return { ok: false, status: 422, error: "eventId is required unless userId or modelId is provided" };
+  }
+  return { ok: true, filters };
+}
+
+function buildModelFilterConditions(filters: ExportFilters) {
+  const conds: any[] = [];
+  if (filters.eventId) conds.push(eq(categoriesTable.eventId, filters.eventId as any));
+  if (filters.categoryId) conds.push(eq(modelsTable.categoryId, filters.categoryId as any));
+  if (filters.userId) conds.push(eq(modelsTable.userId, filters.userId as any));
+  if (filters.modelId) conds.push(eq(modelsTable.id, filters.modelId as any));
+  return conds;
+}
+
+export const exportFilterQuerySchema = t.Object({
+  eventId: t.Optional(t.String()),
+  categoryId: t.Optional(t.String()),
+  userId: t.Optional(t.String()),
+  modelId: t.Optional(t.String())
+});
+
+function filtersFileSuffix(filters: ExportFilters) {
+  return [filters.eventId, filters.userId, filters.modelId].filter(Boolean).join("-") || undefined;
+}
+
+async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSettings: ExportSettings) {
+  const conds = buildModelFilterConditions(filters);
   const rows = await tenantDb
     .select({
+      modelId: modelsTable.id,
       userEmail: usersTable.email,
       firstName: userProfilesTable.firstName,
       lastName: userProfilesTable.lastName,
@@ -316,19 +418,27 @@ async function getLabelRows(tenantDb: any, eventId: string, exportSettings: Expo
       categorySeqId: categoriesTable.seqId,
       modelName: modelsTable.name,
       modelCode: modelsTable.code,
-      displayNumber: modelsTable.displayNumber
+      displayNumber: modelsTable.displayNumber,
+      notes: modelsTable.notes
     })
     .from(modelsTable)
     .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
     .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
     .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId))
-    .where(eq(categoriesTable.eventId, eventId as any));
+    .where(conds.length ? and(...conds) : undefined)
+    .limit(exportMaxRows() + 1);
 
-  return (rows as any[]).map((row) => ({
+  // null = over EXPORT_MAX_ROWS (callers answer 413); checked before generating any QR code
+  if (exportLimitError((rows as any[]).length)) return null;
+
+  return mapInChunks(rows as any[], QR_CHUNK_SIZE, async (row) => ({
     utente: fullName(row.firstName, row.lastName, row.userEmail) || row.userEmail || "",
     categoria: row.categoryName ?? "",
     nomeModello: row.modelName ?? "",
-    codice: formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber)
+    codice: formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber),
+    note: row.notes ?? "",
+    qrPayload: modelQrPayload(row.modelId),
+    qr: await modelQrDataUrl(row.modelId)
   }));
 }
 
@@ -352,7 +462,11 @@ const managerExportRoutes = new Elysia()
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
         displayNumber: modelsTable.displayNumber,
-        checkedIn: registrationsTable.checkedIn
+        checkedIn: registrationsTable.checkedIn,
+        absent: registrationsTable.absent,
+        patreon: userProfilesTable.patreon,
+        pinterest: userProfilesTable.pinterest,
+        tiktok: userProfilesTable.tiktok
       })
       .from(registrationsTable)
       .leftJoin(eventsTable, eq(eventsTable.id, registrationsTable.eventId))
@@ -361,9 +475,11 @@ const managerExportRoutes = new Elysia()
       .leftJoin(modelsTable, eq(modelsTable.id, registrationsTable.modelId))
       .leftJoin(categoriesTable, eq(categoriesTable.id, registrationsTable.categoryId));
 
-    const rows = eventId
-      ? await queryBuilder.where(eq(registrationsTable.eventId, eventId as any))
-      : await queryBuilder;
+    const rows = await (eventId
+      ? queryBuilder.where(eq(registrationsTable.eventId, eventId as any)).limit(exportMaxRows() + 1)
+      : queryBuilder.limit(exportMaxRows() + 1));
+    const tooLarge = exportLimitError(rows.length);
+    if (tooLarge) { set.status = 413; return tooLarge; }
 
     const excelRows = rows.map((row: any) => {
       const base: Record<string, string> = {
@@ -372,7 +488,11 @@ const managerExportRoutes = new Elysia()
         partecipante: fullName(row.participant, row.participantLastName, row.email ?? row.userId),
         modello: row.modelName ?? "",
         categoria: row.categoryName ?? "",
-        checkIn: row.checkedIn ? "true" : "false"
+        checkIn: row.checkedIn ? "true" : "false",
+        assente: row.absent ? "true" : "false",
+        patreon: row.patreon ?? "",
+        pinterest: row.pinterest ?? "",
+        tiktok: row.tiktok ?? ""
       };
 
       if (exportSettings.includeParticipantEmail) {
@@ -414,9 +534,11 @@ const managerExportRoutes = new Elysia()
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId));
-    const rows = categoryId
-      ? await baseQuery.where(eq(modelsTable.categoryId, categoryId as any))
-      : await baseQuery;
+    const rows = await (categoryId
+      ? baseQuery.where(eq(modelsTable.categoryId, categoryId as any)).limit(exportMaxRows() + 1)
+      : baseQuery.limit(exportMaxRows() + 1));
+    const tooLarge = exportLimitError(rows.length);
+    if (tooLarge) { set.status = 413; return tooLarge; }
 
     const excelRows = rows.map((row: any) => {
       const base: Record<string, string> = {
@@ -458,12 +580,21 @@ const managerExportRoutes = new Elysia()
         userId: registrationsTable.userId,
         email: usersTable.email,
         firstName: userProfilesTable.firstName,
-        lastName: userProfilesTable.lastName
+        lastName: userProfilesTable.lastName,
+        instagram: userProfilesTable.instagram,
+        facebook: userProfilesTable.facebook,
+        website: userProfilesTable.website,
+        patreon: userProfilesTable.patreon,
+        pinterest: userProfilesTable.pinterest,
+        tiktok: userProfilesTable.tiktok
       })
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
       .leftJoin(userProfilesTable, eq(userProfilesTable.userId, registrationsTable.userId))
-      .where(eq(registrationsTable.eventId, eventId as any));
+      .where(eq(registrationsTable.eventId, eventId as any))
+      .limit(exportMaxRows() + 1);
+    const usersTooLarge = exportLimitError((allUserRows as any[]).length);
+    if (usersTooLarge) { set.status = 413; return usersTooLarge; }
     const seenUserIds = new Set<string>();
     const users = (allUserRows as any[]).filter((u) => {
       if (seenUserIds.has(u.userId)) return false;
@@ -483,7 +614,10 @@ const managerExportRoutes = new Elysia()
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .where(eq(categoriesTable.eventId, eventId as any));
+      .where(eq(categoriesTable.eventId, eventId as any))
+      .limit(exportMaxRows() + 1);
+    const modelsTooLarge = exportLimitError((models as any[]).length);
+    if (modelsTooLarge) { set.status = 413; return modelsTooLarge; }
 
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
@@ -509,6 +643,12 @@ const managerExportRoutes = new Elysia()
       if (exportSettings.includeParticipantEmail) {
         base.email = u.email;
       }
+      base.instagram = u.instagram ?? "";
+      base.facebook = u.facebook ?? "";
+      base.website = u.website ?? "";
+      base.patreon = u.patreon ?? "";
+      base.pinterest = u.pinterest ?? "";
+      base.tiktok = u.tiktok ?? "";
       return base;
     });
 
@@ -542,12 +682,21 @@ const managerExportRoutes = new Elysia()
         userId: registrationsTable.userId,
         email: usersTable.email,
         firstName: userProfilesTable.firstName,
-        lastName: userProfilesTable.lastName
+        lastName: userProfilesTable.lastName,
+        instagram: userProfilesTable.instagram,
+        facebook: userProfilesTable.facebook,
+        website: userProfilesTable.website,
+        patreon: userProfilesTable.patreon,
+        pinterest: userProfilesTable.pinterest,
+        tiktok: userProfilesTable.tiktok
       })
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
       .leftJoin(userProfilesTable, eq(userProfilesTable.userId, registrationsTable.userId))
-      .where(eq(registrationsTable.eventId, eventId as any));
+      .where(eq(registrationsTable.eventId, eventId as any))
+      .limit(exportMaxRows() + 1);
+    const usersTooLargePdf = exportLimitError((allUserRowsPdf as any[]).length);
+    if (usersTooLargePdf) { set.status = 413; return usersTooLargePdf; }
     const seenUserIdsPdf = new Set<string>();
     const users = (allUserRowsPdf as any[]).filter((u) => {
       if (seenUserIdsPdf.has(u.userId)) return false;
@@ -566,7 +715,10 @@ const managerExportRoutes = new Elysia()
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .where(eq(categoriesTable.eventId, eventId as any));
+      .where(eq(categoriesTable.eventId, eventId as any))
+      .limit(exportMaxRows() + 1);
+    const modelsTooLarge = exportLimitError((models as any[]).length);
+    if (modelsTooLarge) { set.status = 413; return modelsTooLarge; }
 
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
@@ -580,18 +732,19 @@ const managerExportRoutes = new Elysia()
       .map((u) => {
         const participant = fullName(u.firstName, u.lastName, u.email);
         const modelList = modelsByUser.get(u.userId) ?? [];
-        return `<tr><td>${participant}</td><td>${u.email}</td><td>${modelList.join("<br/>") || "-"}</td></tr>`;
+        const modelsHtml = modelList.map((m) => escapeHtml(m)).join("<br/>") || "-";
+        return `<tr><td>${escapeHtml(participant)}</td><td>${escapeHtml(u.email)}</td><td>${renderSocialHtml(u) || "-"}</td><td>${modelsHtml}</td></tr>`;
       })
       .join("");
 
     set.headers["content-type"] = "text/html; charset=utf-8";
-    set.headers["content-disposition"] = `inline; filename=\"users-by-event-${eventId}.html\"`;
+    set.headers["content-disposition"] = `inline; filename=\"users-by-event-${normalizeFilePart(eventId, "event")}.html\"`;
 
     return `<!DOCTYPE html>
 <html>
   <head>
     <meta charset=\"utf-8\" />
-    <title>Export utenti ${event?.name ?? eventId}</title>
+    <title>Export utenti ${escapeHtml(event?.name ?? eventId)}</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 24px; }
       h1 { margin-bottom: 8px; }
@@ -606,17 +759,18 @@ const managerExportRoutes = new Elysia()
   </head>
   <body>
     <h1>Utenti per evento</h1>
-    <p><strong>Evento:</strong> ${event?.name ?? eventId}</p>
+    <p><strong>Evento:</strong> ${escapeHtml(event?.name ?? eventId)}</p>
     <table>
       <thead>
         <tr>
           <th>Partecipante</th>
           <th>Email</th>
+          <th>Social</th>
           <th>Modelli</th>
         </tr>
       </thead>
       <tbody>
-        ${rows || "<tr><td colspan=\"3\">Nessun dato</td></tr>"}
+        ${rows || "<tr><td colspan=\"4\">Nessun dato</td></tr>"}
       </tbody>
     </table>
     <script>window.onload = () => window.print();</script>
@@ -630,16 +784,100 @@ const managerExportRoutes = new Elysia()
       security: [{ bearerAuth: [] }]
     }
   })
-  .get("/labels/data", async ({ tenantDb, query, set }) => {
-    const eventId = query?.eventId ? String(query.eventId) : "";
-    if (!eventId) {
-      set.status = 400;
-      return { error: "eventId is required" };
+  .get("/models/print", async ({ tenantDb, query, set }) => {
+    const parsed = parseExportFilters(query as any);
+    if (!parsed.ok) {
+      set.status = parsed.status;
+      return { error: parsed.error };
     }
     const exportSettings = await loadExportSettings(tenantDb);
-    return await getLabelRows(tenantDb, eventId, exportSettings);
+
+    const filters = buildModelFilterConditions(parsed.filters);
+    const baseQuery = tenantDb
+      .select({
+        id: modelsTable.id,
+        name: modelsTable.name,
+        description: modelsTable.description,
+        notes: modelsTable.notes,
+        code: modelsTable.code,
+        displayNumber: modelsTable.displayNumber,
+        categoryName: categoriesTable.name,
+        categorySeqId: categoriesTable.seqId,
+        userEmail: usersTable.email,
+        firstName: userProfilesTable.firstName,
+        lastName: userProfilesTable.lastName
+      })
+      .from(modelsTable)
+      .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+      .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
+      .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId));
+    const rows = (await (filters.length
+      ? baseQuery.where(and(...filters)).limit(exportMaxRows() + 1)
+      : baseQuery.limit(exportMaxRows() + 1))) as any[];
+    const tooLarge = exportLimitError(rows.length);
+    if (tooLarge) { set.status = 413; return tooLarge; }
+
+    const cards = await mapInChunks(rows, QR_CHUNK_SIZE, async (row) => {
+      const code = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber);
+      const qr = await modelQrDataUrl(row.id);
+      return `<section class="card">
+        <img class="qr" alt="${escapeHtml(modelQrPayload(row.id))}" src="${escapeHtml(qr)}" width="120" height="120"/>
+        <div class="info">
+          <h2>${escapeHtml(row.name)}</h2>
+          <p><strong>Codice:</strong> ${escapeHtml(code)}</p>
+          <p><strong>Categoria:</strong> ${escapeHtml(row.categoryName)}</p>
+          <p><strong>Utente:</strong> ${escapeHtml(fullName(row.firstName, row.lastName, row.userEmail))}</p>
+          ${row.description && exportSettings.includeModelDescription ? `<p><strong>Descrizione:</strong> ${escapeHtml(row.description)}</p>` : ""}
+          ${row.notes ? `<p><strong>Note:</strong> ${escapeHtml(row.notes)}</p>` : ""}
+        </div>
+      </section>`;
+    });
+
+    set.headers["content-type"] = "text/html; charset=utf-8";
+    set.headers["content-disposition"] = `inline; filename="models-print.html"`;
+
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Stampa modelli</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; }
+      .card { display: flex; gap: 16px; border: 1px solid #ccc; padding: 12px; margin-bottom: 12px; page-break-inside: avoid; break-inside: avoid; }
+      .card h2 { margin: 0 0 6px; font-size: 14pt; }
+      .card p { margin: 2px 0; font-size: 10pt; }
+      @media print {
+        @page { size: A4 portrait; margin: 12mm; }
+        body { margin: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Modelli</h1>
+    ${cards.join("") || "<p>Nessun modello</p>"}
+    <script>window.onload = () => window.print();</script>
+  </body>
+</html>`;
   }, {
-    query: t.Object({ eventId: t.String() }),
+    query: exportFilterQuerySchema,
+    detail: {
+      summary: "Stampa modelli (HTML stampabile con QR e note)",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/labels/data", async ({ tenantDb, query, set }) => {
+    const parsed = parseExportFilters(query as any, { requireEventUnlessScoped: true });
+    if (!parsed.ok) {
+      set.status = parsed.status;
+      return { error: parsed.error };
+    }
+    const exportSettings = await loadExportSettings(tenantDb);
+    const labelRows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
+    if (!labelRows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
+    return labelRows;
+  }, {
+    query: exportFilterQuerySchema,
     detail: {
       summary: "Dati etichette JSON (DYMO/stampa diretta)",
       tags: ["Exports"],
@@ -647,18 +885,19 @@ const managerExportRoutes = new Elysia()
     }
   })
   .get("/labels/excel", async ({ tenantDb, query, set }) => {
-    const eventId = query?.eventId ? String(query.eventId) : "";
-    if (!eventId) {
-      set.status = 400;
-      return { error: "eventId is required" };
+    const parsed = parseExportFilters(query as any, { requireEventUnlessScoped: true });
+    if (!parsed.ok) {
+      set.status = parsed.status;
+      return { error: parsed.error };
     }
 
     const exportSettings = await loadExportSettings(tenantDb);
-    const rows = await getLabelRows(tenantDb, eventId, exportSettings);
-    setXlsxHeaders(set, buildFileName(exportSettings, "labels", eventId));
-    return toXlsx(buildSheetName(exportSettings, "Labels"), rows);
+    const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
+    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
+    setXlsxHeaders(set, buildFileName(exportSettings, "labels", filtersFileSuffix(parsed.filters)));
+    return toXlsx(buildSheetName(exportSettings, "Labels"), rows.map(({ qr: _qr, ...rest }) => rest));
   }, {
-    query: t.Object({ eventId: t.String() }),
+    query: exportFilterQuerySchema,
     detail: {
       summary: "Export etichette Excel (XLSX)",
       tags: ["Exports"],
@@ -666,32 +905,36 @@ const managerExportRoutes = new Elysia()
     }
   })
   .get("/labels/pdf", async ({ tenantDb, query, set }) => {
-    const eventId = query?.eventId ? String(query.eventId) : "";
-    if (!eventId) {
-      set.status = 400;
-      return { error: "eventId is required" };
+    const parsed = parseExportFilters(query as any, { requireEventUnlessScoped: true });
+    if (!parsed.ok) {
+      set.status = parsed.status;
+      return { error: parsed.error };
     }
+    const eventId = parsed.filters.eventId;
 
-    const [event] = await tenantDb
-      .select({ id: eventsTable.id, name: eventsTable.name })
-      .from(eventsTable)
-      .where(eq(eventsTable.id, eventId as any))
-      .limit(1);
+    const [event] = eventId
+      ? await tenantDb
+        .select({ id: eventsTable.id, name: eventsTable.name })
+        .from(eventsTable)
+        .where(eq(eventsTable.id, eventId as any))
+        .limit(1)
+      : [];
 
     const exportSettings = await loadExportSettings(tenantDb);
-    const rows = await getLabelRows(tenantDb, eventId, exportSettings);
+    const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
+    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
     const bodyRows = rows
-      .map((row) => `<tr><td>${row.utente}</td><td>${row.categoria}</td><td>${row.nomeModello}</td><td>${row.codice}</td></tr>`)
+      .map((row) => `<tr><td>${escapeHtml(row.utente)}</td><td>${escapeHtml(row.categoria)}</td><td>${escapeHtml(row.nomeModello)}</td><td>${escapeHtml(row.codice)}</td><td>${escapeHtml(row.note)}</td><td><img class="qr" alt="${escapeHtml(row.qrPayload)}" src="${escapeHtml(row.qr)}" width="80" height="80"/></td></tr>`)
       .join("");
 
     set.headers["content-type"] = "text/html; charset=utf-8";
-    set.headers["content-disposition"] = `inline; filename=\"labels-${eventId}.html\"`;
+    set.headers["content-disposition"] = `inline; filename=\"labels-${normalizeFilePart(filtersFileSuffix(parsed.filters), "labels")}.html\"`;
 
     return `<!DOCTYPE html>
 <html>
   <head>
     <meta charset=\"utf-8\" />
-    <title>Etichette ${event?.name ?? eventId}</title>
+    <title>Etichette ${escapeHtml(event?.name ?? eventId ?? "")}</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 24px; }
       h1 { margin-bottom: 8px; }
@@ -706,7 +949,7 @@ const managerExportRoutes = new Elysia()
   </head>
   <body>
     <h1>Stampa etichette</h1>
-    <p><strong>Evento:</strong> ${event?.name ?? eventId}</p>
+    ${eventId ? `<p><strong>Evento:</strong> ${escapeHtml(event?.name ?? eventId)}</p>` : ""}
     <table>
       <thead>
         <tr>
@@ -714,17 +957,19 @@ const managerExportRoutes = new Elysia()
           <th>Categoria</th>
           <th>Nome modello</th>
           <th>Codice</th>
+          <th>Note</th>
+          <th>QR</th>
         </tr>
       </thead>
       <tbody>
-        ${bodyRows || "<tr><td colspan=\"4\">Nessun dato</td></tr>"}
+        ${bodyRows || "<tr><td colspan=\"6\">Nessun dato</td></tr>"}
       </tbody>
     </table>
     <script>window.onload = () => window.print();</script>
   </body>
 </html>`;
   }, {
-    query: t.Object({ eventId: t.String() }),
+    query: exportFilterQuerySchema,
     detail: {
       summary: "Export etichette PDF",
       tags: ["Exports"],
@@ -747,7 +992,11 @@ const userExportRoutes = new Elysia()
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
         displayNumber: modelsTable.displayNumber,
-        checkedIn: registrationsTable.checkedIn
+        checkedIn: registrationsTable.checkedIn,
+        absent: registrationsTable.absent,
+        patreon: userProfilesTable.patreon,
+        pinterest: userProfilesTable.pinterest,
+        tiktok: userProfilesTable.tiktok
       })
       .from(registrationsTable)
       .leftJoin(eventsTable, eq(eventsTable.id, registrationsTable.eventId))
@@ -761,7 +1010,11 @@ const userExportRoutes = new Elysia()
         eventName: row.eventName ?? "",
         modello: row.modelName ?? "",
         categoria: row.categoryName ?? "",
-        checkIn: row.checkedIn ? "true" : "false"
+        checkIn: row.checkedIn ? "true" : "false",
+        assente: row.absent ? "true" : "false",
+        patreon: row.patreon ?? "",
+        pinterest: row.pinterest ?? "",
+        tiktok: row.tiktok ?? ""
       };
       if (exportSettings.includeModelCode) {
         base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber);
@@ -830,9 +1083,9 @@ const userExportRoutes = new Elysia()
     const modelRowsHtml = (allModels as any[]).map((model) => {
       const code = formatModelCodeForExport(exportSettings, model.code, model.categorySeqId, model.displayNumber);
       return `<tr>
-        <td>${code || model.id.slice(0, 8)}</td>
-        <td>${model.name}</td>
-        <td>${model.categoryName ?? ""}</td>
+        <td>${escapeHtml(code || model.id.slice(0, 8))}</td>
+        <td>${escapeHtml(model.name)}</td>
+        <td>${escapeHtml(model.categoryName ?? "")}</td>
       </tr>`;
     });
 
@@ -862,10 +1115,10 @@ const userExportRoutes = new Elysia()
   <div class="section">
     <h2>User Details</h2>
     <p><strong>User ID:</strong> ${paddedUserId}</p>
-    <p><strong>First name:</strong> ${profile.firstName ?? ""}</p>
-    <p><strong>Last name:</strong> ${profile.lastName ?? ""}</p>
-    <p><strong>Country:</strong> ${profile.city ?? ""}</p>
-    <p><strong>E-mail address:</strong> ${profile.email}</p>
+    <p><strong>First name:</strong> ${escapeHtml(profile.firstName)}</p>
+    <p><strong>Last name:</strong> ${escapeHtml(profile.lastName)}</p>
+    <p><strong>Country:</strong> ${escapeHtml(profile.city)}</p>
+    <p><strong>E-mail address:</strong> ${escapeHtml(profile.email)}</p>
     <p><strong>Model Total:</strong> ${allModels.length}</p>
   </div>
   <div class="section">
@@ -896,4 +1149,5 @@ const userExportRoutes = new Elysia()
 export const exportRoutes = new Elysia({ prefix: "/exports" })
   .use(tenantMiddleware)
   .use(managerExportRoutes)
+  .use(classPrintRoutes)
   .use(userExportRoutes);

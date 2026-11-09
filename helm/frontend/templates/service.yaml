@@ -8,6 +8,6 @@ spec:
     app: {{ include "miniatures-contest-frontend.name" . }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: 80
+      targetPort: 8080
       protocol: TCP
       name: http

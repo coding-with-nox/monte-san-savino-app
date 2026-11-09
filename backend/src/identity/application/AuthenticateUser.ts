@@ -8,10 +8,13 @@ export class AuthenticateUser {
   async execute(input: { email: string; password: string }) {
     const email = Email.create(input.email);
     const user = await this.users.findByEmail(email);
-    if (!user) throw new Error("Invalid credentials");
-    if (!user.canLogin()) throw new Error("User disabled");
+    if (!user) {
+      await this.hasher.hash(input.password); // equalize timing with the existing-user path
+      throw new Error("Invalid credentials");
+    }
     const ok = await this.hasher.verify(input.password, user.passwordHash);
-    if (!ok) throw new Error("Invalid credentials");
+    // Disabled accounts are indistinguishable from wrong credentials.
+    if (!ok || !user.canLogin()) throw new Error("Invalid credentials");
     return user;
   }
 }

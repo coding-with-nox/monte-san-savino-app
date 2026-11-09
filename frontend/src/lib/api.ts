@@ -14,6 +14,19 @@ const rawApiBase = import.meta.env.VITE_API_BASE;
 const trimmedBase = rawApiBase && rawApiBase.trim() !== "" ? rawApiBase.trim() : "/api";
 export const API_BASE = trimmedBase.endsWith("/") ? trimmedBase.slice(0, -1) : trimmedBase;
 
+export const AUTH_LOGOUT_EVENT = "auth:logout";
+export type AuthLogoutDetail = { handled: boolean };
+
+/**
+ * Notifies the app that the session is gone. A mounted listener (App) marks the event as
+ * handled and navigates client-side; without any listener we fall back to a hard redirect.
+ */
+export function signalLogout() {
+  const detail: AuthLogoutDetail = { handled: false };
+  window.dispatchEvent(new CustomEvent<AuthLogoutDetail>(AUTH_LOGOUT_EVENT, { detail }));
+  if (!detail.handled) window.location.href = "/login";
+}
+
 const REFRESH_THRESHOLD_MS = 5 * 60 * 1000;
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -67,7 +80,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     const refreshed = await refreshSession();
     if (!refreshed && res.status === 401) {
       clearToken();
-      window.location.href = "/login";
+      signalLogout();
       throw new ApiError(401, "Session expired");
     }
     if (refreshed) {

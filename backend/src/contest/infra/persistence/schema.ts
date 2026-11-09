@@ -1,9 +1,10 @@
-import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index, serial } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index, serial, bigserial } from "drizzle-orm/pg-core";
 
 export const levelsTable = pgTable("levels", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
-  sortOrder: integer("sort_order")
+  sortOrder: integer("sort_order"),
+  freeToEnter: boolean("free_to_enter").default(false).notNull()
 });
 
 export const memberRolesTable = pgTable("member_roles", {
@@ -24,8 +25,15 @@ export const categoriesTable = pgTable("categories", {
   eventId: uuid("event_id").notNull(),
   name: text("name").notNull(),
   status: text("status").default("open").notNull(),
-  seqId: serial("seq_id").notNull()
-});
+  seqId: serial("seq_id").notNull(),
+  classNumber: text("class_number"),
+  levelId: uuid("level_id"),
+  classGroup: text("class_group"),
+  presentationOrder: integer("presentation_order"),
+  outOfCompetition: boolean("out_of_competition").default(false).notNull()
+}, (t) => ({
+  byEvent: index("ix_categories_event_id").on(t.eventId)
+}));
 
 export const eventCampaignsTable = pgTable("event_campaigns", {
   id: uuid("id").primaryKey(),
@@ -42,8 +50,13 @@ export const registrationsTable = pgTable("registrations", {
   modelId: uuid("model_id"),
   categoryId: uuid("category_id"),
   status: text("status").notNull(),
-  checkedIn: boolean("checked_in").default(false).notNull()
-});
+  checkedIn: boolean("checked_in").default(false).notNull(),
+  absent: boolean("absent").default(false).notNull()
+}, (t) => ({
+  byUser: index("ix_registrations_user_id").on(t.userId),
+  byEvent: index("ix_registrations_event_id").on(t.eventId),
+  byModel: index("ix_registrations_model_id").on(t.modelId)
+}));
 
 export const modelsTable = pgTable("models", {
   id: uuid("id").primaryKey(),
@@ -56,9 +69,13 @@ export const modelsTable = pgTable("models", {
   imageUrl: text("image_url"),
   isTeam: boolean("is_team").default(false).notNull(),
   displayNumber: integer("display_number"),
-  teamId: uuid("team_id")
+  teamId: uuid("team_id"),
+  notes: text("notes"),
+  internalNotes: text("internal_notes")
 }, (t) => ({
-  uniqCode: uniqueIndex("ux_models_code").on(t.code)
+  uniqCode: uniqueIndex("ux_models_code").on(t.code),
+  byCategory: index("ix_models_category_id").on(t.categoryId),
+  byUser: index("ix_models_user_id").on(t.userId)
 }));
 
 export const modelTeamMembersTable = pgTable("model_team_members", {
@@ -68,20 +85,26 @@ export const modelTeamMembersTable = pgTable("model_team_members", {
   surname: text("surname").notNull(),
   role: text("role").notNull(),
   email: text("email")
-});
+}, (t) => ({
+  byModel: index("ix_model_team_members_model_id").on(t.modelId)
+}));
 
 export const modelImagesTable = pgTable("model_images", {
   id: uuid("id").primaryKey(),
   modelId: uuid("model_id").notNull(),
   url: text("url").notNull()
-});
+}, (t) => ({
+  byModel: index("ix_model_images_model_id").on(t.modelId)
+}));
 
 export const votesTable = pgTable("votes", {
   id: uuid("id").primaryKey(),
   judgeId: uuid("judge_id").notNull(),
   modelId: uuid("model_id").notNull(),
   rank: integer("rank").notNull(),
-  createdAt: timestamp("created_at").defaultNow()
+  createdAt: timestamp("created_at").defaultNow(),
+  // Monotonic tiebreaker: "latest vote" = ORDER BY created_at DESC, seq DESC (votes are append-only)
+  seq: bigserial("seq", { mode: "number" }).notNull()
 }, (t) => ({
   byJudgeModel: index("ix_votes_judge_model").on(t.judgeId, t.modelId),
   byModelCreatedAt: index("ix_votes_model_created_at").on(t.modelId, t.createdAt)
@@ -103,7 +126,9 @@ export const paymentsTable = pgTable("payments", {
   status: text("status").notNull(),
   providerRef: text("provider_ref"),
   createdAt: timestamp("created_at").defaultNow()
-});
+}, (t) => ({
+  byRegistration: index("ix_payments_registration_id").on(t.registrationId)
+}));
 
 export const sponsorsTable = pgTable("sponsors", {
   id: uuid("id").primaryKey(),
@@ -123,7 +148,9 @@ export const specialMentionsTable = pgTable("special_mentions", {
   description: text("description"),
   awardedBy: uuid("awarded_by").notNull(),
   createdAt: timestamp("created_at").defaultNow()
-});
+}, (t) => ({
+  byEvent: index("ix_special_mentions_event_id").on(t.eventId)
+}));
 
 export const modificationRequestsTable = pgTable("modification_requests", {
   id: uuid("id").primaryKey(),
@@ -163,7 +190,9 @@ export const teamMatesTable = pgTable("team_mates", {
   surname: text("surname").notNull(),
   role: text("role").notNull(),
   email: text("email"),
-});
+}, (t) => ({
+  byTeam: index("ix_team_mates_team_id").on(t.teamId)
+}));
 
 export const awardBracketsTable = pgTable("award_brackets", {
   id: uuid("id").primaryKey(),

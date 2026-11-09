@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes, Link as RouterLink, useLocation } from "react-router-dom";
+﻿import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Navigate, Route, Routes, Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   AppBar,
   Avatar,
@@ -36,6 +36,9 @@ import HomeIcon from "@mui/icons-material/Home";
 import EventIcon from "@mui/icons-material/Event";
 import GavelIcon from "@mui/icons-material/Gavel";
 import GroupsIcon from "@mui/icons-material/Groups";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import PeopleIcon from "@mui/icons-material/People";
+import HowToRegIcon from "@mui/icons-material/HowToReg";
 
 function FigurineIcon(props: React.ComponentProps<typeof SvgIcon>) {
   return (
@@ -51,16 +54,22 @@ function FigurineIcon(props: React.ComponentProps<typeof SvgIcon>) {
   );
 }
 import Login from "./pages/Login";
-import Judge from "./pages/Judge";
-import Profile from "./pages/Profile";
-import Models from "./pages/Models";
-import Teams from "./pages/Teams";
-import PublicEvents from "./pages/PublicEvents";
-import Admin from "./pages/Admin";
-import Users from "./pages/Users";
-import Settings from "./pages/Settings";
-import Labels from "./pages/Labels";
-import { api, API_BASE } from "./lib/api";
+const Judge = lazy(() => import("./pages/Judge"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Enrollments = lazy(() => import("./pages/Enrollments"));
+const StaffCheckin = lazy(() => import("./pages/StaffCheckin"));
+const Models = lazy(() => import("./pages/Models"));
+const Teams = lazy(() => import("./pages/Teams"));
+const PublicEvents = lazy(() => import("./pages/PublicEvents"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Users = lazy(() => import("./pages/Users"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Labels = lazy(() => import("./pages/Labels"));
+const Stats = lazy(() => import("./pages/Stats"));
+const Podium = lazy(() => import("./pages/Podium"));
+import PageSkeleton from "./components/PageSkeleton";
+import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
 import { buildTheme } from "./lib/theme";
@@ -92,7 +101,27 @@ export default function App() {
   const [appName, setAppName] = useState("Miniatures Contest");
   const [backendDown, setBackendDown] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [avatarMenuAnchor, setAvatarMenuAnchor] = useState<null | HTMLElement>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Session expiry (api.ts) and manual logout: client-side navigation, no full reload.
+  const endSession = useCallback(() => {
+    clearToken();
+    setAvatarMenuAnchor(null);
+    setDrawerOpen(false);
+    navigate("/login", { replace: true });
+  }, [navigate]);
+
+  useEffect(() => {
+    const onLogout = (event: Event) => {
+      const detail = (event as CustomEvent<AuthLogoutDetail>).detail;
+      if (detail) detail.handled = true;
+      endSession();
+    };
+    window.addEventListener(AUTH_LOGOUT_EVENT, onLogout);
+    return () => window.removeEventListener(AUTH_LOGOUT_EVENT, onLogout);
+  }, [endSession]);
 
   useEffect(() => {
     window.localStorage.setItem("theme", themeMode);
@@ -154,7 +183,6 @@ export default function App() {
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
 
   const role = getRole();
-  const [avatarMenuAnchor, setAvatarMenuAnchor] = useState<null | HTMLElement>(null);
 
   const userInitial = (() => {
     const token = getToken();
@@ -166,21 +194,21 @@ export default function App() {
     } catch { return "?"; }
   })();
 
-  const handleLogout = () => {
-    setAvatarMenuAnchor(null);
-    clearToken();
-    window.location.href = "/login";
-  };
+  const handleLogout = endSession;
 
   const allNavItems = [
-    { label: t(language, "navProfile"), path: "/", minRole: "user" as Role },
-{ label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
+    { label: t(language, "navHome"), path: "/", minRole: "user" as Role },
+    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
+    { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role },
     { label: t(language, "navTeams"), path: "/teams", minRole: "user" as Role },
     { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null },
+    { label: t(language, "navCheckin"), path: "/staff-checkin", minRole: "staff" as Role },
     { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role },
     { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role },
     { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role },
     { label: t(language, "navLabels"), path: "/labels", minRole: "manager" as Role },
+    { label: t(language, "navStats"), path: "/stats", minRole: "manager" as Role },
+    { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role },
     { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role }
   ];
 
@@ -190,13 +218,23 @@ export default function App() {
     return roleAtLeast(role, item.minRole);
   });
 
-  const bottomNavItems = [
-    { label: t(language, "navProfile"),      path: "/",              icon: <HomeIcon /> },
-    { label: t(language, "navModels"),       path: "/models",        icon: <FigurineIcon /> },
-    { label: t(language, "navTeams"),        path: "/teams",         icon: <GroupsIcon /> },
-    { label: t(language, "navPublicEvents"), path: "/public-events", icon: <EventIcon /> },
-    ...(role && roleAtLeast(role, "judge") ? [{ label: t(language, "navJudge"), path: "/judge", icon: <GavelIcon /> }] : []),
-  ];
+  const isManagerRole = !!role && roleAtLeast(role, "manager");
+  const bottomNavItems = isManagerRole
+    ? [
+        { label: t(language, "navHome"),   path: "/",        icon: <HomeIcon /> },
+        { label: t(language, "navModels"), path: "/models",  icon: <FigurineIcon /> },
+        { label: t(language, "navJudge"),  path: "/judge",   icon: <GavelIcon /> },
+        { label: t(language, "navUsers"),  path: "/users",   icon: <PeopleIcon /> },
+        { label: t(language, "navAdmin"),  path: "/admin",   icon: <AdminPanelSettingsIcon /> },
+      ]
+    : [
+        { label: t(language, "navHome"),         path: "/",              icon: <HomeIcon /> },
+        { label: t(language, "navModels"),       path: "/models",        icon: <FigurineIcon /> },
+        { label: t(language, "navTeams"),        path: "/teams",         icon: <GroupsIcon /> },
+        { label: t(language, "navPublicEvents"), path: "/public-events", icon: <EventIcon /> },
+        ...(role && roleAtLeast(role, "judge") ? [{ label: t(language, "navJudge"), path: "/judge", icon: <GavelIcon /> }] : []),
+        ...(role === "staff" ? [{ label: t(language, "navCheckin"), path: "/staff-checkin", icon: <HowToRegIcon /> }] : []),
+      ];
 
   const bottomNavValue = bottomNavItems.findIndex((item) =>
     item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path)
@@ -244,7 +282,7 @@ export default function App() {
         <Box sx={{ minHeight: "100vh", bgcolor: "background.default", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2, p: 4 }}>
           <Typography variant="h4" sx={{ color: "error.main" }}>⚠ {t(language, "maintenanceTitle")}</Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center">{t(language, "maintenanceSubtitle")}</Typography>
-          <Button variant="outlined" onClick={() => { setBackendDown(false); window.location.reload(); }}>Riprova</Button>
+          <Button variant="outlined" onClick={() => { setBackendDown(false); window.location.reload(); }}>{t(language, "retryButton")}</Button>
         </Box>
       </ThemeProvider>
     );
@@ -313,7 +351,7 @@ export default function App() {
                     anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                     transformOrigin={{ vertical: "top", horizontal: "right" }}
                   >
-                    <MenuItem component={RouterLink} to="/" onClick={() => setAvatarMenuAnchor(null)}>
+                    <MenuItem component={RouterLink} to="/profile" onClick={() => setAvatarMenuAnchor(null)}>
                       <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
                       {t(language, "navProfile")}
                     </MenuItem>
@@ -332,6 +370,7 @@ export default function App() {
           {drawerContent}
         </Drawer>
         <Box sx={{ pb: isMobile && role ? "56px" : 0 }}>
+          <Suspense fallback={<PageSkeleton variant="table" />}>
           <Routes>
             <Route
               path="/login"
@@ -341,17 +380,23 @@ export default function App() {
                 />
               )}
             />
-            <Route path="/" element={<Protected><Profile language={language} /></Protected>} />
-<Route path="/models" element={<Protected><Models language={language} /></Protected>} />
+            <Route path="/" element={<Protected><Dashboard language={language} /></Protected>} />
+            <Route path="/profile" element={<Protected><Profile language={language} /></Protected>} />
+            <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
+            <Route path="/enrollments" element={<Protected><Enrollments language={language} /></Protected>} />
+            <Route path="/staff-checkin" element={<Protected><RequireRole min="staff"><StaffCheckin language={language} /></RequireRole></Protected>} />
             <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
             <Route path="/public-events" element={<PublicEvents language={language} />} />
             <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />
             <Route path="/users" element={<Protected><RequireRole min="manager"><Users language={language} /></RequireRole></Protected>} />
             <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin language={language} /></RequireRole></Protected>} />
             <Route path="/labels" element={<Protected><RequireRole min="manager"><Labels language={language} /></RequireRole></Protected>} />
+            <Route path="/stats" element={<Protected><RequireRole min="manager"><Stats language={language} /></RequireRole></Protected>} />
+            <Route path="/podium" element={<Protected><RequireRole min="manager"><Podium language={language} /></RequireRole></Protected>} />
             <Route path="/settings" element={<Protected><RequireRole min="admin"><Settings language={language} /></RequireRole></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </Box>
         {isMobile && role && (
           <BottomNavigation

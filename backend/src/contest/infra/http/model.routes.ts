@@ -2,8 +2,15 @@ import { Elysia, t } from "elysia";
 import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
+import { checkEnrollmentOpen } from "./enrollment-guard";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
+import { isAllowedImageUrl, allowedImageBase } from "../../../shared/domain/imageUrl";
 import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable, votesTable, judgeCompletionsTable } from "../persistence/schema";
+
+/** True when a client-supplied image URL is absent or allowed (evaluated per request so env changes apply). */
+export function isImageUrlAcceptable(url: unknown): boolean {
+  return url === undefined || url === null || isAllowedImageUrl(url, allowedImageBase());
+}
 
 async function getCategorySeqId(tenantDb: any, categoryId: string): Promise<number | null> {
   const [row] = await tenantDb
@@ -75,50 +82,6 @@ function isCodeConflict(err: unknown): boolean {
   return msg.includes("ux_models_code") || msg.includes("models_code_key");
 }
 
-async function checkEnrollmentOpen(
-  tenantDb: any,
-  categoryId: string,
-  set: any
-): Promise<{ blocked: boolean }> {
-  const [catRow] = await tenantDb
-    .select({ eventId: categoriesTable.eventId })
-    .from(categoriesTable)
-    .where(eq(categoriesTable.id, categoryId as any))
-    .limit(1);
-
-  if (!catRow) {
-    set.status = 422;
-    set.body = { error: "Invalid category" };
-    return { blocked: true };
-  }
-
-  const campaigns = await tenantDb
-    .select({ enrollmentCloseDate: eventCampaignsTable.enrollmentCloseDate })
-    .from(eventCampaignsTable)
-    .where(eq(eventCampaignsTable.eventId, catRow.eventId as any));
-
-  const now = new Date();
-  const isClosed = campaigns.length > 0 && campaigns.some((c: any) => {
-    if (!c.enrollmentCloseDate) return false;
-    // Parse as end-of-day Italy time (UTC+1/+2): append T23:59:59+01:00 if date-only string
-    const raw = c.enrollmentCloseDate as string;
-    const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(raw)
-      ? `${raw}T23:59:59+01:00`
-      : raw;
-    const closeDate = new Date(dateStr);
-    if (isNaN(closeDate.getTime())) return false;
-    return closeDate < now;
-  });
-
-  if (isClosed) {
-    set.status = 403;
-    set.body = { error: "Enrollment period is closed" };
-    return { blocked: true };
-  }
-
-  return { blocked: false };
-}
-
 export const modelRoutes = new Elysia({ prefix: "/models" })
   .use(tenantMiddleware)
   .use(requireRole("user"))
@@ -139,6 +102,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         isTeam: modelsTable.isTeam,
         teamId: modelsTable.teamId,
         displayNumber: modelsTable.displayNumber,
+        notes: modelsTable.notes,
         categorySeqId: categoriesTable.seqId
       })
       .from(modelsTable)
@@ -164,6 +128,11 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (user?.role !== "manager" && user?.role !== "admin") {
       const guard = await checkEnrollmentOpen(tenantDb, body.categoryId, set);
       if (guard.blocked) return (set as any).body;
+    }
+
+    if (!isImageUrlAcceptable(body.imageUrl)) {
+      set.status = 422;
+      return { error: "Invalid image url" };
     }
 
     if (body.isTeam) {
@@ -199,6 +168,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
           levelId: body.levelId,
           name: body.name,
           description: body.description ?? null,
+          notes: body.notes?.trim() || null,
           code,
           imageUrl: body.imageUrl ?? null,
           isTeam: body.isTeam ?? false,
@@ -236,6 +206,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       categoryId: t.String(),
       levelId: t.String(),
       description: t.Optional(t.String()),
+      notes: t.Optional(t.String({ maxLength: 2000 })),
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
       teamId: t.Optional(t.String()),
@@ -265,6 +236,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         isTeam: modelsTable.isTeam,
         teamId: modelsTable.teamId,
         displayNumber: modelsTable.displayNumber,
+        notes: modelsTable.notes,
         categorySeqId: categoriesTable.seqId
       })
       .from(modelsTable)
@@ -316,6 +288,10 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       if (guard.blocked) return (set as any).body;
     }
 
+    if (!isImageUrlAcceptable(body.imageUrl)) {
+      set.status = 422;
+      return { error: "Invalid image url" };
+    }
     if (body.isTeam === true && !body.teamId) {
       set.status = 422;
       return { error: "teamId required for team models" };
@@ -346,6 +322,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (body.levelId !== undefined) updateData.levelId = body.levelId;
     if (body.description !== undefined) updateData.description = body.description;
     if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
+    if (body.notes !== undefined) updateData.notes = body.notes.trim() || null;
     if (body.isTeam !== undefined) updateData.isTeam = body.isTeam;
     if ("teamId" in body) updateData.teamId = body.teamId ?? null;
 
@@ -375,6 +352,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       categoryId: t.Optional(t.String()),
       levelId: t.Optional(t.String()),
       description: t.Optional(t.String()),
+      notes: t.Optional(t.String({ maxLength: 2000 })),
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
       teamId: t.Optional(t.String()),
@@ -422,6 +400,10 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (user?.role !== "manager" && user?.role !== "admin") {
       const guard = await checkEnrollmentOpen(tenantDb, existingModel.categoryId, set);
       if (guard.blocked) return (set as any).body;
+    }
+    if (!isAllowedImageUrl(body.url, allowedImageBase())) {
+      set.status = 422;
+      return { error: "Invalid image url" };
     }
     const imageId = crypto.randomUUID();
     await tenantDb.insert(modelImagesTable).values({ id: imageId, modelId: params.modelId, url: body.url });

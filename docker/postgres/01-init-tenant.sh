@@ -3,7 +3,7 @@ set -euo pipefail
 
 TENANT_DB_NAME="${TENANT_DB_NAME:-tenant_db_1}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}"
+: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
 

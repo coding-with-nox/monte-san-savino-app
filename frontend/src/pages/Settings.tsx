@@ -244,11 +244,11 @@ export default function Settings({ language }: SettingsProps) {
         <Typography variant="h4">{t(language, "settingsTitle")}</Typography>
 
         <Paper variant="outlined">
-          <Tabs value={tab} onChange={(_, value) => setTab(value)}>
+          <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
             <Tab value="general" label={t(language, "settingsTabGeneral")} />
             <Tab value="theme" label={t(language, "settingsTabTheme")} />
             <Tab value="export" label={t(language, "settingsTabExport")} />
-            <Tab value="team" label="Team" />
+            <Tab value="team" label={t(language, "settingsTabTeam")} />
           </Tabs>
         </Paper>
 
@@ -468,7 +468,7 @@ export default function Settings({ language }: SettingsProps) {
         )}
 
         {tab === "team" && (
-          <SectionCard title="Team">
+          <SectionCard title={t(language, "settingsTabTeam")}>
             <Table>
               <TableBody>
                 <TableRow>

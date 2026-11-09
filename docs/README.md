@@ -44,14 +44,19 @@ docker compose -f docker-compose.debug.yml up --build
 ### Servizi disponibili
 
 - Frontend (Vite): `http://localhost:5173`
-- Backend API: `http://localhost:3000`
-- Bun Inspector (backend): `localhost:9229`
-- Adminer: `http://localhost:8888`
-- MinIO API: `http://localhost:9000`
-- MinIO Console: `http://localhost:9001`
-- PostgreSQL: `localhost:5432`
+- Backend API: `http://127.0.0.1:3000`
+- Bun Inspector (backend): `127.0.0.1:9229`
+- Adminer: `http://127.0.0.1:8888`
+- MinIO API: `http://127.0.0.1:9000`
+- MinIO Console: `http://127.0.0.1:9001`
+- PostgreSQL: `127.0.0.1:5432`
 
-Nota: il seed dati (`02-test-data.sh`) viene eseguito solo se la tabella `users` e' vuota.
+Tutte le porte sono pubblicate solo su loopback. `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`,
+`MINIO_ROOT_PASSWORD` e `JWT_SECRET` sono obbligatorie nel `.env` (nessun default).
+
+Nota: il seed dati (`02-test-data.sh`) NON parte piu' di default: e' opt-in con
+`--profile demo`, richiede `DEMO_PASSWORD_HASH` e gira solo se la tabella `users` e' vuota
+(vedi `docs/configuration_deploy_debug.md`, "Profilo demo").
 
 ### Log
 
