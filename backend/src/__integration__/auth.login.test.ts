@@ -39,24 +39,34 @@ describe("integration POST /auth/login", () => {
 });
 
 describe("integration POST /auth/refresh", () => {
-  let refreshToken: string;
-
-  beforeAll(async () => {
+  // Each test creates its own user: with bun 1.1.29 the afterAll of a previous describe can run
+  // after this describe's beforeAll, which would delete a user created in a shared beforeAll.
+  async function registerAndLogin() {
     await truncateUsers();
     await postJson(app, "/auth/register", { email: TEST_EMAIL, password: TEST_PASSWORD });
     const loginRes = await postJson(app, "/auth/login", { email: TEST_EMAIL, password: TEST_PASSWORD });
     const loginBody = await loginRes.json() as { refreshToken: string };
-    refreshToken = loginBody.refreshToken;
-  });
+    return loginBody.refreshToken;
+  }
   afterAll(async () => { await truncateUsers(); });
 
   it("returns new accessToken and refreshToken given a valid refresh token", async () => {
+    const refreshToken = await registerAndLogin();
     const res = await postJson(app, "/auth/refresh", { refreshToken });
     expect(res.status).toBe(200);
     const body = await res.json() as { accessToken: string; refreshToken: string; role: string };
     expect(typeof body.accessToken).toBe("string");
     expect(body.accessToken.length).toBeGreaterThan(0);
     expect(body.role).toBe("user");
+  });
+
+  it("returns 401 when the user no longer exists", async () => {
+    const refreshToken = await registerAndLogin();
+    await truncateUsers();
+    const res = await postJson(app, "/auth/refresh", { refreshToken });
+    expect(res.status).toBe(401);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe("Invalid refresh token");
   });
 
   it("returns 401 when refresh token is invalid", async () => {

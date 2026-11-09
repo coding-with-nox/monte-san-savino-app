@@ -31,7 +31,7 @@ describe("integration POST /auth/register", () => {
     expect(body.error).toContain("8");
   });
 
-  it("returns 400 when email is already registered", async () => {
+  it("does not reveal that an email is already registered and keeps the original password", async () => {
     await postJson(app, "/auth/register", {
       email: "duplicate@example.com",
       password: "password123",
@@ -40,8 +40,15 @@ describe("integration POST /auth/register", () => {
       email: "duplicate@example.com",
       password: "password456",
     });
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
-    expect(body.error).toContain("already");
+    // Same response shape as a fresh registration: no enumeration of existing accounts.
+    expect(res.status).toBe(200);
+    const body = await res.json() as { id: string; email: string; role: string; error?: string };
+    expect(body.error).toBeUndefined();
+    expect(body.email).toBe("duplicate@example.com");
+    // The second registration must not change the existing account's password.
+    const original = await postJson(app, "/auth/login", { email: "duplicate@example.com", password: "password123" });
+    expect(original.status).toBe(200);
+    const overwritten = await postJson(app, "/auth/login", { email: "duplicate@example.com", password: "password456" });
+    expect(overwritten.status).toBe(401);
   });
 });
