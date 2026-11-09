@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { LoginWithPassword } from "../LoginWithPassword";
 import { Email } from "../../domain/Email";
 import { User } from "../../domain/User";
+import { InvalidCredentialsError, describeHashFormat } from "../../domain/InvalidCredentialsError";
 import type { UserRepository } from "../ports/UserRepository";
 import type { PasswordHasher } from "../ports/PasswordHasher";
 import type { TokenService } from "../ports/TokenService";
@@ -79,5 +80,42 @@ describe("LoginWithPassword.unit", () => {
     const disabled = new User("uid-2", Email.create("bob@example.com"), "user", "hashed-pw", false);
     const uc = new LoginWithPassword(stubRepo(disabled), stubHasher(true), stubTokens());
     await expect(uc.execute({ email: "bob@example.com", password: "pw" })).rejects.toThrow(new Error("Invalid credentials"));
+  });
+
+  describe("failure reasons (server-side log only)", () => {
+    async function reasonOf(promise: Promise<unknown>) {
+      try { await promise; } catch (e) { return e as InvalidCredentialsError; }
+      throw new Error("expected a rejection");
+    }
+
+    it("unknown email -> user_not_found, generic message", async () => {
+      const uc = new LoginWithPassword(stubRepo(null), stubHasher(true), stubTokens());
+      const err = await reasonOf(uc.execute({ email: "ghost@example.com", password: "pw" }));
+      expect(err).toBeInstanceOf(InvalidCredentialsError);
+      expect(err.reason).toBe("user_not_found");
+      expect(err.message).toBe("Invalid credentials");
+    });
+
+    it("wrong password -> wrong_password with the stored hash FORMAT, never the hash", async () => {
+      const user = new User("uid-3", Email.create("carol@example.com"), "user", "$argon2id$v=19$m=65536,t=2,p=1$abc$def", true);
+      const uc = new LoginWithPassword(stubRepo(user), stubHasher(false), stubTokens());
+      const err = await reasonOf(uc.execute({ email: "carol@example.com", password: "pw" }));
+      expect(err.reason).toBe("wrong_password");
+      expect(err.detail).toEqual({ hashFormat: "argon2id", hashLength: user.passwordHash.length });
+      expect(JSON.stringify(err.detail)).not.toContain("abc$def");
+    });
+
+    it("a corrupted hash is reported as unrecognized, an empty one as empty", async () => {
+      expect(describeHashFormat("argon2idv19m65536")).toEqual({ hashFormat: "unrecognized", hashLength: 17 });
+      expect(describeHashFormat("")).toEqual({ hashFormat: "empty" });
+      expect(describeHashFormat(null)).toEqual({ hashFormat: "empty" });
+    });
+
+    it("correct password on a disabled account -> account_disabled", async () => {
+      const disabled = new User("uid-4", Email.create("dave@example.com"), "user", "hashed-pw", false);
+      const uc = new LoginWithPassword(stubRepo(disabled), stubHasher(true), stubTokens());
+      const err = await reasonOf(uc.execute({ email: "dave@example.com", password: "pw" }));
+      expect(err.reason).toBe("account_disabled");
+    });
   });
 });

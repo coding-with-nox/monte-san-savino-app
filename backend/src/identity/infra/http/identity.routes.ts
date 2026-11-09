@@ -11,6 +11,8 @@ import { consumeAuthCode, createAuthCode } from "../tokens/pkceStore";
 import { RefreshSession } from "../../application/RefreshSession";
 import { clientIp, rateLimiterFromEnv, type SlidingWindowRateLimiter } from "../../../shared/infra/http/rateLimiter";
 import crypto from "node:crypto";
+import { logger } from "../../../shared/infra/logger/logger";
+import { InvalidCredentialsError } from "../../domain/InvalidCredentialsError";
 
 // Per-process limiter (not shared between replicas); built lazily so env is read at first use.
 let limiter: SlidingWindowRateLimiter | null | undefined;
@@ -98,6 +100,10 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
       const result = await uc.execute(body);
       return buildTokenResponse(result.accessToken, result.refreshToken, result.expiresIn, result.role);
     } catch (error) {
+      if (error instanceof InvalidCredentialsError) {
+        // The client always gets the same generic error; the reason is for operators only (no email, no password).
+        logger.warn({ reason: error.reason, ...error.detail }, "login rejected");
+      }
       const message = error instanceof Error ? error.message : "Login failed";
       set.status = message.toLowerCase().includes("credentials") ? 401 : 400;
       return { error: message };

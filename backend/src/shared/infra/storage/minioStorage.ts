@@ -1,11 +1,13 @@
 import { Client } from "minio";
 import { assertProductionSecrets } from "../config/productionEnv";
-import type { ObjectStorage } from "../../application/ports/ObjectStorage";
+import { allowedImageBase, objectKeyFromImageUrl } from "../../domain/imageUrl";
+import { logger } from "../logger/logger";
+import type { ObjectDeleter, ObjectStorage } from "../../application/ports/ObjectStorage";
 
 // Short-lived presigned URL (seconds).
 export const UPLOAD_URL_EXPIRY_SECONDS = 120;
 
-export class MinioStorage implements ObjectStorage {
+export class MinioStorage implements ObjectStorage, ObjectDeleter {
   // Dev-only fallbacks (minioadmin); production requires explicit non-default keys.
   private client = (assertProductionSecrets(process.env, ["MINIO_ACCESS_KEY", "MINIO_SECRET_KEY"]), new Client({
     endPoint: process.env.MINIO_ENDPOINT ?? "localhost",
@@ -45,5 +47,15 @@ export class MinioStorage implements ObjectStorage {
     const publicBase = (process.env.MINIO_PUBLIC_URL ?? "http://localhost:9000").replace(/\/+$/, "");
     const publicUrl = `${publicBase}/${this.bucket}/${input.key}`;
     return { uploadUrl, publicUrl };
+  }
+
+  async deleteObjectByUrl(url: string): Promise<void> {
+    try {
+      const key = objectKeyFromImageUrl(url, allowedImageBase());
+      if (!key) return; // external or unsafe URL: never touch it
+      await this.client.removeObject(this.bucket, key);
+    } catch (err) {
+      logger.warn({ err: { message: (err as Error)?.message, code: (err as any)?.code } }, "MinIO object cleanup failed");
+    }
   }
 }
