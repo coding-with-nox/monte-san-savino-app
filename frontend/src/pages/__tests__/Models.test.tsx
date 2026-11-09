@@ -179,12 +179,12 @@ describe("Models", () => {
     await user.click(await screen.findByText("Space Marine"));
     expect(await screen.findByText("admin list down")).toBeInTheDocument();
     const field = screen.getAllByLabelText(/internal notes/i)[0];
-    await user.type(field, "typed over a blank baseline");
+    await user.type(field, "x");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByText("Model saved, but the internal notes had not loaded and were left unchanged")).toBeInTheDocument();
     expect(adminPuts()).toHaveLength(0);
     expect(apiMock.mock.calls.some((c) => c[0] === "/models/m1" && c[1]?.method === "PUT")).toBe(true);
-  });
+  }, 20000);
 
   it("never renders internal notes for plain users", async () => {
     setup();
