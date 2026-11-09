@@ -172,3 +172,51 @@ describe("api()", () => {
     expect(calls).toBe(1);
   });
 });
+
+describe("api() on public auth endpoints", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    localStorage.clear();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("location", { href: "/" });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the backend message for a rejected login, without refresh or logout side effects", async () => {
+    const onLogout = vi.fn();
+    window.addEventListener(AUTH_LOGOUT_EVENT, onLogout);
+    try {
+      fetchMock.mockResolvedValueOnce(jsonRes(401, { error: "Invalid credentials" }));
+      await expect(api("/auth/login", { method: "POST", body: JSON.stringify({ email: "a@b.it", password: "x" }) }))
+        .rejects.toMatchObject({ status: 401, message: "Invalid credentials" });
+      expect(fetchMock).toHaveBeenCalledTimes(1); // no /auth/refresh attempt
+      expect(onLogout).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(AUTH_LOGOUT_EVENT, onLogout);
+    }
+  });
+
+  it("keeps an existing session untouched when a login attempt fails", async () => {
+    setSession("tok", "ref", 3600);
+    fetchMock.mockResolvedValueOnce(jsonRes(401, { error: "Invalid credentials" }));
+    await expect(api("/auth/authorize", { method: "POST", body: "{}" })).rejects.toMatchObject({ message: "Invalid credentials" });
+    expect(getToken()).toBe("tok");
+  });
+
+  it("passes through the rate limit message (429)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonRes(429, { error: "Too many attempts, retry later" }));
+    await expect(api("/auth/login", { method: "POST", body: "{}" }))
+      .rejects.toMatchObject({ status: 429, message: "Too many attempts, retry later" });
+  });
+
+  it("still reports 'Session expired' for a 401 on a protected endpoint", async () => {
+    setSession("tok", "ref", 3600);
+    fetchMock
+      .mockResolvedValueOnce(jsonRes(401, { error: "Unauthorized" })) // protected call
+      .mockResolvedValueOnce(jsonRes(401, { error: "Invalid refresh token" })); // refresh fails
+    await expect(api("/models")).rejects.toMatchObject({ status: 401, message: "Session expired" });
+  });
+});
+

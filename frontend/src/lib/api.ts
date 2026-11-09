@@ -60,9 +60,17 @@ async function refreshSession(): Promise<boolean> {
   return refreshPromise;
 }
 
+// Public authentication endpoints: a 401/403 here is a rejected login/registration/refresh, not an
+// expired session, so the backend message ("Invalid credentials", rate limit...) must reach the UI
+// and no refresh/logout side effects may run.
+function isPublicAuthPath(path: string) {
+  return path === "/auth" || path.startsWith("/auth/");
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const publicAuth = isPublicAuthPath(path);
   const expiresAt = getTokenExpiresAt();
-  if (expiresAt && expiresAt - Date.now() <= REFRESH_THRESHOLD_MS) {
+  if (!publicAuth && expiresAt && expiresAt - Date.now() <= REFRESH_THRESHOLD_MS) {
     await refreshSession();
   }
 
@@ -76,7 +84,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
 
   const res = await fetch(API_BASE + path, { ...options, headers });
-  if (res.status === 401 || res.status === 403) {
+  if (!publicAuth && (res.status === 401 || res.status === 403)) {
     const refreshed = await refreshSession();
     if (!refreshed && res.status === 401) {
       clearToken();
