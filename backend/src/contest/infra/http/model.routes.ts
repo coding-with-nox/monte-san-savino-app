@@ -2,10 +2,12 @@ import { Elysia, t } from "elysia";
 import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
+import { applyCategoryChange } from "./model-category-change";
+import { cleanupUnreferencedImages } from "./model-image-cleanup";
 import { checkEnrollmentOpen } from "./enrollment-guard";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { isAllowedImageUrl, allowedImageBase } from "../../../shared/domain/imageUrl";
-import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable, votesTable, judgeCompletionsTable } from "../persistence/schema";
+import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable } from "../persistence/schema";
 
 /** True when a client-supplied image URL is absent or allowed (evaluated per request so env changes apply). */
 export function isImageUrlAcceptable(url: unknown): boolean {
@@ -308,13 +310,8 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       }
     }
 
-    // If category changes: clear all votes for this model so new judges re-vote
+    // If category changes: votes/completions are cleared (and a closed category rejected) by applyCategoryChange
     const categoryChanged = body.categoryId !== undefined && body.categoryId !== model.categoryId;
-    if (categoryChanged) {
-      await tenantDb.delete(votesTable).where(eq(votesTable.modelId, params.modelId as any));
-      // Also invalidate judge completions for the old category (it may no longer be fully judged)
-      await tenantDb.delete(judgeCompletionsTable).where(eq(judgeCompletionsTable.categoryId, model.categoryId as any));
-    }
 
     const updateData: Record<string, unknown> = {};
     if (body.name !== undefined) updateData.name = body.name;
@@ -326,7 +323,13 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (body.isTeam !== undefined) updateData.isTeam = body.isTeam;
     if ("teamId" in body) updateData.teamId = body.teamId ?? null;
 
-    await tenantDb.update(modelsTable).set(updateData).where(eq(modelsTable.id, params.modelId as any));
+    await tenantDb.transaction(async (tx: any) => {
+      if (categoryChanged) await applyCategoryChange(tx, params.modelId, model.categoryId, body.categoryId!);
+      await tx.update(modelsTable).set(updateData).where(eq(modelsTable.id, params.modelId as any));
+    });
+    if (body.imageUrl !== undefined && body.imageUrl !== model.imageUrl) {
+      await cleanupUnreferencedImages(tenantDb, [model.imageUrl]);
+    }
 
     if (body.teamMembers !== undefined) {
       await tenantDb.delete(modelTeamMembersTable).where(eq(modelTeamMembersTable.modelId, params.modelId as any));
@@ -378,9 +381,11 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
 
     if (!rows.length) { set.status = 404; return { error: "Not found" }; }
 
+    const imgs = await tenantDb.select({ url: modelImagesTable.url }).from(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
     await tenantDb.delete(modelTeamMembersTable).where(eq(modelTeamMembersTable.modelId, params.modelId as any));
     await tenantDb.delete(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
     await tenantDb.delete(modelsTable).where(eq(modelsTable.id, params.modelId as any));
+    await cleanupUnreferencedImages(tenantDb, [(rows[0] as any).imageUrl, ...imgs.map((i: any) => i.url)]);
     return { deleted: true };
   }, {
     params: t.Object({ modelId: t.String() }),
@@ -428,10 +433,13 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       const guard = await checkEnrollmentOpen(tenantDb, existingModel.categoryId, set);
       if (guard.blocked) return (set as any).body;
     }
-    await tenantDb.delete(modelImagesTable).where(and(
+    const where = and(
       eq(modelImagesTable.id, params.imageId as any),
       eq(modelImagesTable.modelId, params.modelId as any)
-    ));
+    );
+    const imgs = await tenantDb.select({ url: modelImagesTable.url }).from(modelImagesTable).where(where);
+    await tenantDb.delete(modelImagesTable).where(where);
+    await cleanupUnreferencedImages(tenantDb, imgs.map((i: any) => i.url));
     return { deleted: true };
   }, {
     params: t.Object({ modelId: t.String(), imageId: t.String() }),

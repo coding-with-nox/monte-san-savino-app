@@ -3,8 +3,10 @@ import { eq, sql } from "drizzle-orm";
 import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { categoriesTable, modelsTable, registrationsTable } from "../persistence/schema";
+import { categoriesTable, modelImagesTable, modelsTable, registrationsTable } from "../persistence/schema";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
+import { applyCategoryChange } from "./model-category-change";
+import { cleanupUnreferencedImages } from "./model-image-cleanup";
 import { isImageUrlAcceptable } from "./model.routes";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -77,7 +79,7 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
   })
   .put("/:modelId", async ({ tenantDb, params, body, set }) => {
     const [current] = await tenantDb
-      .select({ id: modelsTable.id, categoryId: modelsTable.categoryId })
+      .select({ id: modelsTable.id, categoryId: modelsTable.categoryId, imageUrl: modelsTable.imageUrl })
       .from(modelsTable)
       .where(eq(modelsTable.id, params.modelId as any))
       .limit(1);
@@ -102,11 +104,16 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
     for (const key of ["notes", "internalNotes"] as const) {
       if (typeof updates[key] === "string") updates[key] = (updates[key] as string).trim() || null;
     }
-    await tenantDb.update(modelsTable).set(updates as any).where(eq(modelsTable.id, params.modelId as any));
-    if (move.changed) {
-      // Mantiene coerente l'iscrizione collegata al modello.
-      await tenantDb.update(registrationsTable).set({ categoryId: (body as any).categoryId }).where(eq(registrationsTable.modelId, params.modelId as any));
-    }
+    await tenantDb.transaction(async (tx: any) => {
+      if (move.changed) await applyCategoryChange(tx, params.modelId, current.categoryId, (body as any).categoryId);
+      await tx.update(modelsTable).set(updates as any).where(eq(modelsTable.id, params.modelId as any));
+      if (move.changed) {
+        // Mantiene coerente l'iscrizione collegata al modello.
+        await tx.update(registrationsTable).set({ categoryId: (body as any).categoryId }).where(eq(registrationsTable.modelId, params.modelId as any));
+      }
+    });
+    const newUrl = (body as any).imageUrl;
+    if (newUrl !== undefined && newUrl !== current.imageUrl) await cleanupUnreferencedImages(tenantDb, [current.imageUrl]);
     return { updated: true };
   }, {
     params: t.Object({ modelId: t.String() }),
@@ -126,7 +133,10 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
     }
   })
   .delete("/:modelId", async ({ tenantDb, params }) => {
+    const [m] = await tenantDb.select({ imageUrl: modelsTable.imageUrl }).from(modelsTable).where(eq(modelsTable.id, params.modelId as any)).limit(1);
+    const imgs = await tenantDb.select({ url: modelImagesTable.url }).from(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
     await tenantDb.delete(modelsTable).where(eq(modelsTable.id, params.modelId as any));
+    await cleanupUnreferencedImages(tenantDb, [m?.imageUrl, ...imgs.map((i: any) => i.url)]);
     return { deleted: true };
   }, {
     params: t.Object({ modelId: t.String() }),
