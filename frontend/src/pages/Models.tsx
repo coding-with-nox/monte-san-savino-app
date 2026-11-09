@@ -60,8 +60,6 @@ type Model = {
   displayNumber?: number | null;
   /** Visible to owner, judges and managers. */
   notes?: string | null;
-  /** Managers/admins only: never rendered for other roles. */
-  internalNotes?: string | null;
 };
 type Level = { id: string; name: string; sortOrder?: number | null };
 type ModelDetail = { model: Model & { teamId?: string | null }; images: { id: string; url: string }[] };
@@ -98,6 +96,11 @@ export default function Models({ language }: ModelsProps) {
   const [editIsTeam, setEditIsTeam] = useState(false);
   const [editTeamId, setEditTeamId] = useState("");
   const [attachName, setAttachName] = useState("");
+  // Managers/admins only: internalNotes lives on GET/PUT /admin/models, never on /models.
+  const adminNotesRef = useRef<Promise<Map<string, string>> | null>(null);
+  const loadedInternalNotesRef = useRef("");
+  // false when GET /admin/models failed at open: saving would overwrite stored notes with a blank baseline.
+  const internalNotesLoadedRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -143,6 +146,37 @@ export default function Models({ language }: ModelsProps) {
     } catch {}
   }
 
+  /** Single GET /admin/models per mount, reused afterwards (updated in place after saves). */
+  function getAdminInternalNotes(): Promise<Map<string, string>> {
+    if (!adminNotesRef.current) {
+      adminNotesRef.current = api<{ id: string; internalNotes?: string | null }[]>("/admin/models")
+        .then((list) => new Map(list.map((m) => [m.id, m.internalNotes ?? ""] as [string, string])))
+        .catch((err) => {
+          adminNotesRef.current = null;
+          throw err;
+        });
+    }
+    return adminNotesRef.current;
+  }
+
+  async function saveInternalNotes(modelId: string) {
+    const value = editInternalNotes.trim();
+    if (!internalNotesLoadedRef.current) {
+      toast.error(t(language, "modelsInternalNotesNotLoaded"));
+      return;
+    }
+    if (value === loadedInternalNotesRef.current) return;
+    try {
+      await api(`/admin/models/${encodeURIComponent(modelId)}`, {
+        method: "PUT",
+        body: JSON.stringify({ internalNotes: value })
+      });
+      if (adminNotesRef.current) (await adminNotesRef.current).set(modelId, value);
+    } catch {
+      toast.error(t(language, "modelsInternalNotesSaveFailed"));
+    }
+  }
+
   async function openModel(modelId: string) {
     if (expandedId === modelId) {
       setExpandedId(null);
@@ -151,6 +185,17 @@ export default function Models({ language }: ModelsProps) {
     }
     try {
       const d = await api<ModelDetail>(`/models/${modelId}`);
+      let internal = "";
+      internalNotesLoadedRef.current = true;
+      if (isManager) {
+        try {
+          internal = (await getAdminInternalNotes()).get(modelId) ?? "";
+        } catch (err: any) {
+          internalNotesLoadedRef.current = false;
+          toast.error(err?.message ?? String(err));
+        }
+      }
+      loadedInternalNotesRef.current = internal;
       setDetail(d);
       setEditName(d.model.name);
       setEditCategoryId(d.model.categoryId);
@@ -158,7 +203,7 @@ export default function Models({ language }: ModelsProps) {
       setEditIsTeam(d.model.isTeam || false);
       setEditTeamId(d.model.teamId ?? "");
       setEditNotes(d.model.notes ?? "");
-      setEditInternalNotes(isManager ? d.model.internalNotes ?? "" : "");
+      setEditInternalNotes(internal);
       setExpandedId(modelId);
       setIsCreating(false);
       setAttachName("");
@@ -183,6 +228,8 @@ export default function Models({ language }: ModelsProps) {
     setEditTeamId("");
     setEditNotes("");
     setEditInternalNotes("");
+    loadedInternalNotesRef.current = "";
+    internalNotesLoadedRef.current = true; // a new model has no stored notes to overwrite
     setIsCreating(true);
     setAttachName("");
   }
@@ -190,7 +237,7 @@ export default function Models({ language }: ModelsProps) {
   async function createModel() {
     setSavingModel(true);
     try {
-      await api<{ id: string }>("/models", {
+      const created = await api<{ id: string }>("/models", {
         method: "POST",
         body: JSON.stringify({
           name: editName.trim(),
@@ -198,12 +245,11 @@ export default function Models({ language }: ModelsProps) {
           levelId: editLevelId,
           isTeam: editIsTeam,
           teamId: editIsTeam ? editTeamId : null,
-          notes: editNotes.trim() || null,
-          // internalNotes is sent only by managers/admins; other roles never touch it
-          ...(isManager ? { internalNotes: editInternalNotes.trim() || null } : {})
+          notes: editNotes.trim() || null
         })
       });
       setIsCreating(false);
+      if (isManager && created?.id) await saveInternalNotes(created.id);
       await load();
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
@@ -228,11 +274,10 @@ export default function Models({ language }: ModelsProps) {
           levelId: editLevelId,
           isTeam: editIsTeam,
           teamId: editIsTeam ? editTeamId : null,
-          notes: editNotes.trim() || null,
-          // internalNotes is sent only by managers/admins; other roles never touch it
-          ...(isManager ? { internalNotes: editInternalNotes.trim() || null } : {})
+          notes: editNotes.trim() || null
         })
       });
+      if (isManager) await saveInternalNotes(detail.model.id);
       closePanel();
       await load();
     } catch (err: any) {
