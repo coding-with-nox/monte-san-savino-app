@@ -88,29 +88,105 @@ describe("Login flow", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it("validates email format on blur and blocks registration", async () => {
+  it("validates the email format before calling the API", async () => {
     const user = await fillAndSubmit("not-an-email");
-    await user.click(screen.getByRole("button", { name: /create account/i }));
+    await user.click(screen.getByRole("button", { name: "Login" }));
     expect(await screen.findByText("Invalid email format")).toBeInTheDocument();
     expect(apiMock).not.toHaveBeenCalled();
   });
+});
 
-  it("registers then logs in", async () => {
-    apiMock
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({ accessToken: "a", refreshToken: "r", expiresIn: 5 });
-    const user = await fillAndSubmit();
-    await user.click(screen.getByRole("button", { name: /create account/i }));
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/"));
-    expect(apiMock.mock.calls.map((c) => c[0])).toEqual(["/auth/register", "/auth/login"]);
+describe("Signup flow", () => {
+  beforeEach(() => {
+    apiMock.mockReset();
+    setSessionMock.mockReset();
+    navigateMock.mockReset();
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("shows the error when registration fails", async () => {
-    apiMock.mockRejectedValueOnce(new ApiError(409, "Email taken"));
-    const user = await fillAndSubmit();
+  async function openSignup() {
+    const user = userEvent.setup();
+    renderWithProviders(<MemoryRouter><Login language="en" /></MemoryRouter>);
+    await user.click(screen.getByRole("tab", { name: "Sign up" }));
+    return user;
+  }
+
+  async function completeSteps(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText(/^email/i), "new@b.it");
+    await user.type(screen.getByLabelText(/^password/i), "secret123");
+    await user.type(screen.getByLabelText(/confirm password/i), "secret123");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(await screen.findByLabelText(/first name/i), "Anna");
+    await user.type(screen.getByLabelText(/last name/i), "Verdi");
+    await user.type(screen.getByLabelText(/phone/i), "3331234567");
+    await user.type(screen.getByLabelText(/^city/i), "Arezzo");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(await screen.findByRole("checkbox", { name: /consent/i }));
+  }
+
+  it("switches between the Sign in and Sign up tabs", async () => {
+    await openSignup();
+    expect(screen.getByRole("tab", { name: "Sign up" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
+  });
+
+  it("blocks the first step on invalid email, short password and mismatch", async () => {
+    const user = await openSignup();
+    await user.type(screen.getByLabelText(/^email/i), "bad");
+    await user.type(screen.getByLabelText(/^password/i), "short");
+    await user.type(screen.getByLabelText(/confirm password/i), "other");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("Invalid email format")).toBeInTheDocument();
+    expect(screen.getByText(/at least 8 characters long/i)).toBeInTheDocument();
+    expect(screen.getByText(/do not match/i)).toBeInTheDocument();
+    expect(apiMock).not.toHaveBeenCalled();
+  });
+
+  it("requires the personal details on the second step", async () => {
+    const user = await openSignup();
+    await user.type(screen.getByLabelText(/^email/i), "new@b.it");
+    await user.type(screen.getByLabelText(/^password/i), "secret123");
+    await user.type(screen.getByLabelText(/confirm password/i), "secret123");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    expect(screen.getAllByText("Required field.").length).toBeGreaterThanOrEqual(3);
+    expect(apiMock).not.toHaveBeenCalled();
+  });
+
+  it("requires the privacy consent", async () => {
+    const user = await openSignup();
+    await completeSteps(user);
+    await user.click(screen.getByRole("checkbox", { name: /consent/i })); // uncheck
     await user.click(screen.getByRole("button", { name: /create account/i }));
-    expect(await screen.findByText("Email taken")).toBeInTheDocument();
-    expect(navigateMock).not.toHaveBeenCalled();
+    expect(await screen.findByText(/must consent/i)).toBeInTheDocument();
+    expect(apiMock).not.toHaveBeenCalled();
+  });
+
+  it("registers, logs in, saves the personal details and goes home", async () => {
+    apiMock
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ accessToken: "a", refreshToken: "r", expiresIn: 5 })
+      .mockResolvedValueOnce({ updated: true });
+    const user = await openSignup();
+    await completeSteps(user);
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/"));
+    expect(apiMock.mock.calls.map((c) => c[0])).toEqual(["/auth/register", "/auth/login", "/users/profile"]);
+    expect(JSON.parse(apiMock.mock.calls[0][1].body)).toEqual({ email: "new@b.it", password: "secret123" });
+    expect(JSON.parse(apiMock.mock.calls[2][1].body)).toMatchObject({
+      firstName: "Anna", lastName: "Verdi", city: "Arezzo", country: "IT", phone: expect.stringContaining("333")
+    });
+  });
+
+  it("opens the profile when the details cannot be saved after the account is created", async () => {
+    apiMock
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ accessToken: "a", refreshToken: "r", expiresIn: 5 })
+      .mockRejectedValueOnce(new ApiError(500, "boom"));
+    const user = await openSignup();
+    await completeSteps(user);
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/profile"));
   });
 
   it("shows the invalid-credentials error when registering with an already used email", async () => {
@@ -118,7 +194,8 @@ describe("Login flow", () => {
     apiMock
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(new ApiError(401, "Invalid credentials"));
-    const user = await fillAndSubmit();
+    const user = await openSignup();
+    await completeSteps(user);
     await user.click(screen.getByRole("button", { name: /create account/i }));
     expect(await screen.findByText("Invalid credentials")).toBeInTheDocument();
     expect(apiMock.mock.calls.map((c) => c[0])).toEqual(["/auth/register", "/auth/login"]);
