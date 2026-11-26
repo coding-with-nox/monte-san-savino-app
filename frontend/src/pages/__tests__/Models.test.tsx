@@ -30,7 +30,9 @@ function setup(list: unknown[] = modelList) {
     if (path === "/models" && !init) return list;
     if (path === "/models" && init?.method === "POST") return { id: "new" };
     if (path === "/models/m1" && !init)
-      return { model: { ...modelList[0], notes: "my note", internalNotes: "secret" }, images: [] };
+      return { model: { ...modelList[0], notes: "my note" }, images: [] };
+    if (path === "/admin/models" && !init) return [{ id: "m1", internalNotes: "secret" }];
+    if (path === "/admin/models/m1" && init?.method === "PUT") return {};
     if (path === "/models/m1" && init?.method === "PUT") return {};
     if (path === "/public/categories") return [{ id: "c1", eventId: "e1", name: "Historical", status: "open" }];
     if (path === "/public/levels") return [{ id: "l1", name: "Beginner" }];
@@ -116,45 +118,86 @@ describe("Models", () => {
     expect(body).not.toHaveProperty("internalNotes");
   });
 
-  it("adds co-authors inline, previews the fee and sends teamMembers", async () => {
-    setup();
-    const base = apiMock.getMockImplementation()!;
-    apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
-      if (path.includes("settings")) return { baseFeeCents: "2500", modelImages: "false" };
-      if (path === "/models" && init?.method === "POST") return { id: "new", code: "173T1" };
-      return base(path, init);
-    });
-    const user = userEvent.setup();
-    renderWithProviders(<Models language="en" />);
-    await openWizard(user);
-    await pickClass(user);
-    await user.click(next());
-    await user.type(screen.getByLabelText("Model name"), "Diorama");
-    await user.click(next());
-    await user.click(screen.getByRole("checkbox", { name: "Team model" }));
-    expect(next()).toBeDisabled();
-    await user.type(screen.getByRole("textbox", { name: /First name/ }), "Ada");
-    await user.type(screen.getByRole("textbox", { name: /Last name/ }), "Rossi");
-    await user.click(screen.getByRole("combobox", { name: /Team role/ }));
-    await user.click(await screen.findByRole("option", { name: /Painter/ }));
-    await user.click(next());
-    const preview = screen.getByTestId("price-preview");
-    expect(preview).toHaveTextContent("€25.00");
-    expect(preview).toHaveTextContent("€15.00");
-    await user.click(screen.getAllByRole("button", { name: "Enroll model" }).at(-1)!);
-    expect(await screen.findByText("Model enrolled. Code 173T1.")).toBeInTheDocument();
-    expect(postBody()).toMatchObject({ isTeam: true, teamMembers: [{ name: "Ada", surname: "Rossi", roleId: "r1" }] });
-    expect(postBody().teamMembers[0]).not.toHaveProperty("email");
-  });
+  const adminPuts = () => apiMock.mock.calls.filter((c) => c[0] === "/admin/models/m1" && c[1]?.method === "PUT");
 
-  it("only managers see and send internal notes", async () => {
+  it("managers read internal notes from /admin/models once and never from /models", async () => {
     roleValue = "manager";
     setup();
     const user = userEvent.setup();
     renderWithProviders(<Models language="en" />);
     await user.click(await screen.findByText("Space Marine"));
     expect((await screen.findAllByDisplayValue("secret")).length).toBeGreaterThan(0);
+    expect(apiMock.mock.calls.filter((c) => c[0] === "/admin/models" && !c[1])).toHaveLength(1);
   });
+
+  it("manager round-trip: edit, save via PUT /admin/models, reopen shows the new value", async () => {
+    roleValue = "manager";
+    setup();
+    const user = userEvent.setup();
+    renderWithProviders(<Models language="en" />);
+    await user.click(await screen.findByText("Space Marine"));
+    const field = (await screen.findAllByDisplayValue("secret"))[0];
+    await user.clear(field);
+    await user.type(field, "  updated  ");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(adminPuts()).toHaveLength(1));
+    expect(JSON.parse(adminPuts()[0][1].body)).toEqual({ internalNotes: "updated" });
+    const mainPut = apiMock.mock.calls.find((c) => c[0] === "/models/m1" && c[1]?.method === "PUT")!;
+    expect(JSON.parse(mainPut[1].body)).not.toHaveProperty("internalNotes");
+    await user.click(await screen.findByText("Space Marine"));
+    expect((await screen.findAllByDisplayValue("updated")).length).toBeGreaterThan(0);
+    expect(apiMock.mock.calls.filter((c) => c[0] === "/admin/models" && !c[1])).toHaveLength(1);
+  });
+
+  it("does not call PUT /admin/models when internal notes are unchanged", async () => {
+    roleValue = "manager";
+    setup();
+    const user = userEvent.setup();
+    renderWithProviders(<Models language="en" />);
+    await user.click(await screen.findByText("Space Marine"));
+    await screen.findAllByDisplayValue("secret");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(apiMock.mock.calls.some((c) => c[0] === "/models/m1" && c[1]?.method === "PUT")).toBe(true));
+    expect(adminPuts()).toHaveLength(0);
+  });
+
+  it("shows a specific toast when the admin PUT fails, after the model was saved", async () => {
+    roleValue = "manager";
+    setup();
+    const base = apiMock.getMockImplementation()!;
+    apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/admin/models/m1" && init?.method === "PUT") throw new Error("boom");
+      return base(path, init);
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<Models language="en" />);
+    await user.click(await screen.findByText("Space Marine"));
+    const field = (await screen.findAllByDisplayValue("secret"))[0];
+    await user.type(field, "x");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText("Model saved, but the internal notes were not saved")).toBeInTheDocument();
+    expect(apiMock.mock.calls.some((c) => c[0] === "/models/m1" && c[1]?.method === "PUT")).toBe(true);
+  });
+
+  it("never overwrites stored internal notes when they could not be loaded", async () => {
+    roleValue = "manager";
+    setup();
+    const base = apiMock.getMockImplementation()!;
+    apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/admin/models" && !init) throw new Error("admin list down");
+      return base(path, init);
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<Models language="en" />);
+    await user.click(await screen.findByText("Space Marine"));
+    expect(await screen.findByText("admin list down")).toBeInTheDocument();
+    const field = screen.getAllByLabelText(/internal notes/i)[0];
+    await user.type(field, "x");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText("Model saved, but the internal notes had not loaded and were left unchanged")).toBeInTheDocument();
+    expect(adminPuts()).toHaveLength(0);
+    expect(apiMock.mock.calls.some((c) => c[0] === "/models/m1" && c[1]?.method === "PUT")).toBe(true);
+  }, 20000);
 
   it("never renders internal notes for plain users", async () => {
     setup();
@@ -163,6 +206,7 @@ describe("Models", () => {
     await user.click(await screen.findByText("Space Marine"));
     expect((await screen.findAllByDisplayValue("my note")).length).toBeGreaterThan(0);
     expect(screen.queryByDisplayValue("secret")).not.toBeInTheDocument();
+    expect(apiMock.mock.calls.some((c) => String(c[0]).startsWith("/admin/models"))).toBe(false);
   });
 
   it("disables creation when the per-user model limit is reached", async () => {

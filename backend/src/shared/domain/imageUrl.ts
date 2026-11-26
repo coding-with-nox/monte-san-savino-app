@@ -29,3 +29,23 @@ export function allowedImageBase(env: Record<string, string | undefined> = proce
   const pub = (env.MINIO_PUBLIC_URL ?? "http://localhost:9000").replace(/\/+$/, "");
   return `${pub}/${env.MINIO_BUCKET ?? "models"}`;
 }
+
+/**
+ * Object key (relative to the bucket) for an allowed image URL, or null when the URL is not
+ * under `publicBase` or the key is unsafe (empty, traversal).
+ */
+export function objectKeyFromImageUrl(url: unknown, publicBase: string): string | null {
+  if (!isAllowedImageUrl(url, publicBase)) return null;
+  // URL parsing normalizes dot segments (also %2e%2e); reject them on the raw string instead.
+  let raw: string;
+  try { raw = decodeURIComponent(url as string); } catch { return null; }
+  if (/(^|[\/\\])\.\.([\/\\?#]|$)/.test(raw)) return null;
+  const u = new URL(url as string);
+  const basePath = new URL(publicBase).pathname.replace(/\/+$/, "");
+  const prefix = `${basePath}/`;
+  if (!u.pathname.startsWith(prefix)) return null;
+  let key: string;
+  try { key = decodeURIComponent(u.pathname.slice(prefix.length)); } catch { return null; }
+  if (!key || key.includes("\\") || key.split("/").some((s) => s === ".." || s === "")) return null;
+  return key;
+}
