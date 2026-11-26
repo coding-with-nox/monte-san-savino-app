@@ -3,6 +3,55 @@ import { usersTable, userProfilesTable } from "../identity/infra/persistence/sch
 import { eventsTable, categoriesTable, sponsorsTable, levelsTable, memberRolesTable } from "../contest/infra/persistence/schema";
 import { BcryptHasher } from "../identity/infra/crypto/bcryptHasher";
 
+const LEVELS = [
+  { name: "Juniors", sortOrder: 0, freeToEnter: true },
+  { name: "Standard", sortOrder: 1, freeToEnter: false },
+  { name: "Masters", sortOrder: 2, freeToEnter: false },
+  { name: "All", sortOrder: 3, freeToEnter: false }
+] as const;
+
+type LevelName = (typeof LEVELS)[number]["name"];
+
+// Monte San Savino Show classes: array index = Class ID
+const CLASSES: ReadonlyArray<readonly [name: string, level: LevelName]> = [
+  ["Juniors", "Juniors"],
+  ["Historical Painting", "Standard"],
+  ["Historical Painting", "Masters"],
+  ["Fantasy Painting", "Standard"],
+  ["Fantasy Painting", "Masters"],
+  ["Open Historical", "Standard"],
+  ["Open Historical", "Masters"],
+  ["Open Fantasy", "Standard"],
+  ["Open Fantasy", "Masters"],
+  ["Storytelling", "Standard"],
+  ["Storytelling", "Masters"],
+  ["Sculpting", "Standard"],
+  ["Sculpting", "Masters"],
+  ["Ordnance Military Modelling - Unaltered", "Standard"],
+  ["Ordnance Military Modelling - Unaltered", "Masters"],
+  ["Ordnance Military Modelling - Converted", "Standard"],
+  ["Ordnance Military Modelling - Converted", "Masters"],
+  ["Open Ordnance Military Modelling", "All"],
+  ["Ordnance Military Modelling Diorama", "Standard"],
+  ["Ordnance Military Modelling Diorama", "Masters"],
+  ["Ordnance Sci-fi - Unaltered", "Standard"],
+  ["Ordnance Sci-fi - Unaltered", "Masters"],
+  ["Ordnance Sci-fi - Converted", "Standard"],
+  ["Ordnance Sci-fi - Converted", "Masters"],
+  ["Ordnance Sci-fi Diorama", "All"],
+  ["Cow Contest", "All"],
+  ["Out Of Competition", "All"],
+  ["Time Chronicles Painting", "Standard"],
+  ["Time Chronicles Painting", "Masters"],
+  ["Open Time Chronicles", "Standard"],
+  ["Open Time Chronicles", "Masters"],
+  ["Open Ordnance Time Chronicles", "All"],
+  ["Ordnance Time Chronicles Diorama", "All"]
+];
+
+const OUT_OF_COMPETITION_CLASS = 26;
+const SECOND_EVENT_CLASSES = [0, 1, 2, 3, 4];
+
 export async function seedDatabase() {
   const db = getTenantDbFromEnv();
 
@@ -45,26 +94,34 @@ export async function seedDatabase() {
     { id: event2Id, name: "Concorso Pittura 2025", status: "draft", startDate: "2025-09-15", endDate: "2025-09-17" }
   ]);
 
+  // --- Levels ---
+  const levels = LEVELS.map((level) => ({ id: crypto.randomUUID(), ...level }));
+  await db.insert(levelsTable).values(levels);
+  const levelIds = new Map<LevelName, string>(levels.map((l) => [l.name, l.id]));
+
   // --- Categories ---
+  const categoryFor = (eventId: string, classId: number) => {
+    const [name, level] = CLASSES[classId]!;
+    return {
+      id: crypto.randomUUID(),
+      eventId,
+      name,
+      status: "open",
+      classNumber: String(classId),
+      levelId: levelIds.get(level)!,
+      presentationOrder: classId,
+      outOfCompetition: classId === OUT_OF_COMPETITION_CLASS
+    };
+  };
   await db.insert(categoriesTable).values([
-    { id: crypto.randomUUID(), eventId: event1Id, name: "Fantasy", status: "open" },
-    { id: crypto.randomUUID(), eventId: event1Id, name: "Sci-Fi", status: "open" },
-    { id: crypto.randomUUID(), eventId: event2Id, name: "Storico", status: "open" },
-    { id: crypto.randomUUID(), eventId: event2Id, name: "Diorama", status: "open" }
+    ...CLASSES.map((_, classId) => categoryFor(event1Id, classId)),
+    ...SECOND_EVENT_CLASSES.map((classId) => categoryFor(event2Id, classId))
   ]);
 
   // --- Sponsors ---
   await db.insert(sponsorsTable).values([
     { id: crypto.randomUUID(), eventId: event1Id, name: "Citadel Colour", tier: "gold" },
     { id: crypto.randomUUID(), eventId: event1Id, name: "Vallejo", tier: "silver" }
-  ]);
-
-  // --- Levels ---
-  await db.insert(levelsTable).values([
-    { id: crypto.randomUUID(), name: "Junior", sortOrder: 1 },
-    { id: crypto.randomUUID(), name: "Senior", sortOrder: 2 },
-    { id: crypto.randomUUID(), name: "Open", sortOrder: 3 },
-    { id: crypto.randomUUID(), name: "Master", sortOrder: 4 }
   ]);
 
   // --- Member Roles --- (ensureTenantSchema already inserts the defaults: add only missing names)
