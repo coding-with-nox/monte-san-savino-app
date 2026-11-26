@@ -62,6 +62,12 @@ describe("api()", () => {
     await expect(api("/auth/login")).rejects.toMatchObject({ name: "ApiError", status: 422, message: "Invalid credentials" });
   });
 
+  it("treats a 401 from /auth/login as wrong credentials, not as an expired session", async () => {
+    fetchMock.mockResolvedValueOnce(jsonRes(401, { error: "Invalid credentials" }));
+    await expect(api("/auth/login")).rejects.toMatchObject({ name: "ApiError", status: 401, message: "Invalid credentials" });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no refresh attempt
+  });
+
   it("falls back to the JSON message field, then to plain text", async () => {
     fetchMock.mockResolvedValueOnce(jsonRes(400, { message: "bad" }));
     await expect(api("/a")).rejects.toMatchObject({ status: 400, message: "bad" });

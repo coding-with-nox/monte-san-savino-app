@@ -76,7 +76,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
 
   const res = await fetch(API_BASE + path, { ...options, headers });
-  if (res.status === 401 || res.status === 403) {
+  // Credential endpoints (/auth/login, /auth/register, /auth/token, ...): a 401 means wrong
+  // credentials, not an expired session, so skip refresh/logout and surface the server message.
+  const isCredentialCall = path.startsWith("/auth/");
+  if (!isCredentialCall && (res.status === 401 || res.status === 403)) {
     const refreshed = await refreshSession();
     if (!refreshed && res.status === 401) {
       clearToken();
