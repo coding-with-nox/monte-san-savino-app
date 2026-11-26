@@ -35,7 +35,8 @@ import PersonIcon from "@mui/icons-material/Person";
 import HomeIcon from "@mui/icons-material/Home";
 import EventIcon from "@mui/icons-material/Event";
 import GavelIcon from "@mui/icons-material/Gavel";
-import GroupsIcon from "@mui/icons-material/Groups";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import BarChartIcon from "@mui/icons-material/BarChart";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import PeopleIcon from "@mui/icons-material/People";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
@@ -72,7 +73,7 @@ import PageSkeleton from "./components/PageSkeleton";
 import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
-import { buildTheme } from "./lib/theme";
+import { buildTheme, DEFAULT_THEME_PRESET, isThemePreset, ThemePreset } from "./lib/theme";
 
 function Protected({ children }: { children: React.ReactNode }) {
   return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
@@ -88,11 +89,10 @@ export default function App() {
     if (typeof window === "undefined") return "light";
     return (window.localStorage.getItem("theme") as "light" | "dark") || "light";
   });
-  const [themePreset, setThemePreset] = useState<"violet" | "ocean" | "forest" | "mss">(() => {
-    if (typeof window === "undefined") return "violet";
+  const [themePreset, setThemePreset] = useState<ThemePreset>(() => {
+    if (typeof window === "undefined") return DEFAULT_THEME_PRESET;
     const stored = window.localStorage.getItem("themePreset");
-    if (stored === "ocean" || stored === "forest" || stored === "mss") return stored;
-    return "violet";
+    return isThemePreset(stored) ? stored : DEFAULT_THEME_PRESET;
   });
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === "undefined") return "it";
@@ -142,7 +142,7 @@ export default function App() {
       const storedMode = window.localStorage.getItem("theme");
       const storedPreset = window.localStorage.getItem("themePreset");
       if (storedMode === "light" || storedMode === "dark") setThemeMode(storedMode);
-      if (storedPreset === "violet" || storedPreset === "ocean" || storedPreset === "forest" || storedPreset === "mss") {
+      if (isThemePreset(storedPreset)) {
         setThemePreset(storedPreset);
       }
     };
@@ -155,7 +155,7 @@ export default function App() {
           setThemeMode(settings.appTheme);
           window.localStorage.setItem("theme", settings.appTheme);
         }
-        if (settings.themePreset === "violet" || settings.themePreset === "ocean" || settings.themePreset === "forest" || settings.themePreset === "mss") {
+        if (isThemePreset(settings.themePreset)) {
           setThemePreset(settings.themePreset);
           window.localStorage.setItem("themePreset", settings.themePreset);
         }
@@ -184,6 +184,22 @@ export default function App() {
 
   const role = getRole();
 
+  // null = unknown (loading or endpoint unavailable): fall back to the role-based behaviour.
+  const [sections, setSections] = useState<string[] | null>(null);
+  useEffect(() => {
+    setSections(null);
+    if (!role) return;
+    let cancelled = false;
+    api<{ sections?: string[] }>("/settings/section-visibility")
+      .then((res) => { if (!cancelled && Array.isArray(res?.sections)) setSections(res.sections); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [role]);
+  const sectionVisible = (section: string | null) =>
+    !section || sections === null || role === "admin" || sections.includes(section);
+  const guard = (section: string, element: React.ReactNode) =>
+    sectionVisible(section) ? element : <Navigate to="/" replace />;
+
   const userInitial = (() => {
     const token = getToken();
     if (!token) return "?";
@@ -196,45 +212,36 @@ export default function App() {
 
   const handleLogout = endSession;
 
+  // `section` is matched against the backend visibility matrix; role minimums always apply too.
   const allNavItems = [
-    { label: t(language, "navHome"), path: "/", minRole: "user" as Role },
-    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
-    { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role },
-    { label: t(language, "navTeams"), path: "/teams", minRole: "user" as Role },
-    { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null },
-    { label: t(language, "navCheckin"), path: "/staff-checkin", minRole: "staff" as Role },
-    { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role },
-    { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role },
-    { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role },
-    { label: t(language, "navLabels"), path: "/labels", minRole: "manager" as Role },
-    { label: t(language, "navStats"), path: "/stats", minRole: "manager" as Role },
-    { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role },
-    { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role }
+    { label: t(language, "navHome"), path: "/", minRole: "user" as Role, section: null, icon: <HomeIcon /> },
+    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role, section: "models", icon: <FigurineIcon /> },
+    { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role, section: "enrollments", icon: <AssignmentIcon /> },
+    { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null, section: null, icon: <EventIcon /> },
+    { label: t(language, "navCheckin"), path: "/staff-checkin", minRole: "staff" as Role, section: "checkin", icon: <HowToRegIcon /> },
+    { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role, section: "judge", icon: <GavelIcon /> },
+    { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role, section: "users", icon: <PeopleIcon /> },
+    { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role, section: "admin", icon: <AdminPanelSettingsIcon /> },
+    { label: t(language, "navLabels"), path: "/labels", minRole: "manager" as Role, section: "labels", icon: null },
+    { label: t(language, "navStats"), path: "/stats", minRole: "jury_president" as Role, section: "stats", icon: <BarChartIcon /> },
+    { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role, section: "podium", icon: null },
+    { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role, section: "settings", icon: null }
   ];
 
   const navItems = allNavItems.filter((item) => {
     if (!item.minRole) return true; // public pages always visible
     if (!role) return false; // no role = not logged in, hide protected
-    return roleAtLeast(role, item.minRole);
+    return roleAtLeast(role, item.minRole) && sectionVisible(item.section);
   });
 
-  const isManagerRole = !!role && roleAtLeast(role, "manager");
-  const bottomNavItems = isManagerRole
-    ? [
-        { label: t(language, "navHome"),   path: "/",        icon: <HomeIcon /> },
-        { label: t(language, "navModels"), path: "/models",  icon: <FigurineIcon /> },
-        { label: t(language, "navJudge"),  path: "/judge",   icon: <GavelIcon /> },
-        { label: t(language, "navUsers"),  path: "/users",   icon: <PeopleIcon /> },
-        { label: t(language, "navAdmin"),  path: "/admin",   icon: <AdminPanelSettingsIcon /> },
-      ]
-    : [
-        { label: t(language, "navHome"),         path: "/",              icon: <HomeIcon /> },
-        { label: t(language, "navModels"),       path: "/models",        icon: <FigurineIcon /> },
-        { label: t(language, "navTeams"),        path: "/teams",         icon: <GroupsIcon /> },
-        { label: t(language, "navPublicEvents"), path: "/public-events", icon: <EventIcon /> },
-        ...(role && roleAtLeast(role, "judge") ? [{ label: t(language, "navJudge"), path: "/judge", icon: <GavelIcon /> }] : []),
-        ...(role === "staff" ? [{ label: t(language, "navCheckin"), path: "/staff-checkin", icon: <HowToRegIcon /> }] : []),
-      ];
+  // Mobile bar: at most five destinations, by role.
+  const bottomNavPaths =
+    role && roleAtLeast(role, "manager")
+      ? ["/", "/models", "/judge", "/users", "/admin"]
+      : role === "jury_president"
+        ? ["/", "/judge", "/stats", "/models", "/enrollments"]
+        : ["/", "/models", "/enrollments", role === "staff" ? "/staff-checkin" : "/judge", "/public-events"];
+  const bottomNavItems = bottomNavPaths.flatMap((path) => navItems.filter((item) => item.path === path));
 
   const bottomNavValue = bottomNavItems.findIndex((item) =>
     item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path)
@@ -258,6 +265,7 @@ export default function App() {
             component={RouterLink}
             to={item.path}
             selected={isActive(item.path)}
+            aria-current={isActive(item.path) ? "page" : undefined}
           >
             <ListItemText primary={item.label} />
           </ListItemButton>
@@ -295,7 +303,7 @@ export default function App() {
         <AppBar position="static" elevation={0} sx={{ bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" }}>
           <Toolbar sx={{ gap: 2 }}>
             {isMobile && (
-              <IconButton color="default" edge="start" onClick={() => setDrawerOpen(true)}>
+              <IconButton color="default" edge="start" aria-label={t(language, "navOpenMenu")} onClick={() => setDrawerOpen(true)}>
                 <MenuIcon />
               </IconButton>
             )}
@@ -309,6 +317,7 @@ export default function App() {
                     key={item.path}
                     component={RouterLink}
                     to={item.path}
+                    aria-current={isActive(item.path) ? "page" : undefined}
                     variant={isActive(item.path) ? "contained" : "text"}
                     color={isActive(item.path) ? "secondary" : "inherit"}
                     sx={{ color: isActive(item.path) ? undefined : "text.primary" }}
@@ -339,7 +348,7 @@ export default function App() {
               </IconButton>
               {role && (
                 <>
-                  <IconButton onClick={(e) => setAvatarMenuAnchor(e.currentTarget)} sx={{ p: 0 }}>
+                  <IconButton aria-label={t(language, "navProfile")} onClick={(e) => setAvatarMenuAnchor(e.currentTarget)} sx={{ p: 0 }}>
                     <Avatar sx={{ width: 36, height: 36, bgcolor: "secondary.main", fontSize: 16 }}>
                       {userInitial}
                     </Avatar>
@@ -382,18 +391,18 @@ export default function App() {
             />
             <Route path="/" element={<Protected><Dashboard language={language} /></Protected>} />
             <Route path="/profile" element={<Protected><Profile language={language} /></Protected>} />
-            <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
-            <Route path="/enrollments" element={<Protected><Enrollments language={language} /></Protected>} />
-            <Route path="/staff-checkin" element={<Protected><RequireRole min="staff"><StaffCheckin language={language} /></RequireRole></Protected>} />
+            <Route path="/models" element={<Protected>{guard("models", <Models language={language} />)}</Protected>} />
+            <Route path="/enrollments" element={<Protected>{guard("enrollments", <Enrollments language={language} />)}</Protected>} />
+            <Route path="/staff-checkin" element={<Protected><RequireRole min="staff">{guard("checkin", <StaffCheckin language={language} />)}</RequireRole></Protected>} />
             <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
             <Route path="/public-events" element={<PublicEvents language={language} />} />
-            <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />
-            <Route path="/users" element={<Protected><RequireRole min="manager"><Users language={language} /></RequireRole></Protected>} />
-            <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin language={language} /></RequireRole></Protected>} />
-            <Route path="/labels" element={<Protected><RequireRole min="manager"><Labels language={language} /></RequireRole></Protected>} />
-            <Route path="/stats" element={<Protected><RequireRole min="manager"><Stats language={language} /></RequireRole></Protected>} />
-            <Route path="/podium" element={<Protected><RequireRole min="manager"><Podium language={language} /></RequireRole></Protected>} />
-            <Route path="/settings" element={<Protected><RequireRole min="admin"><Settings language={language} /></RequireRole></Protected>} />
+            <Route path="/judge" element={<Protected><RequireRole min="judge">{guard("judge", <Judge language={language} />)}</RequireRole></Protected>} />
+            <Route path="/users" element={<Protected><RequireRole min="manager">{guard("users", <Users language={language} />)}</RequireRole></Protected>} />
+            <Route path="/admin" element={<Protected><RequireRole min="manager">{guard("admin", <Admin language={language} />)}</RequireRole></Protected>} />
+            <Route path="/labels" element={<Protected><RequireRole min="manager">{guard("labels", <Labels language={language} />)}</RequireRole></Protected>} />
+            <Route path="/stats" element={<Protected><RequireRole min="jury_president">{guard("stats", <Stats language={language} />)}</RequireRole></Protected>} />
+            <Route path="/podium" element={<Protected><RequireRole min="manager">{guard("podium", <Podium language={language} />)}</RequireRole></Protected>} />
+            <Route path="/settings" element={<Protected><RequireRole min="admin">{guard("settings", <Settings language={language} />)}</RequireRole></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>

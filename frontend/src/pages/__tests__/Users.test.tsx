@@ -291,12 +291,12 @@ describe("Users", () => {
     it("manager sees only roles below manager when creating a user", async () => {
       roleValue = "manager";
       setupList();
-      expect(await optionsOfCreateRole()).toEqual(["user", "staff", "judge"]);
+      expect(await optionsOfCreateRole()).toEqual(["user", "staff", "judge", "Jury president"]);
     });
 
     it("admin sees every role when creating a user", async () => {
       setupList();
-      expect(await optionsOfCreateRole()).toEqual(["user", "staff", "judge", "manager", "admin"]);
+      expect(await optionsOfCreateRole()).toEqual(["user", "staff", "judge", "Jury president", "manager", "admin"]);
     });
 
     it("manager cannot toggle users with role >= manager and sees no reset button on them", async () => {
@@ -324,7 +324,7 @@ describe("Users", () => {
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByRole("button", { name: "Reset password" })).toBeInTheDocument();
       await user.click(within(dialog).getAllByRole("combobox")[0]);
-      expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["user", "staff", "judge"]);
+      expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["user", "staff", "judge", "Jury president"]);
     });
 
     it("admin cannot change own role or deactivate self", async () => {

@@ -9,8 +9,10 @@ import JudgesTab from "./admin/JudgesTab";
 import AwardsTab from "./admin/AwardsTab";
 import SponsorsTab from "./admin/SponsorsTab";
 import CatalogTab from "./admin/CatalogTab";
+import RulesTab from "./admin/RulesTab";
+import { getRole } from "../lib/auth";
 
-type TabKey = "events" | "judges" | "awards" | "sponsors" | "catalog";
+type TabKey = "events" | "judges" | "awards" | "sponsors" | "catalog" | "rules";
 
 interface AdminProps {
   language: Language;
@@ -59,6 +61,7 @@ export default function Admin({ language }: AdminProps) {
               <Tab value="awards" label={t(language, "adminTabAwards")} />
               <Tab value="sponsors" label={t(language, "adminTabSponsors")} />
               <Tab value="catalog" label={t(language, "adminTabCatalog")} />
+              {getRole() === "admin" && <Tab value="rules" label={t(language, "adminTabRules")} />}
             </Tabs>
           </Paper>
         )}
@@ -70,6 +73,7 @@ export default function Admin({ language }: AdminProps) {
             {panel("awards", () => <AwardsTab language={language} data={data} />)}
             {panel("sponsors", () => <SponsorsTab language={language} data={data} />)}
             {panel("catalog", () => <CatalogTab language={language} data={data} />)}
+            {panel("rules", () => <RulesTab language={language} />)}
           </>
         )}
       </Stack>

@@ -17,6 +17,12 @@ describe("podium helpers", () => {
     expect(totalSteps(p)).toBe(3);
   });
 
+  it("follows the configured order, unlisted labels first", () => {
+    const withMention = [...rows, { modelId: "e", categoryId: "c1", medalLabel: "Best of show", medalRank: 9 }];
+    const p = buildPodiums(withMention, ["Gold", "Bronze"]);
+    expect(p[0].winners.map((w) => w.modelId)).toEqual(["e", "a", "b"]);
+  });
+
   it("maps global steps to class and revealed count", () => {
     const p = buildPodiums(rows);
     expect(locateStep(p, 0)).toEqual({ classIndex: 0, revealed: 0 });

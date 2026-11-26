@@ -21,6 +21,7 @@ import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import PageSkeleton from "../components/PageSkeleton";
+import EmptyState from "../components/EmptyState";
 import useToast from "../components/useToast";
 
 // ---- Types ----
@@ -42,8 +43,9 @@ type JudgeModel = {
   notes?: string | null;
 };
 
+/** A display case (vetrina): the models of one participant sharing a displayNumber. */
 type Exhibitor = {
-  userId: string;
+  key: string;
   displayNum: string;
   models: JudgeModel[];
 };
@@ -79,17 +81,17 @@ function exhibitorDisplayNum(models: JudgeModel[]): string {
   return String(Math.min(...nums));
 }
 
-function groupByExhibitor(models: JudgeModel[]): Exhibitor[] {
+// A displayNumber is unique within an event. Without a selected event (or number) group per participant too.
+function groupByDisplay(models: JudgeModel[], eventId: string): Exhibitor[] {
   const map = new Map<string, JudgeModel[]>();
   for (const m of models) {
-    if (!map.has(m.userId)) map.set(m.userId, []);
-    map.get(m.userId)!.push(m);
+    const key = m.displayNumber !== null && eventId ? `d:${m.displayNumber}` : `${m.userId}:${m.displayNumber ?? ""}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(m);
   }
-  return Array.from(map.entries()).map(([userId, ms]) => ({
-    userId,
-    displayNum: exhibitorDisplayNum(ms),
-    models: ms,
-  }));
+  return Array.from(map.entries())
+    .map(([key, ms]) => ({ key, displayNum: exhibitorDisplayNum(ms), models: ms }))
+    .sort((a, b) => a.displayNum.localeCompare(b.displayNum, undefined, { numeric: true }));
 }
 
 function errorMessage(err: any, language: Language, categoryScoped = false): string {
@@ -249,7 +251,7 @@ export default function Judge({ language }: JudgeProps) {
   // ---- Derived state ----
   // Defensive: keep only the selected category even if the backend ignores the filter.
   const visibleModels = categoryId ? models.filter((m) => m.categoryId === categoryId) : models;
-  const allExhibitors = groupByExhibitor(visibleModels);
+  const allExhibitors = groupByDisplay(visibleModels, eventId);
 
   const displayedExhibitors = allExhibitors.filter((ex) => {
     if (!showAll && exhibitorFullyJudged(ex)) return false;
@@ -323,15 +325,33 @@ export default function Judge({ language }: JudgeProps) {
 
     setSubmitting(true);
     try {
-      await Promise.all(
-        targets.map((modelId) =>
-          api("/judge/vote", {
-            method: "POST",
-            body: JSON.stringify({ modelId, rank: selectedScore }),
-          })
-        )
-      );
-      toast.success(t(language, "judgeVoteSuccess"));
+      const displayNumber = activeExhibitor.models[0]?.displayNumber ?? null;
+      let notRecorded = 0;
+      if (displayMode && eventId && displayNumber !== null) {
+        const res = await api<{ skippedClosedModelIds?: string[] }>("/judge/displays/vote", {
+          method: "POST",
+          body: JSON.stringify({ eventId, displayNumber, rank: selectedScore }),
+        });
+        notRecorded = res?.skippedClosedModelIds?.length ?? 0;
+      } else {
+        const results = await Promise.allSettled(
+          targets.map((modelId) =>
+            api("/judge/vote", {
+              method: "POST",
+              body: JSON.stringify({ modelId, rank: selectedScore }),
+            })
+          )
+        );
+        const failed = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+        // Every vote failed: surface the backend message and keep the selection for a retry.
+        if (failed.length === targets.length) throw failed[0].reason;
+        notRecorded = failed.length;
+      }
+      if (notRecorded > 0) {
+        toast.error(t(language, "judgeVotePartial").replace("{n}", String(notRecorded)));
+      } else {
+        toast.success(t(language, "judgeVoteSuccess"));
+      }
       // Reload models and refresh active exhibitor in place (don't navigate home)
       const query = new URLSearchParams();
       if (eventId) query.set("eventId", eventId);
@@ -339,8 +359,8 @@ export default function Judge({ language }: JudgeProps) {
       const freshAll = await api<JudgeModel[]>(`/judge/models?${query.toString()}`);
       const fresh = categoryId ? freshAll.filter((m) => m.categoryId === categoryId) : freshAll;
       setModels(freshAll);
-      const grouped = groupByExhibitor(fresh);
-      const updated = grouped.find((ex) => ex.userId === activeExhibitor.userId);
+      const grouped = groupByDisplay(fresh, eventId);
+      const updated = grouped.find((ex) => ex.key === activeExhibitor.key);
       if (updated) {
         setActiveExhibitor(updated);
       }
@@ -424,7 +444,7 @@ export default function Judge({ language }: JudgeProps) {
             />
             {filterText && (
               <Button size="small" variant="outlined" onClick={() => setFilterText("")}>
-                Clear
+                {t(language, "judgeClearFilter")}
               </Button>
             )}
           </Stack>
@@ -455,6 +475,9 @@ export default function Judge({ language }: JudgeProps) {
               {t(language, "judgeAllJudged")}
             </Typography>
           )}
+          {allExhibitors.length === 0 && (
+            <EmptyState title={t(language, "judgeNoModelsTitle")} description={t(language, "judgeNoModelsDescription")} />
+          )}
 
           {/* Exhibitor tile grid */}
           <Box
@@ -472,7 +495,16 @@ export default function Judge({ language }: JudgeProps) {
 
               return (
                 <Paper
-                  key={ex.userId}
+                  key={ex.key}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${t(language, "judgeExhibitor")} ${ex.displayNum} (${ex.models.length})`}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openScoreScreen(ex);
+                    }
+                  }}
                   variant={bgColor ? "elevation" : "outlined"}
                   elevation={bgColor ? 2 : 0}
                   onClick={() => openScoreScreen(ex)}
@@ -523,7 +555,7 @@ export default function Judge({ language }: JudgeProps) {
         <Stack spacing={2}>
           {/* Header */}
           <Stack direction="row" alignItems="center" justifyContent="space-between">
-            <IconButton onClick={goHome} size="small">
+            <IconButton onClick={goHome} size="small" aria-label={t(language, "judgeBack")}>
               <ArrowBackIcon />
             </IconButton>
 
@@ -615,7 +647,7 @@ export default function Judge({ language }: JudgeProps) {
             {activeExhibitor.models.map((model) => {
               const isSelected = selectedModels.has(model.id);
               const label = [
-                model.displayNumber ?? model.code ?? "-",
+                model.code ?? model.displayNumber ?? "-",
                 model.name ?? model.description ?? "",
               ]
                 .filter(Boolean)
@@ -707,7 +739,9 @@ export default function Judge({ language }: JudgeProps) {
             onClick={handleSubmitScore}
             fullWidth
           >
-            {t(language, "judgeSubmitScore")}
+            {displayMode
+              ? t(language, "judgeVoteDisplay").replace("{n}", String(activeExhibitor.models.length))
+              : t(language, "judgeSubmitScore")}
           </Button>
         </Stack>
       )}

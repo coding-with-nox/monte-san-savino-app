@@ -9,6 +9,7 @@ import {
   Collapse,
   Divider,
   FormControl,
+  FormControlLabel,
   Grid,
   IconButton,
   InputLabel,
@@ -19,6 +20,10 @@ import {
   Paper,
   Select,
   Stack,
+  Step,
+  StepLabel,
+  Stepper,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -47,6 +52,10 @@ import PageSkeleton from "../components/PageSkeleton";
 import PrintActions from "../components/PrintActions";
 import { useConfirm } from "../components/ConfirmDialog";
 import useToast from "../components/useToast";
+import Field from "../components/Field";
+import CoauthorsEditor, { Coauthor, coauthorPayload, emptyCoauthor, isCoauthorValid } from "../components/CoauthorsEditor";
+import { PriceLine } from "../components/PriceSummary";
+import { EventPricing, formatCents, MemberRole, PricingResponse } from "../lib/pricing";
 
 type Model = {
   id: string;
@@ -57,14 +66,21 @@ type Model = {
   levelId: string;
   imageUrl?: string | null;
   isTeam: boolean;
+  /** Formatted team code from the backend (e.g. 173T1). */
+  teamCode?: string | null;
   displayNumber?: number | null;
   /** Visible to owner, judges and managers. */
   notes?: string | null;
   /** Managers/admins only: never rendered for other roles. */
   internalNotes?: string | null;
 };
-type Level = { id: string; name: string; sortOrder?: number | null };
-type ModelDetail = { model: Model & { teamId?: string | null }; images: { id: string; url: string }[] };
+type Level = { id: string; name: string; sortOrder?: number | null; freeToEnter?: boolean };
+type TeamMember = { name: string; surname: string; email?: string | null; role?: string | null; roleId?: string | null };
+type ModelDetail = {
+  model: Model & { teamId?: string | null };
+  images: { id: string; url: string }[];
+  teamMembers?: TeamMember[];
+};
 type Category = { id: string; eventId: string; name: string; status: string };
 
 interface ModelsProps {
@@ -93,7 +109,11 @@ export default function Models({ language }: ModelsProps) {
   const [editName, setEditName] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [levels, setLevels] = useState<Level[]>([]);
-  const [teams, setTeams] = useState<{ id: string; name: string; displayNumber: string }[]>([]);
+  const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
+  const [members, setMembers] = useState<Coauthor[]>([]);
+  const [baseFeeCents, setBaseFeeCents] = useState<number | null>(null);
+  const [pricing, setPricing] = useState<EventPricing | null>(null);
+  const [step, setStep] = useState(0);
   const [editLevelId, setEditLevelId] = useState("");
   const [editIsTeam, setEditIsTeam] = useState(false);
   const [editTeamId, setEditTeamId] = useState("");
@@ -136,11 +156,8 @@ export default function Models({ language }: ModelsProps) {
     try { setLevels(await api<Level[]>("/public/levels")); } catch { setLevels([]); }
   }
 
-  async function loadTeams() {
-    try {
-      const data = await api<{ id: string; name: string; displayNumber: string }[]>("/teams");
-      setTeams(data);
-    } catch {}
+  async function loadMemberRoles() {
+    try { setMemberRoles(await api<MemberRole[]>("/public/member-roles")); } catch { setMemberRoles([]); }
   }
 
   async function openModel(modelId: string) {
@@ -157,6 +174,13 @@ export default function Models({ language }: ModelsProps) {
       setEditLevelId(d.model.levelId || "");
       setEditIsTeam(d.model.isTeam || false);
       setEditTeamId(d.model.teamId ?? "");
+      setMembers((d.teamMembers ?? []).map((m) => ({
+        name: m.name,
+        surname: m.surname,
+        email: m.email ?? "",
+        roleId: m.roleId ?? "",
+        role: m.role ?? undefined
+      })));
       setEditNotes(d.model.notes ?? "");
       setEditInternalNotes(isManager ? d.model.internalNotes ?? "" : "");
       setExpandedId(modelId);
@@ -183,21 +207,31 @@ export default function Models({ language }: ModelsProps) {
     setEditTeamId("");
     setEditNotes("");
     setEditInternalNotes("");
+    setMembers([]);
+    setStep(0);
     setIsCreating(true);
     setAttachName("");
+  }
+
+  // Legacy team models keep their teamId until members are entered inline.
+  function teamPayload() {
+    if (!editIsTeam) return { isTeam: false };
+    return {
+      isTeam: true,
+      ...(members.length ? { teamMembers: members.map(coauthorPayload) } : { teamId: editTeamId })
+    };
   }
 
   async function createModel() {
     setSavingModel(true);
     try {
-      await api<{ id: string }>("/models", {
+      const created = await api<{ id: string; code?: string | null }>("/models", {
         method: "POST",
         body: JSON.stringify({
           name: editName.trim(),
           categoryId: editCategoryId,
           levelId: editLevelId,
-          isTeam: editIsTeam,
-          teamId: editIsTeam ? editTeamId : null,
+          ...teamPayload(),
           notes: editNotes.trim() || null,
           // internalNotes is sent only by managers/admins; other roles never touch it
           ...(isManager ? { internalNotes: editInternalNotes.trim() || null } : {})
@@ -205,6 +239,11 @@ export default function Models({ language }: ModelsProps) {
       });
       setIsCreating(false);
       await load();
+      toast.success(
+        created?.code
+          ? t(language, "modelsCreatedWithCode").replace("{code}", String(created.code))
+          : t(language, "modelsCreated")
+      );
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
     } finally {
@@ -226,8 +265,7 @@ export default function Models({ language }: ModelsProps) {
           name: editName.trim(),
           categoryId: editCategoryId,
           levelId: editLevelId,
-          isTeam: editIsTeam,
-          teamId: editIsTeam ? editTeamId : null,
+          ...teamPayload(),
           notes: editNotes.trim() || null,
           // internalNotes is sent only by managers/admins; other roles never touch it
           ...(isManager ? { internalNotes: editInternalNotes.trim() || null } : {})
@@ -235,6 +273,7 @@ export default function Models({ language }: ModelsProps) {
       });
       closePanel();
       await load();
+      toast.success(t(language, "modelsSaved"));
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
     } finally {
@@ -349,6 +388,8 @@ export default function Models({ language }: ModelsProps) {
     try {
       const s = await api<Record<string, string>>("/settings");
       setImagesEnabled(s.modelImages === "true");
+      const fee = Number.parseInt(s.baseFeeCents ?? "", 10);
+      setBaseFeeCents(Number.isFinite(fee) ? fee : null);
       const max = Number.parseInt(s.maxModelsPerUser ?? "", 10);
       setMaxModelsPerUser(Number.isFinite(max) && max > 0 ? max : null);
     } catch {
@@ -356,7 +397,7 @@ export default function Models({ language }: ModelsProps) {
     }
   }
 
-  useEffect(() => { load(); loadCategories(); loadSettings(); loadLevels(); loadTeams(); }, []);
+  useEffect(() => { load(); loadCategories(); loadSettings(); loadLevels(); loadMemberRoles(); }, []);
 
   const openCategories = categories.filter((c) => c.status === "open");
   const getCategoryName = (catId: string) => {
@@ -364,9 +405,173 @@ export default function Models({ language }: ModelsProps) {
     return cat ? cat.name : catId;
   };
 
+  const pricingEventId = categories.find((c) => c.id === editCategoryId)?.eventId;
+  const panelOpen = isCreating || expandedId !== null;
+
+  // Current fee of the event (computed by the backend), shown next to the price preview.
+  useEffect(() => {
+    if (!panelOpen || !pricingEventId) { setPricing(null); return; }
+    let cancelled = false;
+    api<PricingResponse>(`/pricing/me?eventId=${encodeURIComponent(pricingEventId)}`)
+      .then((res) => { if (!cancelled) setPricing(res?.events?.[0] ?? null); })
+      .catch(() => { if (!cancelled) setPricing(null); });
+    return () => { cancelled = true; };
+  }, [panelOpen, pricingEventId]);
+
+  const selectedLevel = levels.find((l) => l.id === editLevelId);
+  const teamValid = !editIsTeam || (members.length ? members.every(isCoauthorValid) : !!editTeamId);
+
+  const pricePreview = (
+    <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="price-preview">
+      <Stack spacing={0.75}>
+        <Typography variant="subtitle2">{t(language, "pricePreviewTitle")}</Typography>
+        {selectedLevel?.freeToEnter ? (
+          <Typography variant="body2">{t(language, "priceLevelFree")}</Typography>
+        ) : (
+          <>
+            {pricing && pricing.baseFeeCents > 0 ? (
+              <PriceLine label={t(language, "priceBaseFee")} value={t(language, "priceAlreadyApplied")} />
+            ) : (
+              baseFeeCents !== null && <PriceLine label={t(language, "priceBaseFeeOnce")} value={formatCents(baseFeeCents, language)} />
+            )}
+            {editIsTeam && members.map((m, i) => {
+              const role = memberRoles.find((r) => r.id === m.roleId);
+              return role?.price != null ? (
+                <PriceLine
+                  key={i}
+                  label={`${t(language, "coauthorLabel")} ${i + 1}: ${`${m.name} ${m.surname}`.trim() || role.name}`}
+                  value={formatCents(role.price, language)}
+                />
+              ) : null;
+            })}
+          </>
+        )}
+        {pricing && <PriceLine label={t(language, "priceCurrentTotal")} value={formatCents(pricing.totalCents, language)} />}
+        <Typography variant="body2" color="text.secondary">{t(language, "pricePreviewNote")}</Typography>
+      </Stack>
+    </Paper>
+  );
+
   const showMediaPanel = !isCreating && Boolean(detail);
   const tableColumnCount = imagesEnabled ? 5 : 4;
   const atMaxModels = maxModelsPerUser !== null && models.length >= maxModelsPerUser;
+
+  const nameField = (
+      <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" />
+  );
+  const classFields = (
+    <>
+      <FormControl fullWidth size="small">
+        <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
+        <Select value={editCategoryId} label={t(language, "modelsCategoryPlaceholder")} onChange={(e) => setEditCategoryId(e.target.value)}>
+          {openCategories.map((cat) => <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>)}
+        </Select>
+      </FormControl>
+      {!isCreating && detail?.model && editCategoryId && editCategoryId !== detail.model.categoryId && (
+        <Alert severity="warning" sx={{ py: 0.5 }}>
+          {t(language, "modelsCategoryChangeWarning")}
+        </Alert>
+      )}
+      <FormControl fullWidth size="small">
+        <InputLabel>{t(language, "modelsLevelPlaceholder")}</InputLabel>
+        <Select value={editLevelId} label={t(language, "modelsLevelPlaceholder")} onChange={(e) => setEditLevelId(e.target.value)}>
+          {levels.map((lvl) => <MenuItem key={lvl.id} value={lvl.id}>{lvl.name}</MenuItem>)}
+        </Select>
+      </FormControl>
+    </>
+  );
+  const noteFields = (
+    <>
+      <TextField
+        label={t(language, "modelsNotesLabel")}
+        value={editNotes}
+        onChange={(e) => setEditNotes(e.target.value)}
+        fullWidth
+        multiline
+        minRows={2}
+        size="small"
+        inputProps={{ maxLength: 2000 }}
+      />
+      {isManager && (
+        <TextField
+          label={t(language, "modelsInternalNotesLabel")}
+          value={editInternalNotes}
+          onChange={(e) => setEditInternalNotes(e.target.value)}
+          fullWidth
+          multiline
+          minRows={2}
+          size="small"
+          color="warning"
+          inputProps={{ maxLength: 2000 }}
+        />
+      )}
+    </>
+  );
+  const teamFields = (
+    <>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={editIsTeam}
+            onChange={(e) => {
+              setEditIsTeam(e.target.checked);
+              if (e.target.checked && members.length === 0 && !editTeamId) setMembers([emptyCoauthor()]);
+            }}
+          />
+        }
+        label={t(language, "modelsIsTeamLabel")}
+      />
+      {editIsTeam && <CoauthorsEditor language={language} members={members} roles={memberRoles} onChange={setMembers} />}
+    </>
+  );
+
+  const stepLabels = [
+    t(language, "wizardStepClass"),
+    t(language, "wizardStepModel"),
+    t(language, "wizardStepCoauthors"),
+    t(language, "wizardStepSummary")
+  ];
+  const stepValid = [!!editCategoryId && !!editLevelId, !!editName.trim(), teamValid, true];
+
+  const createPanel = (
+    <Box sx={{ p: 2 }}>
+      <Stack spacing={2}>
+        <Stepper activeStep={step} alternativeLabel>
+          {stepLabels.map((label) => (
+            <Step key={label}><StepLabel>{label}</StepLabel></Step>
+          ))}
+        </Stepper>
+        {step === 0 && classFields}
+        {step === 1 && <>{nameField}{noteFields}</>}
+        {step === 2 && teamFields}
+        {step === 3 && (
+          <>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}><Field label={t(language, "modelsNamePlaceholder")} value={editName.trim()} /></Grid>
+              <Grid item xs={12} sm={4}><Field label={t(language, "modelsCategoryPlaceholder")} value={editCategoryId ? getCategoryName(editCategoryId) : ""} /></Grid>
+              <Grid item xs={12} sm={4}><Field label={t(language, "modelsLevelPlaceholder")} value={selectedLevel?.name} /></Grid>
+              {editIsTeam && (
+                <Grid item xs={12}>
+                  <Field label={t(language, "wizardStepCoauthors")} value={members.map((m) => `${m.name} ${m.surname}`.trim()).join(", ")} />
+                </Grid>
+              )}
+            </Grid>
+            {pricePreview}
+          </>
+        )}
+        <Stack direction="row" justifyContent="space-between" spacing={1}>
+          <Button onClick={() => setStep((v) => v - 1)} disabled={step === 0}>{t(language, "wizardBack")}</Button>
+          {step < stepLabels.length - 1 ? (
+            <Button key="next" variant="contained" onClick={() => setStep((v) => v + 1)} disabled={!stepValid[step]}>{t(language, "wizardNext")}</Button>
+          ) : (
+            <Button key="submit" variant="contained" onClick={createModel} disabled={savingModel || !stepValid.every(Boolean)}>
+              {savingModel ? t(language, "modelsUploading") : t(language, "modelsCreateButton")}
+            </Button>
+          )}
+        </Stack>
+      </Stack>
+    </Box>
+  );
 
   const editPanel = (
     <Box sx={{ p: 2 }}>
@@ -374,78 +579,20 @@ export default function Models({ language }: ModelsProps) {
         <Grid item xs={12} md={showMediaPanel && imagesEnabled ? 7 : 12}>
           <Stack spacing={1.5}>
             <Typography variant="subtitle2">
-              {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
+              {t(language, "modelsEditSection")}
             </Typography>
-            <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" />
-            <FormControl fullWidth size="small">
-              <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
-              <Select value={editCategoryId} label={t(language, "modelsCategoryPlaceholder")} onChange={(e) => setEditCategoryId(e.target.value)}>
-                {openCategories.map((cat) => <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            {!isCreating && detail?.model && editCategoryId && editCategoryId !== detail.model.categoryId && (
-              <Alert severity="warning" sx={{ py: 0.5 }}>
-                {t(language, "modelsCategoryChangeWarning")}
-              </Alert>
-            )}
-            <FormControl fullWidth size="small">
-              <InputLabel>{t(language, "modelsLevelPlaceholder")}</InputLabel>
-              <Select value={editLevelId} label={t(language, "modelsLevelPlaceholder")} onChange={(e) => setEditLevelId(e.target.value)}>
-                {levels.map((lvl) => <MenuItem key={lvl.id} value={lvl.id}>{lvl.name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <input type="checkbox" id="isTeam" checked={editIsTeam} onChange={(e) => setEditIsTeam(e.target.checked)} />
-              <Typography variant="body2" component="label" htmlFor="isTeam">
-                {t(language, "modelsIsTeamLabel")}
-              </Typography>
-            </Stack>
-            {editIsTeam && (
-              <FormControl fullWidth size="small">
-                <InputLabel>{t(language, "teamsSelectTeamLabel")}</InputLabel>
-                <Select
-                  value={editTeamId}
-                  label={t(language, "teamsSelectTeamLabel")}
-                  onChange={(e) => setEditTeamId(e.target.value)}
-                >
-                  {teams.map((team) => (
-                    <MenuItem key={team.id} value={team.id}>
-                      {team.name} — {team.displayNumber}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-            <TextField
-              label={t(language, "modelsNotesLabel")}
-              value={editNotes}
-              onChange={(e) => setEditNotes(e.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-              size="small"
-              inputProps={{ maxLength: 2000 }}
-            />
-            {isManager && (
-              <TextField
-                label={t(language, "modelsInternalNotesLabel")}
-                value={editInternalNotes}
-                onChange={(e) => setEditInternalNotes(e.target.value)}
-                fullWidth
-                multiline
-                minRows={2}
-                size="small"
-                color="warning"
-                inputProps={{ maxLength: 2000 }}
-              />
-            )}
+            {nameField}
+            {classFields}
+            {teamFields}
+            {editIsTeam && pricePreview}
+            {noteFields}
             {!isCreating && detail?.model && (
               <Stack direction="row" alignItems="center" spacing={1}>
                 <PrintActions language={language} params={{ modelId: detail.model.id }} />
               </Stack>
             )}
-            <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || (isCreating && !editLevelId)} fullWidth>
-              {savingModel ? t(language, "modelsUploading") : isCreating ? t(language, "modelsCreateButton") : t(language, "modelsSaveButton")}
+            <Button variant="contained" onClick={saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || !teamValid} fullWidth>
+              {savingModel ? t(language, "modelsUploading") : t(language, "modelsSaveButton")}
             </Button>
           </Stack>
         </Grid>
@@ -544,15 +691,19 @@ export default function Models({ language }: ModelsProps) {
           <Paper variant="outlined" sx={{ mb: 1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
               <Typography variant="subtitle2">{t(language, "modelsCreateButton")}</Typography>
-              <IconButton size="small" onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></IconButton>
+              <IconButton size="small" aria-label={t(language, "wizardClose")} onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></IconButton>
             </Stack>
-            {editPanel}
+            {isCreating && createPanel}
           </Paper>
         </Collapse>
         <SectionCard title={t(language, "modelsTitle")}>
           {loading && <PageSkeleton variant="table" rows={4} />}
           {!loading && models.length === 0 && (
-            <EmptyState title={t(language, "emptyModelsTitle")} description={t(language, "emptyModelsDescription")} />
+            <EmptyState
+              title={t(language, "emptyModelsTitle")}
+              description={t(language, "emptyModelsDescription")}
+              action={atMaxModels ? undefined : { label: t(language, "modelsCreateButton"), onClick: startCreate }}
+            />
           )}
           {models.length > 0 && (
             <TableContainer component={Paper} variant="outlined">
@@ -594,15 +745,15 @@ export default function Models({ language }: ModelsProps) {
                           <Chip
                             size="small"
                             variant="outlined"
-                            label={model.code || "-"}
+                            label={model.teamCode || model.code || "-"}
                             sx={{ "& .MuiChip-label": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }}
                           />
                         </TableCell>
                         <TableCell><Chip size="small" label={getCategoryName(model.categoryId)} /></TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); openModel(model.id); }} color="primary"><EditIcon fontSize="small" /></IconButton>
-                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); deleteModel(model.id); }} color="error"><DeleteIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" aria-label={`${t(language, "modelsEditSection")} ${model.name}`} onClick={(e) => { e.stopPropagation(); openModel(model.id); }} color="primary"><EditIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" aria-label={`${t(language, "confirmDelete")} ${model.name}`} onClick={(e) => { e.stopPropagation(); deleteModel(model.id); }} color="error"><DeleteIcon fontSize="small" /></IconButton>
                           </Stack>
                         </TableCell>
                       </TableRow>

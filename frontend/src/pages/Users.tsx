@@ -48,6 +48,7 @@ import SocialLinks from "../components/SocialLinks";
 import { hasInvalidSocial, socialPayload } from "../lib/social";
 import { countryName, countryOptions } from "../lib/countries";
 import useToast from "../components/useToast";
+import { roleLabel } from "../lib/roles";
 
 type User = { id: string; email: string; role: string; isActive: boolean };
 type Event = { id: string; name: string; status: string };
@@ -77,7 +78,7 @@ interface UsersProps {
   language: Language;
 }
 
-const roles: Role[] = ["user", "staff", "judge", "manager", "admin"];
+const roles: Role[] = ["user", "staff", "judge", "jury_president", "manager", "admin"];
 
 // Roles the current user may assign: admin all, anyone else only roles strictly below their own.
 function assignableRoles(me: Role | null): Role[] {
@@ -392,7 +393,7 @@ export default function Users({ language }: UsersProps) {
               {users.map((user) => (
                 <TableRow key={user.id} hover sx={{ cursor: "pointer" }} onClick={() => openEditDialog(user.id)}>
                   <TableCell><Typography fontWeight={600}>{user.email}</Typography></TableCell>
-                  <TableCell><Chip size="small" label={user.role} /></TableCell>
+                  <TableCell><Chip size="small" label={roleLabel(language, user.role)} /></TableCell>
                   <TableCell>
                     <Box onClick={(e) => e.stopPropagation()}>
                       <ActiveSwitch
@@ -442,7 +443,7 @@ export default function Users({ language }: UsersProps) {
             <FormControl fullWidth>
               <InputLabel>{t(language, "usersRolePlaceholder")}</InputLabel>
               <Select value={createRole} label={t(language, "usersRolePlaceholder")} onChange={(e) => setCreateRole(e.target.value)}>
-                {myAssignableRoles.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                {myAssignableRoles.map((r) => <MenuItem key={r} value={r}>{roleLabel(language, r)}</MenuItem>)}
               </Select>
             </FormControl>
             <TextField
@@ -496,7 +497,7 @@ export default function Users({ language }: UsersProps) {
                       onChange={(e) => updateRole(e.target.value)}
                       disabled={!canAct(editProfile)}
                     >
-                      {(myAssignableRoles.includes(editProfile.role as Role) ? myAssignableRoles : [...myAssignableRoles, editProfile.role]).map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                      {(myAssignableRoles.includes(editProfile.role as Role) ? myAssignableRoles : [...myAssignableRoles, editProfile.role]).map((r) => <MenuItem key={r} value={r}>{roleLabel(language, r)}</MenuItem>)}
                     </Select>
                   </FormControl>
                   <ActiveSwitch

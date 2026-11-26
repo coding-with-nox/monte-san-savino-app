@@ -49,7 +49,8 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 /* ---------------- Manager / admin ---------------- */
-function ManagerDashboard({ language }: DashboardProps) {
+// Also used by the jury president (read-only: statistics instead of the management shortcuts).
+function ManagerDashboard({ language, juryPresident }: DashboardProps & { juryPresident?: boolean }) {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [eventId, setEventId] = useState("");
   const [enrollments, setEnrollments] = useState<AdminEnrollment[]>([]);
@@ -58,7 +59,7 @@ function ManagerDashboard({ language }: DashboardProps) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    api<EventRow[]>("/public/events")
+    api<EventRow[]>(juryPresident ? "/public/events?status=all" : "/public/events")
       .then((rows) => {
         setEvents(rows ?? []);
         if (rows?.length) setEventId(rows[0].id);
@@ -120,11 +121,18 @@ function ManagerDashboard({ language }: DashboardProps) {
           </Stack>
         </SectionCard>
       )}
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <Button component={RouterLink} to="/admin" variant="contained">{t(language, "dashOpenAdmin")}</Button>
-        <Button component={RouterLink} to="/enrollments" variant="outlined">{t(language, "dashManageEnrollments")}</Button>
-        <Button component={RouterLink} to="/staff-checkin" variant="outlined">{t(language, "dashOpenCheckin")}</Button>
-      </Stack>
+      {juryPresident ? (
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button component={RouterLink} to="/stats" variant="contained">{t(language, "dashOpenStats")}</Button>
+          <Button component={RouterLink} to="/judge" variant="outlined">{t(language, "dashGoToJudge")}</Button>
+        </Stack>
+      ) : (
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button component={RouterLink} to="/admin" variant="contained">{t(language, "dashOpenAdmin")}</Button>
+          <Button component={RouterLink} to="/enrollments" variant="outlined">{t(language, "dashManageEnrollments")}</Button>
+          <Button component={RouterLink} to="/staff-checkin" variant="outlined">{t(language, "dashOpenCheckin")}</Button>
+        </Stack>
+      )}
     </Stack>
   );
 }
@@ -279,8 +287,8 @@ export default function Dashboard({ language }: DashboardProps) {
     <PageContainer maxWidth="lg">
       <Stack spacing={2}>
         <Typography variant="h4">{t(language, "dashboardTitle")}</Typography>
-        {isManager ? (
-          <ManagerDashboard language={language} />
+        {isManager || role === "jury_president" ? (
+          <ManagerDashboard language={language} juryPresident={!isManager} />
         ) : isJudge ? (
           <JudgeDashboard language={language} />
         ) : (

@@ -4,6 +4,7 @@ import SlideshowIcon from "@mui/icons-material/Slideshow";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import { Link as RouterLink } from "react-router-dom";
 import { api } from "../lib/api";
+import { getRole } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
 import { countryName } from "../lib/countries";
 import PageContainer from "../components/PageContainer";
@@ -46,7 +47,8 @@ export default function Stats({ language }: StatsProps) {
   }, [language, eventId]);
 
   useEffect(() => {
-    api<{ id: string; name: string }[]>("/events").then(setEvents).catch(() => undefined);
+    const path = getRole() === "jury_president" ? "/public/events?status=all" : "/events";
+    api<{ id: string; name: string }[]>(path).then(setEvents).catch(() => undefined);
   }, []);
 
   useEffect(() => {

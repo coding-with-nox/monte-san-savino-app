@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Button, IconButton, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField
+  Button, Checkbox, IconButton, InputAdornment, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { api } from "../../lib/api";
@@ -9,10 +9,11 @@ import SectionCard from "../../components/SectionCard";
 import CsvImportCard from "../../components/CsvImportCard";
 import ModelMoveCard from "../../components/ModelMoveCard";
 import { useConfirm } from "../../components/ConfirmDialog";
+import useToast from "../../components/useToast";
+import { MemberRole, parseEuros } from "../../lib/pricing";
 import type { AdminData } from "./useAdminData";
 
-type Level = { id: string; name: string; sortOrder?: number | null };
-type MemberRole = { id: string; name: string };
+type Level = { id: string; name: string; sortOrder?: number | null; freeToEnter?: boolean };
 
 export default function CatalogTab({ language, data }: { language: Language; data: AdminData }) {
   const { events, categories, models, eventName, ensureModels, refreshModels, refresh } = data;
@@ -22,6 +23,8 @@ export default function CatalogTab({ language, data }: { language: Language; dat
   const [newLevelSortOrder, setNewLevelSortOrder] = useState("");
   const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
   const [newMemberRoleName, setNewMemberRoleName] = useState("");
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+  const toast = useToast();
 
   // Lookup tables load only when the catalog tab is first opened. Failures degrade to an empty list.
   async function loadLevels() {
@@ -55,6 +58,33 @@ export default function CatalogTab({ language, data }: { language: Language; dat
     if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/admin/levels/${id}`, { method: "DELETE" });
     await loadLevels();
+  }
+  async function toggleFreeLevel(level: Level) {
+    try {
+      await api(`/admin/levels/${level.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ name: level.name, freeToEnter: !level.freeToEnter })
+      });
+      await loadLevels();
+      toast.success(t(language, "adminSaved"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
+  }
+  async function savePrice(role: MemberRole) {
+    const price = parseEuros(priceDrafts[role.id] ?? "");
+    if (price === null) {
+      toast.error(t(language, "adminPriceInvalid"));
+      return;
+    }
+    try {
+      await api(`/admin/member-roles/${role.id}`, { method: "PUT", body: JSON.stringify({ price }) });
+      setPriceDrafts(({ [role.id]: _saved, ...rest }) => rest);
+      await loadMemberRoles();
+      toast.success(t(language, "adminSaved"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
   }
   async function createMemberRole() {
     if (!newMemberRoleName.trim()) return;
@@ -105,6 +135,7 @@ export default function CatalogTab({ language, data }: { language: Language; dat
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelName")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelSortOrder")}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelFree")}</TableCell>
                 <TableCell />
               </TableRow>
             </TableHead>
@@ -113,6 +144,14 @@ export default function CatalogTab({ language, data }: { language: Language; dat
                 <TableRow key={lvl.id}>
                   <TableCell>{lvl.name}</TableCell>
                   <TableCell>{lvl.sortOrder ?? "-"}</TableCell>
+                  <TableCell>
+                    <Checkbox
+                      size="small"
+                      checked={!!lvl.freeToEnter}
+                      onChange={() => toggleFreeLevel(lvl)}
+                      inputProps={{ "aria-label": `${t(language, "adminLevelFree")}: ${lvl.name}` }}
+                    />
+                  </TableCell>
                   <TableCell align="right">
                     <IconButton size="small" color="error" onClick={() => deleteLevel(lvl.id)}>
                       <DeleteIcon fontSize="small" />
@@ -137,6 +176,7 @@ export default function CatalogTab({ language, data }: { language: Language; dat
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminMemberRoleName")}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminMemberRolePrice")}</TableCell>
                 <TableCell />
               </TableRow>
             </TableHead>
@@ -144,6 +184,21 @@ export default function CatalogTab({ language, data }: { language: Language; dat
               {memberRoles.map((role) => (
                 <TableRow key={role.id}>
                   <TableCell>{role.name}</TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <TextField
+                        size="small"
+                        sx={{ width: 110 }}
+                        value={priceDrafts[role.id] ?? (role.price != null ? String(role.price / 100) : "")}
+                        onChange={(e) => setPriceDrafts((d) => ({ ...d, [role.id]: e.target.value }))}
+                        inputProps={{ inputMode: "decimal", "aria-label": `${t(language, "adminMemberRolePrice")}: ${role.name}` }}
+                        InputProps={{ startAdornment: <InputAdornment position="start">€</InputAdornment> }}
+                      />
+                      <Button size="small" onClick={() => savePrice(role)} disabled={priceDrafts[role.id] === undefined}>
+                        {t(language, "adminSave")}
+                      </Button>
+                    </Stack>
+                  </TableCell>
                   <TableCell align="right">
                     <IconButton size="small" color="error" onClick={() => deleteMemberRole(role.id)}>
                       <DeleteIcon fontSize="small" />
@@ -156,6 +211,7 @@ export default function CatalogTab({ language, data }: { language: Language; dat
         </TableContainer>
       </SectionCard>
       {confirmNode}
+      {toast.node}
     </Stack>
   );
 }

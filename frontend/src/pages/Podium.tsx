@@ -6,7 +6,7 @@ import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
-import { AwardRow, buildPodiums, locateStep, totalSteps } from "../lib/podium";
+import { AwardRow, buildPodiums, DEFAULT_PRIZE_ORDER, locateStep, totalSteps } from "../lib/podium";
 
 type Event = { id: string; name: string };
 type Category = { id: string; name: string };
@@ -17,7 +17,7 @@ interface PodiumProps {
 
 const reduceMotion = { "@media (prefers-reduced-motion: reduce)": { transition: "none", transform: "none" } };
 
-/** Full-screen awards ceremony: winners of each class revealed one at a time (lowest medal first). */
+/** Full-screen awards ceremony: winners of each class revealed one at a time, in the configured order. */
 export default function Podium({ language }: PodiumProps) {
   const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
@@ -27,10 +27,14 @@ export default function Podium({ language }: PodiumProps) {
   const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [prizeOrder, setPrizeOrder] = useState<string[]>(DEFAULT_PRIZE_ORDER);
 
   useEffect(() => {
     api<Event[]>("/events").then(setEvents).catch((e) => setError(e?.message ?? t(language, "awardsLoadError")));
     api<Category[]>("/categories").then(setCategories).catch(() => undefined);
+    api<{ order?: string[] }>("/settings/prize-order")
+      .then((res) => { if (res?.order?.length) setPrizeOrder(res.order); })
+      .catch(() => undefined);
   }, [language]);
 
   async function start() {
@@ -45,7 +49,7 @@ export default function Podium({ language }: PodiumProps) {
     }
   }
 
-  const podiums = useMemo(() => buildPodiums(rows), [rows]);
+  const podiums = useMemo(() => buildPodiums(rows, prizeOrder), [rows, prizeOrder]);
   const total = totalSteps(podiums);
   const { classIndex, revealed } = locateStep(podiums, step);
   const current = podiums[classIndex];

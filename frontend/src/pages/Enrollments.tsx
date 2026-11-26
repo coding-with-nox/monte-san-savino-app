@@ -23,6 +23,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import DownloadIcon from "@mui/icons-material/Download";
+import PrintIcon from "@mui/icons-material/Print";
 import { api } from "../lib/api";
 import { getRole, roleAtLeast } from "../lib/auth";
 import { downloadAuthenticatedFile } from "../lib/download";
@@ -31,6 +32,10 @@ import PageContainer from "../components/PageContainer";
 import EmptyState from "../components/EmptyState";
 import AbsentToggle from "../components/AbsentToggle";
 import useToast from "../components/useToast";
+import SectionCard from "../components/SectionCard";
+import PriceSummary from "../components/PriceSummary";
+import { openHtmlExport } from "../lib/exports";
+import { EventPricing, PricingResponse } from "../lib/pricing";
 
 type Enrollment = {
   id: string;
@@ -70,6 +75,8 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   const [saving, setSaving] = useState(false);
   const [exportingMine, setExportingMine] = useState(false);
   const [exportingAdmin, setExportingAdmin] = useState(false);
+  const [pricing, setPricing] = useState<EventPricing[]>([]);
+  const [printingId, setPrintingId] = useState<string | null>(null);
 
   async function load() {
     setEnrollments(await api<Enrollment[]>("/enrollments"));
@@ -119,6 +126,27 @@ export default function Enrollments({ language }: EnrollmentsProps) {
     }
   }
 
+  // The fee breakdown is optional information: the page works without it.
+  async function loadPricing() {
+    try {
+      const res = await api<PricingResponse>("/pricing/me");
+      setPricing(res?.events ?? []);
+    } catch {
+      setPricing([]);
+    }
+  }
+
+  async function printEnrollment(id: string) {
+    setPrintingId(id);
+    try {
+      await openHtmlExport("/exports/model-card/pdf", { eventId: id });
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
   async function enroll() {
     setSaving(true);
     try {
@@ -134,6 +162,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
       setModelId("");
       setCategoryId("");
       await load();
+      await loadPricing();
       if (isManager) {
         await loadAdminEnrollments();
       }
@@ -183,6 +212,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
     loadEvents();
     loadModels();
     loadCategories();
+    loadPricing();
     loadUsers().catch((err) => toast.error(err?.message ?? String(err)));
   }, []);
 
@@ -268,6 +298,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
       <EmptyState
         title={t(language, isPast ? "emptyEnrollmentsPastTitle" : "emptyEnrollmentsActiveTitle")}
         description={t(language, "emptyEnrollmentsDescription")}
+        action={isPast ? undefined : { label: t(language, "enrollmentsEmptyAction"), onClick: startCreate }}
       />
     ) : (
       <TableContainer component={Paper} variant="outlined">
@@ -292,7 +323,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                   {enrollment.checkedIn ? (
                     <Chip label={t(language, "enrollmentsCheckedIn")} size="small" color="success" variant="outlined" />
                   ) : (
-                    <Chip label="No" size="small" variant="outlined" />
+                    <Chip label={t(language, "enrollmentsNotCheckedIn")} size="small" variant="outlined" />
                   )}
                 </TableCell>
               </TableRow>
@@ -328,7 +359,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
           <Paper variant="outlined" sx={{ mb: 1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
               <Typography variant="subtitle2">{t(language, "enrollmentsButton")}</Typography>
-              <IconButton size="small" onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></IconButton>
+              <IconButton size="small" aria-label={t(language, "wizardClose")} onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></IconButton>
             </Stack>
             {createPanel}
           </Paper>
@@ -345,7 +376,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                   onClick={exportEnrollmentsByEvent}
                   disabled={exportingAdmin || !adminEventId}
                 >
-                  {exportingAdmin ? "..." : "Export iscrizioni evento"}
+                  {exportingAdmin ? "..." : t(language, "enrollmentsExportEvent")}
                 </Button>
               </Stack>
               <FormControl size="small" sx={{ maxWidth: 360 }}>
@@ -365,7 +396,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Partecipante</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsParticipantColumn")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsEventSelect")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelColumn")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategoryColumn")}</TableCell>
@@ -380,7 +411,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                         <TableCell>{getEventName(enrollment.eventId)}</TableCell>
                         <TableCell>{getModelName(enrollment.modelId)}</TableCell>
                         <TableCell>{getCategoryName(enrollment.categoryId)}</TableCell>
-                        <TableCell>{enrollment.checkedIn ? "yes" : "no"}</TableCell>
+                        <TableCell>{t(language, enrollment.checkedIn ? "enrollmentsCheckedIn" : "enrollmentsNotCheckedIn")}</TableCell>
                         <TableCell>
                           <AbsentToggle
                             language={language}
@@ -406,6 +437,26 @@ export default function Enrollments({ language }: EnrollmentsProps) {
             </Stack>
           </Paper>
         )}
+
+        {pricing.map((p) => (
+          <SectionCard
+            key={p.eventId}
+            title={`${t(language, "priceSummaryTitle")}: ${p.eventName}`}
+            action={
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<PrintIcon />}
+                onClick={() => printEnrollment(p.eventId)}
+                disabled={printingId !== null}
+              >
+                {t(language, "enrollmentsPrint")}
+              </Button>
+            }
+          >
+            <PriceSummary language={language} pricing={p} />
+          </SectionCard>
+        ))}
 
         <Typography variant="h6">{t(language, "enrollmentsListTitle")}</Typography>
         {renderTable(activeEnrollments, false)}

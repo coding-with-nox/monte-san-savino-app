@@ -34,7 +34,8 @@ function setup(list: unknown[] = modelList) {
     if (path === "/models/m1" && init?.method === "PUT") return {};
     if (path === "/public/categories") return [{ id: "c1", eventId: "e1", name: "Historical", status: "open" }];
     if (path === "/public/levels") return [{ id: "l1", name: "Beginner" }];
-    if (path === "/teams") return [];
+    if (path === "/public/member-roles") return [{ id: "r1", name: "Painter", price: 1500 }];
+    if (path.startsWith("/pricing/me")) return { currency: "EUR", totalCents: 0, events: [] };
     if (path.includes("settings")) return { maxModelsPerUser: maxModels === null ? "" : String(maxModels), modelImages: "false" };
     return [];
   });
@@ -69,38 +70,81 @@ describe("Models", () => {
     expect(await screen.findByText("Server down")).toBeInTheDocument();
   });
 
-  it("keeps the create form submit disabled until name, category and level are set", async () => {
+  async function openWizard(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByText("Space Marine");
+    await user.click(screen.getAllByRole("button", { name: "Enroll model" })[0]);
+  }
+  const next = () => screen.getByRole("button", { name: "Next" });
+  async function pickClass(user: ReturnType<typeof userEvent.setup>) {
+    const [catBox, levelBox] = screen.getAllByRole("combobox");
+    await user.click(catBox);
+    await user.click(await screen.findByRole("option", { name: "Historical" }));
+    await user.click(levelBox);
+    await user.click(await screen.findByRole("option", { name: "Beginner" }));
+  }
+  const postBody = () => JSON.parse(apiMock.mock.calls.find((c) => c[0] === "/models" && c[1]?.method === "POST")![1].body);
+
+  it("does not advance until each step is complete", async () => {
     setup();
     const user = userEvent.setup();
     renderWithProviders(<Models language="en" />);
-    await screen.findByText("Space Marine");
-    const openers = screen.getAllByRole("button", { name: "Enroll model" });
-    await user.click(openers[0]);
-    const submit = () => screen.getAllByRole("button", { name: "Enroll model" }).find((b) => (b as HTMLButtonElement).type === "button" && b.getAttribute("class")?.includes("fullWidth"))!;
-    expect(submit()).toBeDisabled();
+    await openWizard(user);
+    expect(next()).toBeDisabled();
+    await pickClass(user);
+    await user.click(next());
+    expect(next()).toBeDisabled();
     await user.type(screen.getByLabelText("Model name"), "Dread");
-    expect(submit()).toBeDisabled();
+    expect(next()).toBeEnabled();
   });
 
   it("creates a model with the trimmed name and without internalNotes for plain users", async () => {
     setup();
     const user = userEvent.setup();
     renderWithProviders(<Models language="en" />);
-    await screen.findByText("Space Marine");
-    await user.click(screen.getAllByRole("button", { name: "Enroll model" })[0]);
+    await openWizard(user);
+    await pickClass(user);
+    await user.click(next());
     await user.type(screen.getByLabelText("Model name"), "  Dread  ");
-    const [catBox, levelBox] = screen.getAllByRole("combobox");
-    await user.click(catBox);
-    await user.click(await screen.findByRole("option", { name: "Historical" }));
-    await user.click(levelBox);
-    await user.click(await screen.findByRole("option", { name: "Beginner" }));
-    const submit = screen.getAllByRole("button", { name: "Enroll model" }).find((b) => !(b as HTMLButtonElement).disabled && b.getAttribute("class")?.includes("fullWidth"))!;
+    await user.click(next());
+    await user.click(next());
+    const submit = screen.getAllByRole("button", { name: "Enroll model" }).at(-1)!;
     await user.click(submit);
     await waitFor(() => expect(apiMock.mock.calls.some((c) => c[0] === "/models" && c[1]?.method === "POST")).toBe(true));
-    const post = apiMock.mock.calls.find((c) => c[0] === "/models" && c[1]?.method === "POST")!;
-    const body = JSON.parse(post[1].body);
-    expect(body).toMatchObject({ name: "Dread", categoryId: "c1", levelId: "l1", isTeam: false, teamId: null });
+    const body = postBody();
+    expect(body).toMatchObject({ name: "Dread", categoryId: "c1", levelId: "l1", isTeam: false });
+    expect(body).not.toHaveProperty("teamMembers");
     expect(body).not.toHaveProperty("internalNotes");
+  });
+
+  it("adds co-authors inline, previews the fee and sends teamMembers", async () => {
+    setup();
+    const base = apiMock.getMockImplementation()!;
+    apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path.includes("settings")) return { baseFeeCents: "2500", modelImages: "false" };
+      if (path === "/models" && init?.method === "POST") return { id: "new", code: "173T1" };
+      return base(path, init);
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<Models language="en" />);
+    await openWizard(user);
+    await pickClass(user);
+    await user.click(next());
+    await user.type(screen.getByLabelText("Model name"), "Diorama");
+    await user.click(next());
+    await user.click(screen.getByRole("checkbox", { name: "Team model" }));
+    expect(next()).toBeDisabled();
+    await user.type(screen.getByRole("textbox", { name: /First name/ }), "Ada");
+    await user.type(screen.getByRole("textbox", { name: /Last name/ }), "Rossi");
+    await user.click(screen.getByRole("combobox", { name: /Team role/ }));
+    await user.click(await screen.findByRole("option", { name: /Painter/ }));
+    await user.click(next());
+    const preview = screen.getByTestId("price-preview");
+    expect(preview).toHaveTextContent("€25.00");
+    expect(preview).toHaveTextContent("€15.00");
+    await user.click(screen.getAllByRole("button", { name: "Enroll model" }).at(-1)!);
+    expect(await screen.findByText("Model enrolled. Code 173T1.")).toBeInTheDocument();
+    expect(postBody()).toMatchObject({ isTeam: true, teamMembers: [{ name: "Ada", surname: "Rossi", roleId: "r1" }] });
+    expect(postBody().teamMembers[0]).not.toHaveProperty("email");
   });
 
   it("only managers see and send internal notes", async () => {

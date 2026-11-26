@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import { DEFAULT_THEME_PRESET, isThemePreset, ThemePreset } from "../lib/theme";
 import ActiveSwitch from "../lib/ActiveSwitch";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
@@ -42,7 +43,7 @@ export default function Settings({ language }: SettingsProps) {
   const [sheetNameDraft, setSheetNameDraft] = useState("");
   const [filePrefixDraft, setFilePrefixDraft] = useState("");
   const [themeModeDraft, setThemeModeDraft] = useState<"light" | "dark">("light");
-  const [themePresetDraft, setThemePresetDraft] = useState<"violet" | "ocean" | "forest" | "mss">("violet");
+  const [themePresetDraft, setThemePresetDraft] = useState<ThemePreset>(DEFAULT_THEME_PRESET);
 
   const [maxModelsDraft, setMaxModelsDraft] = useState("5");
 
@@ -70,9 +71,7 @@ export default function Settings({ language }: SettingsProps) {
     setSheetNameDraft(res.excelSheetName ?? "Export");
     setFilePrefixDraft(res.excelFilePrefix ?? "contest-export");
     setThemeModeDraft(res.appTheme === "dark" ? "dark" : "light");
-    setThemePresetDraft(
-      res.themePreset === "ocean" || res.themePreset === "forest" || res.themePreset === "mss" ? res.themePreset : "violet"
-    );
+    setThemePresetDraft(isThemePreset(res.themePreset) ? res.themePreset : DEFAULT_THEME_PRESET);
   }
 
   async function toggle(key: string) {
@@ -368,8 +367,9 @@ export default function Settings({ language }: SettingsProps) {
                 <Select
                   value={themePresetDraft}
                   label={t(language, "settingsThemePreset")}
-                  onChange={(event) => setThemePresetDraft(event.target.value as "violet" | "ocean" | "forest" | "mss")}
+                  onChange={(event) => setThemePresetDraft(event.target.value as ThemePreset)}
                 >
+                  <MenuItem value="savino">{t(language, "settingsThemePresetSavino")}</MenuItem>
                   <MenuItem value="violet">{t(language, "settingsThemePresetViolet")}</MenuItem>
                   <MenuItem value="ocean">{t(language, "settingsThemePresetOcean")}</MenuItem>
                   <MenuItem value="forest">{t(language, "settingsThemePresetForest")}</MenuItem>

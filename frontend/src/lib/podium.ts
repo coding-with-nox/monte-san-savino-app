@@ -8,17 +8,21 @@ export type AwardRow = {
   averageRank?: number | null;
 };
 
+/** Presentation order of medalLabel values (first = presented first). */
+export const DEFAULT_PRIZE_ORDER = ["Highly Commended", "Bronze", "Silver", "Gold"];
+
 export type ClassPodium = {
   categoryId: string;
-  /** Winners ordered for the reveal: lowest medal first, best medal last. */
+  /** Winners in reveal order. */
   winners: AwardRow[];
 };
 
 /**
- * Groups awarded rows (medalLabel present) by class. Within a class winners are ordered
- * by ascending medalRank (higher rank = better medal, revealed last).
+ * Groups awarded rows (medalLabel present) by class. Within a class winners follow `order`;
+ * labels not listed come first, by ascending medalRank.
  */
-export function buildPodiums(rows: AwardRow[]): ClassPodium[] {
+export function buildPodiums(rows: AwardRow[], order: readonly string[] = DEFAULT_PRIZE_ORDER): ClassPodium[] {
+  const position = (r: AwardRow) => order.indexOf(r.medalLabel ?? "");
   const byClass = new Map<string, AwardRow[]>();
   for (const r of rows) {
     if (!r.medalLabel) continue;
@@ -28,7 +32,7 @@ export function buildPodiums(rows: AwardRow[]): ClassPodium[] {
   }
   return [...byClass.entries()].map(([categoryId, winners]) => ({
     categoryId,
-    winners: winners.sort((a, b) => (a.medalRank ?? 0) - (b.medalRank ?? 0))
+    winners: winners.sort((a, b) => position(a) - position(b) || (a.medalRank ?? 0) - (b.medalRank ?? 0))
   }));
 }
 
