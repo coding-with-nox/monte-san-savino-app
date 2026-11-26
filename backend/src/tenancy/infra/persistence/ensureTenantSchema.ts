@@ -465,6 +465,7 @@ export async function ensureTenantSchema() {
     await pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ux_awards_category_model ON awards (category_id, model_id)
     `);
+    await pool.query(`ALTER TABLE IF EXISTS awards ADD COLUMN IF NOT EXISTS issues text`);
 
     // Team codes (<participant number>T<n>), coauthor role ids and per-role coauthor price (cents)
     await pool.query(`

@@ -155,7 +155,7 @@ describe("tour definitions", () => {
 
   it("covers every page and tab of the application", () => {
     expect(TOURS.map((tour) => tour.id).sort()).toEqual([
-      "admin-awards", "admin-catalog", "admin-events", "admin-judges", "admin-rules", "admin-sponsors",
+      "admin-awards", "admin-catalog", "admin-events", "admin-judges", "admin-judging", "admin-rules", "admin-sponsors",
       "checkin", "enrollments", "events", "help", "home", "judge", "judge-score", "labels", "login",
       "models", "models-wizard", "podium", "profile", "settings-export", "settings-general",
       "settings-team", "settings-theme", "stats", "teams", "users"

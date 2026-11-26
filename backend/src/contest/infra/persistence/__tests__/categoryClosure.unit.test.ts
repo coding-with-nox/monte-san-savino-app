@@ -7,6 +7,7 @@ type State = {
   votes: { judgeId: string; modelId: string; rank: number }[]; // newest first
   completions: string[]; awards: any[];
   brackets: any[];
+  settings: Record<string, string>;
 };
 
 /** Fake DB whose transaction() snapshots state and rolls back when the callback throws. */
@@ -14,7 +15,8 @@ function fakeDb(initial: Partial<State> = {}) {
   let state: State = {
     category: { id: "c1", eventId: "e1", status: "open" },
     assigned: ["j1", "j2"], models: ["m1", "m2"], votes: [], completions: [], awards: [],
-    brackets: [{ medalLabel: "Gold", medalRank: 4, lowLimit: 6, highLimit: 8 }],
+    brackets: [{ medalLabel: "Gold", medalRank: 4, lowLimit: 11, highLimit: 12 }],
+    settings: {},
     ...initial
   };
   const calls: string[] = [];
@@ -23,9 +25,9 @@ function fakeDb(initial: Partial<State> = {}) {
     listAssignedJudgeIds: async () => state.assigned,
     listCategoryModelIds: async () => state.models,
     listVotedModelIds: async (j) => [...new Set(state.votes.filter((v) => v.judgeId === j).map((v) => v.modelId))],
-    listVotePairs: async () => state.votes.map(({ judgeId, modelId }) => ({ judgeId, modelId })),
     listVotesNewestFirst: async () => state.votes,
     listBrackets: async () => state.brackets,
+    listSettingValues: async (keys) => Object.fromEntries(Object.entries(state.settings).filter(([k]) => keys.includes(k))),
     upsertCompletion: async (j) => { if (!state.completions.includes(j)) state.completions.push(j); },
     listCompletedJudgeIds: async () => state.completions,
     upsertAwards: async (_c, rows) => { if ((state as any).failAwards) throw new Error("boom"); state.awards = rows; },
@@ -71,22 +73,22 @@ describe("closeCategory - judge path", () => {
     expect(f.state.category!.status).toBe("open");
     expect(f.state.awards).toEqual([]);
   });
-  it("closes and freezes awards when the last judge completes", async () => {
+  it("closes and freezes awards when the last judge completes (2 judges, N=3 scaled to 12)", async () => {
     const f = fakeDb({ votes: allVotes(["j1", "j2"], ["m1", "m2"], 4) });
     await closeCategory(f.db, "c1", { judgeId: "j1" }, makeStore(f));
     const r = await closeCategory(f.db, "c1", { judgeId: "j2" }, makeStore(f));
     expect(r.outcome).toBe("closed");
     expect(f.state.category!.status).toBe("closed");
     expect(f.state.awards).toEqual([
-      { modelId: "m1", totalScore: 8, medalLabel: "Gold", medalRank: 4 },
-      { modelId: "m2", totalScore: 8, medalLabel: "Gold", medalRank: 4 }
+      { modelId: "m1", totalScore: 12, medalLabel: "Gold", medalRank: 4, issues: [] },
+      { modelId: "m2", totalScore: 12, medalLabel: "Gold", medalRank: 4, issues: [] }
     ]);
   });
   it("uses the latest vote (newest first) per judge+model", async () => {
     const votes = [{ judgeId: "j1", modelId: "m1", rank: 1 }, { judgeId: "j1", modelId: "m1", rank: 4 }, { judgeId: "j1", modelId: "m2", rank: 0 }];
     const f = fakeDb({ assigned: ["j1"], votes });
     await closeCategory(f.db, "c1", { judgeId: "j1" }, makeStore(f));
-    expect(f.state.awards.find((a) => a.modelId === "m1").totalScore).toBe(1);
+    expect(f.state.awards.find((a) => a.modelId === "m1").totalScore).toBe(3); // latest rank 1, N=3, one voter
   });
   it("never closes with zero assigned judges (judge not assigned -> 403)", async () => {
     const f = fakeDb({ assigned: [] });
@@ -108,7 +110,20 @@ describe("closeCategory - judge path", () => {
   });
 });
 
-describe("closeCategory - manager manual path (same award logic)", () => {
+describe("closeCategory - judging rules from settings", () => {
+  it("uses maxVotesPerExhibitor from settings as N", async () => {
+    const f = fakeDb({ assigned: ["j1"], votes: [{ judgeId: "j1", modelId: "m1", rank: 4 }], settings: { maxVotesPerExhibitor: "2" } });
+    await closeCategory(f.db, "c1", {}, makeStore(f));
+    expect(f.state.awards.find((a) => a.modelId === "m1").totalScore).toBe(8);
+  });
+  it("invalid settings fall back to the defaults (N=3)", async () => {
+    const f = fakeDb({ assigned: ["j1"], votes: [{ judgeId: "j1", modelId: "m1", rank: 4 }], settings: { maxVotesPerExhibitor: "99" } });
+    await closeCategory(f.db, "c1", {}, makeStore(f));
+    expect(f.state.awards.find((a) => a.modelId === "m1").totalScore).toBe(12);
+  });
+});
+
+describe("closeCategory - manager manual path", () => {
   it("closes AND computes awards", async () => {
     const f = fakeDb({ votes: allVotes(["j1", "j2"], ["m1", "m2"], 4) });
     const r = await closeCategory(f.db, "c1", {}, makeStore(f));
@@ -123,12 +138,15 @@ describe("closeCategory - manager manual path (same award logic)", () => {
     expect(err.code).toBe("NO_JUDGES");
     expect(f.state.category!.status).toBe("open");
   });
-  it("refuses when not all judges voted all models, reports expected/actual", async () => {
-    const f = fakeDb({ votes: allVotes(["j1"], ["m1", "m2"]) });
-    const err: any = await closeCategory(f.db, "c1", {}, makeStore(f)).catch((e) => e);
-    expect(err.status).toBe(409);
-    expect(err.details).toMatchObject({ expected: 4, actual: 2 });
-    expect(f.state.awards).toEqual([]);
+  it("closes with missing votes: unvoted models score 0 and partial votes are flagged", async () => {
+    const f = fakeDb({ votes: [{ judgeId: "j1", modelId: "m1", rank: 4 }] });
+    const r = await closeCategory(f.db, "c1", {}, makeStore(f));
+    expect(r.outcome).toBe("closed");
+    expect(f.state.category!.status).toBe("closed");
+    expect(f.state.awards).toEqual([
+      { modelId: "m1", totalScore: 12, medalLabel: "Gold", medalRank: 4, issues: ["PARTIAL_VOTES"] }, // 1 voter of 2 assigned: round(4*3/1)
+      { modelId: "m2", totalScore: 0, medalLabel: "None", medalRank: 0, issues: [] }
+    ]);
   });
   it("is idempotent on an already closed category", async () => {
     const f = fakeDb({ category: { id: "c1", eventId: "e1", status: "closed" } });

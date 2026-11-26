@@ -21,6 +21,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -41,6 +42,13 @@ type CorrectionRow = {
   id?: string; modelId: string; modelName?: string | null; categoryId: string; totalScore: number | null;
   medalLabel: string | null; medalRank: number | null;
   votes: number; source: string; averageRank: number | null;
+  /** Absent means no issues; known values are listed in ISSUE_KEYS. */
+  issues?: string[];
+};
+
+const ISSUE_KEYS: Record<string, { label: "adminIssuePartialVotes" | "adminIssueDiscordantVotes"; tip: "tipIssuePartialVotes" | "tipIssueDiscordantVotes" }> = {
+  PARTIAL_VOTES: { label: "adminIssuePartialVotes", tip: "tipIssuePartialVotes" },
+  DISCORDANT_VOTES: { label: "adminIssueDiscordantVotes", tip: "tipIssueDiscordantVotes" }
 };
 
 export default function AwardsTab({ language, data }: { language: Language; data: AdminData }) {
@@ -243,7 +251,14 @@ export default function AwardsTab({ language, data }: { language: Language; data
               <TableBody>
                 {corrections.map((row) => (
                   <TableRow key={row.modelId} sx={{ bgcolor: row.source === "frozen" && !row.medalLabel ? "error.light" : undefined }}>
-                    <TableCell>{row.modelName ?? modelName(row.modelId)}</TableCell>
+                    <TableCell>
+                      {row.modelName ?? modelName(row.modelId)}
+                      {(row.issues ?? []).filter((issue) => issue in ISSUE_KEYS).map((issue) => (
+                        <Tooltip key={issue} title={t(language, ISSUE_KEYS[issue].tip)}>
+                          <Chip size="small" color="warning" variant="outlined" sx={{ ml: 1 }} label={t(language, ISSUE_KEYS[issue].label)} />
+                        </Tooltip>
+                      ))}
+                    </TableCell>
                     <TableCell>{categoryName(row.categoryId)}</TableCell>
                     <TableCell>{row.totalScore ?? (row.averageRank != null ? row.averageRank.toFixed(2) : "-")}</TableCell>
                     <TableCell>
