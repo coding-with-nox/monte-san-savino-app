@@ -9,7 +9,8 @@ export const levelsTable = pgTable("levels", {
 
 export const memberRolesTable = pgTable("member_roles", {
   id: uuid("id").primaryKey(),
-  name: text("name").notNull()
+  name: text("name").notNull(),
+  price: integer("price").default(1500).notNull() // cents, per coauthor
 });
 
 export const eventsTable = pgTable("events", {
@@ -70,10 +71,12 @@ export const modelsTable = pgTable("models", {
   isTeam: boolean("is_team").default(false).notNull(),
   displayNumber: integer("display_number"),
   teamId: uuid("team_id"),
+  teamCode: text("team_code"), // <participant number>T<n>, team models only
   notes: text("notes"),
   internalNotes: text("internal_notes")
 }, (t) => ({
   uniqCode: uniqueIndex("ux_models_code").on(t.code),
+  uniqTeamCode: uniqueIndex("ux_models_team_code").on(t.teamCode),
   byCategory: index("ix_models_category_id").on(t.categoryId),
   byUser: index("ix_models_user_id").on(t.userId)
 }));
@@ -84,6 +87,7 @@ export const modelTeamMembersTable = pgTable("model_team_members", {
   name: text("name").notNull(),
   surname: text("surname").notNull(),
   role: text("role").notNull(),
+  roleId: uuid("role_id"),
   email: text("email")
 }, (t) => ({
   byModel: index("ix_model_team_members_model_id").on(t.modelId)

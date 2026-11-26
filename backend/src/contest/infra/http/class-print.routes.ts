@@ -143,6 +143,7 @@ export const classPrintRoutes = new Elysia()
         modelName: modelsTable.name,
         code: modelsTable.code,
         displayNumber: modelsTable.displayNumber,
+        teamCode: modelsTable.teamCode,
         email: usersTable.email,
         firstName: userProfilesTable.firstName,
         lastName: userProfilesTable.lastName
@@ -155,7 +156,7 @@ export const classPrintRoutes = new Elysia()
       .map((r) => ({
         exhibitor: displayName(r.firstName, r.lastName, r.email),
         modelName: r.modelName ?? "",
-        code: formatModelCode(r.code, (cls as any).seqId, r.displayNumber, fmt)
+        code: formatModelCode(r.code, (cls as any).seqId, r.displayNumber, fmt, r.teamCode)
       }))
       .sort((a, b) => a.exhibitor.localeCompare(b.exhibitor) || a.modelName.localeCompare(b.modelName));
     set.headers["content-type"] = "text/html; charset=utf-8";

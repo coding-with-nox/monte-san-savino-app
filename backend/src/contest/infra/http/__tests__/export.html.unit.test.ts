@@ -36,7 +36,7 @@ describe("internal_notes confinement", () => {
     const offenders = walk(root)
       .filter((f) => f.endsWith(".ts") && !f.includes("__tests__"))
       .filter((f) => /internalNotes|internal_notes/.test(readFileSync(f, "utf8")))
-      .map((f) => f.slice(root.length + 1));
+      .map((f) => f.slice(root.length + 1).replace(/\\/g, "/"));
     expect(offenders.sort()).toEqual([
       "contest/infra/http/admin-models.routes.ts",
       "contest/infra/persistence/schema.ts",

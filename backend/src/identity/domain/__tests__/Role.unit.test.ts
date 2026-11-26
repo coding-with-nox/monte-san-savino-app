@@ -16,8 +16,8 @@ describe("roleAtLeast.unit", () => {
     expect(roleAtLeast("manager", "manager")).toBe(true);
   });
 
-  it("ordering: user < staff < judge < manager < admin", () => {
-    const roles = ["user", "staff", "judge", "manager", "admin"] as const;
+  it("ordering: user < staff < judge < jury_president < manager < admin", () => {
+    const roles = ["user", "staff", "judge", "jury_president", "manager", "admin"] as const;
     for (let i = 0; i < roles.length; i++) {
       for (let j = 0; j <= i; j++) {
         expect(roleAtLeast(roles[i], roles[j])).toBe(true);

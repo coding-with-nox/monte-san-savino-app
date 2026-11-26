@@ -1,4 +1,4 @@
-export const ROLES = ["user", "staff", "judge", "manager", "admin"] as const;
+export const ROLES = ["user", "staff", "judge", "jury_president", "manager", "admin"] as const;
 export type Role = (typeof ROLES)[number];
 const order: readonly Role[] = ROLES;
 export function roleAtLeast(actual: Role, minimum: Role): boolean {

@@ -4,6 +4,9 @@ import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { memberRolesTable } from "../persistence/schema";
 
+/** Coauthor price in cents. */
+const priceSchema = () => t.Integer({ minimum: 0, maximum: 1_000_000 });
+
 export const adminMemberRolesRoutes = new Elysia({ prefix: "/admin/member-roles" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
@@ -14,20 +17,22 @@ export const adminMemberRolesRoutes = new Elysia({ prefix: "/admin/member-roles"
   })
   .post("/", async ({ tenantDb, body }) => {
     const id = crypto.randomUUID();
-    await tenantDb.insert(memberRolesTable).values({ id, name: body.name });
+    await tenantDb.insert(memberRolesTable).values({ id, name: body.name, price: body.price });
     return { id };
   }, {
-    body: t.Object({ name: t.String() }),
+    body: t.Object({ name: t.String(), price: t.Optional(priceSchema()) }),
     detail: { summary: "Crea ruolo membro", tags: ["Admin"], security: [{ bearerAuth: [] }] }
   })
   .put("/:id", async ({ tenantDb, params, body, set }) => {
     const rows = await tenantDb.select().from(memberRolesTable).where(eq(memberRolesTable.id, params.id as any));
     if (!rows.length) { set.status = 404; return { error: "Not found" }; }
-    await tenantDb.update(memberRolesTable).set({ name: body.name }).where(eq(memberRolesTable.id, params.id as any));
+    if (body.name !== undefined || body.price !== undefined) {
+      await tenantDb.update(memberRolesTable).set({ name: body.name, price: body.price }).where(eq(memberRolesTable.id, params.id as any));
+    }
     return { updated: true };
   }, {
     params: t.Object({ id: t.String() }),
-    body: t.Object({ name: t.Optional(t.String()) }),
+    body: t.Object({ name: t.Optional(t.String()), price: t.Optional(priceSchema()) }),
     detail: { summary: "Aggiorna ruolo membro", tags: ["Admin"], security: [{ bearerAuth: [] }] }
   })
   .delete("/:id", async ({ tenantDb, params, set }) => {

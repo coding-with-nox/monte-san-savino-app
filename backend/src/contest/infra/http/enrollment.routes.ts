@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
+import { requireVisibleSection } from "../../../identity/infra/http/section.middleware";
 import { registrationsTable } from "../persistence/schema";
 import { usersTable, userProfilesTable } from "../../../identity/infra/persistence/schema";
 import QRCode from "qrcode";
@@ -68,9 +69,9 @@ export const userEnrollmentRoutes = new Elysia({ prefix: "/enrollments" })
     }
   });
 
-export const adminEnrollmentRoutes = new Elysia({ prefix: "/admin/enrollments" })
+const adminEnrollmentListRoutes = new Elysia({ prefix: "/admin/enrollments" })
   .use(tenantMiddleware)
-  .use(requireRole("manager"))
+  .use(requireRole("jury_president"))
   .get("/", async ({ tenantDb, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
     const where = eventId ? eq(registrationsTable.eventId, eventId as any) : undefined;
@@ -80,12 +81,17 @@ export const adminEnrollmentRoutes = new Elysia({ prefix: "/admin/enrollments" }
       (page) => applyPage(tenantDb.select().from(registrationsTable).where(where).$dynamic(), registrationsTable.id, page)
     );
   }, {
+    beforeHandle: requireVisibleSection("dashboard"),
     detail: {
       summary: "Lista iscrizioni (admin), include absent",
       tags: ["Enrollments"],
       security: [{ bearerAuth: [] }]
     }
-  })
+  });
+
+const adminEnrollmentWriteRoutes = new Elysia({ prefix: "/admin/enrollments" })
+  .use(tenantMiddleware)
+  .use(requireRole("manager"))
   .patch("/:id/absent", async ({ tenantDb, params, body, set }) => {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.id)) {
       set.status = 422;
@@ -110,6 +116,10 @@ export const adminEnrollmentRoutes = new Elysia({ prefix: "/admin/enrollments" }
       security: [{ bearerAuth: [] }]
     }
   });
+
+export const adminEnrollmentRoutes = new Elysia()
+  .use(adminEnrollmentListRoutes)
+  .use(adminEnrollmentWriteRoutes);
 
 export const staffCheckinRoutes = new Elysia({ prefix: "/staff" })
   .use(tenantMiddleware)

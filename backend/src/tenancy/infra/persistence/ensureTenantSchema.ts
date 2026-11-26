@@ -411,6 +411,30 @@ export async function ensureTenantSchema() {
       CREATE UNIQUE INDEX IF NOT EXISTS ux_awards_category_model ON awards (category_id, model_id)
     `);
 
+    // Team codes (<participant number>T<n>), coauthor role ids and per-role coauthor price (cents)
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.users') IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'seq_id'
+        ) THEN
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS seq_id serial;
+        END IF;
+      END $$;
+    `);
+    await pool.query(`ALTER TABLE IF EXISTS models ADD COLUMN IF NOT EXISTS team_code text`);
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.models') IS NOT NULL THEN
+          CREATE UNIQUE INDEX IF NOT EXISTS ux_models_team_code ON models (team_code);
+        END IF;
+      END $$;
+    `);
+    await pool.query(`ALTER TABLE IF EXISTS model_team_members ADD COLUMN IF NOT EXISTS role_id uuid`);
+    await pool.query(`ALTER TABLE IF EXISTS member_roles ADD COLUMN IF NOT EXISTS price integer NOT NULL DEFAULT 1500`);
+
     await ensureRegistrationsUniqueIndex(pool);
 
     for (const stmt of buildPerformanceIndexStatements()) await pool.query(stmt);

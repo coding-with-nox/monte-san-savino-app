@@ -5,6 +5,8 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 import { checkEnrollmentOpen } from "./enrollment-guard";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { isAllowedImageUrl, allowedImageBase } from "../../../shared/domain/imageUrl";
+import { countParticipantModels, nextTeamCodeForUser, resolveTeamMembers } from "../persistence/modelTeam";
+import { MAX_MODELS_PER_PARTICIPANT } from "../../domain/pricing";
 import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable, votesTable, judgeCompletionsTable } from "../persistence/schema";
 
 /** True when a client-supplied image URL is absent or allowed (evaluated per request so env changes apply). */
@@ -79,8 +81,24 @@ async function generateModelCode(tenantDb: any): Promise<number> {
 
 function isCodeConflict(err: unknown): boolean {
   const msg = String((err as any)?.message ?? "");
-  return msg.includes("ux_models_code") || msg.includes("models_code_key");
+  return msg.includes("ux_models_code") || msg.includes("models_code_key") || msg.includes("ux_models_team_code");
 }
+
+const teamMembersSchema = () => t.Optional(t.Array(t.Object({
+  name: t.String(),
+  surname: t.String(),
+  roleId: t.Optional(t.String({ format: "uuid" })),
+  role: t.Optional(t.String()),
+  email: t.Optional(t.String({ format: "email" }))
+})));
+
+const membersRequired = { error: "teamMembers required for team models", code: "TEAM_MEMBERS_REQUIRED" };
+const invalidRole = { error: "Unknown or missing member role", code: "INVALID_MEMBER_ROLE" };
+const modelLimit = {
+  error: `Maximum ${MAX_MODELS_PER_PARTICIPANT} models per participant`,
+  code: "MODEL_LIMIT",
+  limit: MAX_MODELS_PER_PARTICIPANT
+};
 
 export const modelRoutes = new Elysia({ prefix: "/models" })
   .use(tenantMiddleware)
@@ -101,6 +119,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         imageUrl: modelsTable.imageUrl,
         isTeam: modelsTable.isTeam,
         teamId: modelsTable.teamId,
+        teamCode: modelsTable.teamCode,
         displayNumber: modelsTable.displayNumber,
         notes: modelsTable.notes,
         categorySeqId: categoriesTable.seqId
@@ -112,7 +131,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       const { categorySeqId, ...rest } = row;
       return {
         ...rest,
-        code: formatModelCode(row.code, categorySeqId, row.displayNumber, codeFormat) || null
+        code: formatModelCode(row.code, categorySeqId, row.displayNumber, codeFormat, row.teamCode) || null
       };
     });
   }, {
@@ -135,11 +154,23 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       return { error: "Invalid image url" };
     }
 
-    if (body.isTeam) {
-      if (!body.teamId) {
-        set.status = 422;
-        return { error: "teamId required for team models" };
-      }
+    if (await countParticipantModels(tenantDb, user!.id, body.categoryId) >= MAX_MODELS_PER_PARTICIPANT) {
+      set.status = 409;
+      return modelLimit;
+    }
+
+    // Team = coauthors declared with the model (teamId is the legacy, separate-team flow)
+    if (body.isTeam && !body.teamId && !body.teamMembers?.length) {
+      set.status = 422;
+      return membersRequired;
+    }
+    const members = body.isTeam ? await resolveTeamMembers(tenantDb, body.teamMembers ?? []) : [];
+    if (!members) {
+      set.status = 422;
+      return invalidRole;
+    }
+
+    if (body.isTeam && body.teamId) {
       // verify team belongs to user
       const [teamRow] = await tenantDb
         .select({ id: teamsTable.id })
@@ -160,6 +191,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const code = await generateModelCode(tenantDb);
+      const teamCode = body.isTeam ? await nextTeamCodeForUser(tenantDb, user!.id) : null;
       try {
         await tenantDb.insert(modelsTable).values({
           id: modelId,
@@ -173,25 +205,19 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
           imageUrl: body.imageUrl ?? null,
           isTeam: body.isTeam ?? false,
           teamId: body.teamId ?? null,
+          teamCode,
           displayNumber
         });
 
-        if (body.isTeam && body.teamMembers?.length) {
+        if (members.length) {
           await tenantDb.insert(modelTeamMembersTable).values(
-            body.teamMembers.map((m: any) => ({
-              id: crypto.randomUUID(),
-              modelId,
-              name: m.name,
-              surname: m.surname,
-              role: m.role,
-              email: m.email ?? null
-            }))
+            members.map((m) => ({ id: crypto.randomUUID(), modelId, ...m }))
           );
         }
 
         return {
           id: modelId,
-          code: formatModelCode(code, categorySeqId, displayNumber, codeFormat)
+          code: formatModelCode(code, categorySeqId, displayNumber, codeFormat, teamCode)
         };
       } catch (err) {
         if (!isCodeConflict(err)) throw err;
@@ -210,12 +236,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
       teamId: t.Optional(t.String()),
-      teamMembers: t.Optional(t.Array(t.Object({
-        name: t.String(),
-        surname: t.String(),
-        role: t.String(),
-        email: t.Optional(t.String({ format: "email" }))
-      })))
+      teamMembers: teamMembersSchema()
     }),
     detail: {
       summary: "Crea modello",
@@ -235,6 +256,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
         imageUrl: modelsTable.imageUrl,
         isTeam: modelsTable.isTeam,
         teamId: modelsTable.teamId,
+        teamCode: modelsTable.teamCode,
         displayNumber: modelsTable.displayNumber,
         notes: modelsTable.notes,
         categorySeqId: categoriesTable.seqId
@@ -259,7 +281,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     return {
       model: {
         ...modelRow,
-        code: formatModelCode(modelRow.code, categorySeqId, modelRow.displayNumber, codeFormat) || null
+        code: formatModelCode(modelRow.code, categorySeqId, modelRow.displayNumber, codeFormat, modelRow.teamCode) || null
       },
       images,
       teamMembers
@@ -292,9 +314,27 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       set.status = 422;
       return { error: "Invalid image url" };
     }
-    if (body.isTeam === true && !body.teamId) {
+    const isTeam = body.isTeam ?? Boolean(model.isTeam);
+    const teamId = "teamId" in body ? body.teamId : model.teamId;
+    const becomesTeam = isTeam && !model.isTeam;
+    const clearsMembers = isTeam && body.teamMembers?.length === 0;
+    if (!teamId && (clearsMembers || (becomesTeam && !body.teamMembers?.length))) {
       set.status = 422;
-      return { error: "teamId required for team models" };
+      return membersRequired;
+    }
+    const members = isTeam && body.teamMembers !== undefined ? await resolveTeamMembers(tenantDb, body.teamMembers) : [];
+    if (!members) {
+      set.status = 422;
+      return invalidRole;
+    }
+    if (body.categoryId !== undefined && body.categoryId !== model.categoryId) {
+      const [from, to] = await Promise.all([model.categoryId, body.categoryId].map((id) =>
+        tenantDb.select({ eventId: categoriesTable.eventId }).from(categoriesTable).where(eq(categoriesTable.id, id as any)).limit(1)));
+      if (to[0] && to[0].eventId !== from[0]?.eventId
+        && await countParticipantModels(tenantDb, user!.id, body.categoryId) >= MAX_MODELS_PER_PARTICIPANT) {
+        set.status = 409;
+        return modelLimit;
+      }
     }
     if (body.teamId) {
       const [teamRow] = await tenantDb
@@ -325,21 +365,16 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (body.notes !== undefined) updateData.notes = body.notes.trim() || null;
     if (body.isTeam !== undefined) updateData.isTeam = body.isTeam;
     if ("teamId" in body) updateData.teamId = body.teamId ?? null;
+    if (becomesTeam && !model.teamCode) updateData.teamCode = await nextTeamCodeForUser(tenantDb, user!.id);
+    if (body.isTeam === false) updateData.teamCode = null;
 
     await tenantDb.update(modelsTable).set(updateData).where(eq(modelsTable.id, params.modelId as any));
 
-    if (body.teamMembers !== undefined) {
+    if (body.teamMembers !== undefined || body.isTeam === false) {
       await tenantDb.delete(modelTeamMembersTable).where(eq(modelTeamMembersTable.modelId, params.modelId as any));
-      if (body.teamMembers.length > 0) {
+      if (members.length > 0) {
         await tenantDb.insert(modelTeamMembersTable).values(
-          body.teamMembers.map((m: any) => ({
-            id: crypto.randomUUID(),
-            modelId: params.modelId,
-            name: m.name,
-            surname: m.surname,
-            role: m.role,
-            email: m.email ?? null
-          }))
+          members.map((m) => ({ id: crypto.randomUUID(), modelId: params.modelId, ...m }))
         );
       }
     }
@@ -356,12 +391,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
       teamId: t.Optional(t.String()),
-      teamMembers: t.Optional(t.Array(t.Object({
-        name: t.String(),
-        surname: t.String(),
-        role: t.String(),
-        email: t.Optional(t.String({ format: "email" }))
-      })))
+      teamMembers: teamMembersSchema()
     }),
     detail: {
       summary: "Aggiorna modello",

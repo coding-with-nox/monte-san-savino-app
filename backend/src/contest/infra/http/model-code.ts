@@ -19,8 +19,11 @@ export function formatModelCode(
   code: number | null | undefined,
   categorySeqId: number | null | undefined,
   displayNumber: number | null | undefined,
-  format: ModelCodeFormat
+  format: ModelCodeFormat,
+  teamCode?: string | null
 ): string {
+  // Team models: "<participant number>T<n>" replaces the individual code.
+  if (teamCode) return teamCode;
   if (code === null || code === undefined) return "";
   if (categorySeqId === null || categorySeqId === undefined) return "";
   if (displayNumber === null || displayNumber === undefined) return "";

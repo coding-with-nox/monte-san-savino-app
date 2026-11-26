@@ -5,6 +5,7 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 import { awardsTable, categoriesTable, modelsTable, specialMentionsTable } from "../persistence/schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
 import { isUuid } from "./class-print.routes";
+import { requireVisibleSection } from "../../../identity/infra/http/section.middleware";
 
 /** Pre-aggregated by SQL (GROUP BY/COUNT); no per-model/per-award rows are loaded. */
 export type StatsInput = {
@@ -61,7 +62,7 @@ export function buildStatsOverview(input: StatsInput) {
 
 export const adminStatsRoutes = new Elysia({ prefix: "/admin/stats" })
   .use(tenantMiddleware)
-  .use(requireRole("manager"))
+  .use(requireRole("jury_president"))
   .get("/overview", async ({ tenantDb, query, set }) => {
     const eventId = (query as any)?.eventId;
     if (eventId !== undefined && !isUuid(eventId)) {
@@ -118,5 +119,6 @@ export const adminStatsRoutes = new Elysia({ prefix: "/admin/stats" })
     return buildStatsOverview({ usersByCountryRaw, users, modelsByUser, modelsByCategory, categories: cats, awardsByMedal, mentionsByTitle } as StatsInput);
   }, {
     query: t.Object({ eventId: t.Optional(t.String()) }),
-    detail: { summary: "Statistiche generali (manager)", tags: ["Admin"], security: [{ bearerAuth: [] }] }
+    beforeHandle: requireVisibleSection("stats"),
+    detail: { summary: "Statistiche generali (presidente di giuria, manager)", tags: ["Admin"], security: [{ bearerAuth: [] }] }
   });
