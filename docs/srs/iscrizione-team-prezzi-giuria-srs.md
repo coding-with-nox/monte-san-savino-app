@@ -2,13 +2,13 @@
 
 **Document type:** SRS — formal commitment document
 **Status:** Draft
-**Version:** 0.1
+**Version:** 0.2
 **Author(s):** team documentazione
 **Date:** 2026-11-26
 **Sponsor / Product Owner:** [TODO: da validare con product owner]
 **Related Pre-SRS:** nessuno (feature incrementali con requisiti chiari)
 
-> Baseline di riferimento: commit `fb84f68` (backend) e `1fab600` (frontend), branch `feat/team-pricing-jury-theme`. Le voci `[TODO: …]` sono assunzioni di implementazione non ancora approvate.
+> Baseline di riferimento: commit `fb84f68` (backend) e `1fab600` (frontend), branch `feat/team-pricing-jury-theme`; la versione 0.2 estende la baseline fino al commit `8b58297`. Le voci `[TODO: …]` sono assunzioni di implementazione non ancora approvate.
 
 ---
 
@@ -16,7 +16,7 @@
 
 ### 1.1 Purpose
 
-Formalizza i requisiti di sei feature incrementali della piattaforma di contest di miniature: team dichiarati nell'iscrizione, quote di iscrizione, voto per display, presidente di giuria con visibilità sezioni, ordine di premiazione, tema grafico e miglioramenti UX.
+Formalizza i requisiti delle feature incrementali della piattaforma di contest di miniature: team dichiarati nell'iscrizione, quote di iscrizione, voto per display, presidente di giuria con visibilità sezioni, ordine di premiazione, tema grafico e miglioramenti UX, permessi e iscrizione per conto di, guida in applicazione, suggerimenti sui pulsanti, navigazione laterale.
 
 ### 1.2 Scope
 
@@ -26,7 +26,11 @@ Formalizza i requisiti di sei feature incrementali della piattaforma di contest 
 - voto del giudice sull'intero display;
 - ruolo `jury_president` e matrice di visibilità sezioni;
 - ordine di presentazione dei premi;
-- tema predefinito `savino` e miglioramenti UX.
+- tema predefinito `savino` e miglioramenti UX;
+- permessi per ruolo e iscrizione di modelli per conto di altri;
+- guida pop-up per pagina e scheda, pagina `/help`;
+- suggerimento su ogni pulsante;
+- navigazione laterale sinistra collassabile.
 
 **Out of scope:**
 - incasso online della quota calcolata e riconciliazione con `/payments`;
@@ -78,7 +82,7 @@ Gerarchia: `user < staff < judge < jury_president < manager < admin`.
 | judge | Giudice | Votare modelli e display assegnati |
 | jury_president | Presidente di giuria | Seguire avanzamento e statistiche in sola lettura, oltre ai permessi di giudice |
 | manager | Organizzatore | Catalogo prezzi, livelli, premi |
-| admin | Amministratore | Quota base, visibilità, ordine premi, tema |
+| admin | Amministratore | Quota base, visibilità, permessi, ordine premi, tema |
 
 ### 2.3 Operating environment
 
@@ -95,6 +99,7 @@ Web desktop e mobile, tema chiaro e scuro, interfaccia in italiano e inglese.
 - Il numero partecipante esiste per ogni utente.
 - I ruoli coautore e i livelli sono gestiti a catalogo.
 - Il livello Juniores è gratuito solo se l'amministrazione attiva "Iscrizione gratuita" (o lo importa così da CSV).
+- I livelli del concorso sono `Juniors`, `Standard`, `Masters`, `All`; i dati demo riportano le 33 classi reali del Monte San Savino Show (numeri 0–32) con `Juniors` gratuito.
 - Confermato dal product owner (2026-11-26): un coautore è pagato **una sola volta**, in orizzontale su tutti i modelli a pagamento del partecipante nello stesso evento. La stessa persona è riconosciuta dall'email, altrimenti da nome + cognome (senza distinzione di maiuscole e spazi); se ha ruoli diversi si applica il prezzo di ruolo più alto.
 - [TODO: da validare con product owner] I prezzi **non sono congelati** all'iscrizione: il totale è ricalcolato con i prezzi correnti a ogni lettura e stampa.
 - [TODO: da validare con product owner] L'ordine di premiazione predefinito include `Highly Commended`: `Highly Commended, Bronze, Silver, Gold`.
@@ -125,7 +130,7 @@ Il partecipante salva modello e coautori; il server assegna il codice. La quota 
 
 ### 3.4 Technology choices
 
-Invariate. Nuovi dati: `models.team_code` (univoco), `model_team_members.role_id`, `member_roles.price`, chiavi di impostazione `baseFeeCents`, `sectionVisibility`, `prizeOrder`.
+Invariate. Nuovi dati: `models.team_code` (univoco), `model_team_members.role_id`, `member_roles.price`, chiavi di impostazione `baseFeeCents`, `sectionVisibility`, `prizeOrder`, `rolePermissions`; indice univoco sul nome del ruolo coautore. Guide viste e stato della barra laterale sono memorizzati nel browser.
 
 ### 3.5 Deployment topology (high level)
 
@@ -159,6 +164,8 @@ Descrivono il *quanto bene*: qualità misurabili con una soglia.
 | BR-004 | Dare al presidente di giuria il controllo dell'andamento senza permessi gestionali. |
 | BR-005 | Adattare navigazione e cerimonia di premiazione alle scelte dell'organizzazione. |
 | BR-006 | Allineare l'applicazione all'identità visiva della manifestazione e semplificarne l'uso. |
+| BR-007 | Permettere all'organizzazione di iscrivere modelli per chi non può farlo da sé, mantenendo titolarità e quota in capo al partecipante. |
+| BR-008 | Rendere ogni funzione comprensibile e raggiungibile senza formazione o assistenza. |
 
 ---
 
@@ -200,6 +207,8 @@ Descrivono il *quanto bene*: qualità misurabili con una soglia.
 | FR-016 | Il manager o superiore deve poter leggere via API i totali per iscritto ed evento, filtrabili per `eventId` e `userId`. | BR-002 | Should |
 | FR-017 | La stampa dell'iscrizione deve includere il dettaglio della quota e il totale; con più eventi anche il totale generale. | BR-002 | Must |
 | FR-018 | Prima di salvare, l'iscrizione deve mostrare un'anteprima indicativa: quota base (o "già inclusa"), prezzi dei coautori, totale attuale dell'evento; per un livello gratuito deve indicare la gratuità. [TODO: da validare con product owner] | BR-002 | Should |
+
+| FR-019 | I nomi dei ruoli coautore devono essere univoci senza distinzione di maiuscole e spazi esterni; un duplicato è rifiutato con 409 e i duplicati preesistenti sono unificati all'avvio rimappando i coautori. | BR-002 | Must |
 
 | ID | Requirement | Metric | Target |
 |----|-------------|--------|--------|
@@ -243,7 +252,7 @@ Descrivono il *quanto bene*: qualità misurabili con una soglia.
 | FR-035 | Per il presidente di giuria, il server deve rispondere 403 `SECTION_HIDDEN` sugli endpoint delle sezioni `dashboard` e `stats` nascoste. | BR-004 | Must |
 | FR-036 | Navigazione e rotte della SPA devono rispettare la matrice; se la matrice non è leggibile vale il comportamento basato sul ruolo. | BR-005 | Must |
 | FR-037 | Un aggiornamento con ruolo o sezione sconosciuti deve essere rifiutato con 422. | BR-005 | Must |
-| FR-038 | Un presidente di giuria deve poter essere assegnato alle categorie da giudicare. [TODO: da validare con product owner] — **non soddisfatto in UI**: la scheda Giudici non lo elenca tra gli assegnabili. | BR-004 | Should |
+| FR-038 | Un presidente di giuria deve poter essere assegnato alle categorie da giudicare dalla scheda Giudici. | BR-004 | Should |
 
 Valori predefiniti: `user` = dashboard, models, enrollments, teams; `staff` = + checkin; `judge` = + judge; `jury_president` = + stats; `manager` = tutto tranne settings; `admin` = tutto.
 
@@ -278,7 +287,7 @@ Valori predefiniti: `user` = dashboard, models, enrollments, teams; `staff` = + 
 | FR-051 | I preset `violet`, `ocean`, `forest`, `mss` devono restare selezionabili; un valore già salvato non deve essere sovrascritto. | BR-006 | Must |
 | FR-052 | La nuova iscrizione deve essere a quattro step (Dati, Modello, Coautori, Riepilogo); non si avanza con dati obbligatori mancanti. | BR-006, BR-001 | Must |
 | FR-053 | Dopo l'iscrizione il sistema deve mostrare il codice assegnato. | BR-006 | Must |
-| FR-054 | Su mobile la barra inferiore deve contenere al massimo cinque destinazioni, scelte per ruolo. | BR-006 | Should |
+| FR-054 | Su mobile la barra inferiore deve contenere al massimo cinque destinazioni, scelte per ruolo (le altre nel pannello laterale, FR-093). | BR-006 | Should |
 | FR-055 | La voce "Team" non deve più comparire nel menu. | BR-006, BR-001 | Should |
 
 | ID | Requirement | Metric | Target |
@@ -287,6 +296,88 @@ Valori predefiniti: `user` = dashboard, models, enrollments, teams; `staff` = + 
 | NFR-051 | Pulsanti a sola icona della navigazione e dei coautori | Presenza di nome accessibile | 100% |
 
 **Dependencies:** impostazione `themePreset`.
+
+### 5.7 Module — Permessi e iscrizione per conto di
+
+**BR coverage:** BR-007
+
+| ID | Requirement | Traces to | Priority |
+|----|-------------|-----------|----------|
+| FR-060 | Il sistema deve gestire permessi per ruolo, distinti da gerarchia e visibilità; il primo è `enrollOnBehalf`, predefinito per `manager`. `admin` ha sempre tutti i permessi. | BR-007 | Must |
+| FR-061 | L'admin deve poter concedere e revocare i permessi dalla scheda Regole, insieme alla visibilità sezioni. | BR-007 | Must |
+| FR-062 | Chi ha il permesso deve poter cercare i soli utenti attivi per email, nome e cognome (in entrambi gli ordini) o numero partecipante. | BR-007 | Must |
+| FR-063 | Chi ha il permesso deve poter creare un modello indicando il titolare; modello, codici, numero display, limite di 50 modelli e quota spettano al titolare. | BR-007 | Must |
+| FR-064 | La richiesta senza permesso deve essere rifiutata con 403 `PERMISSION_DENIED`; un titolare inesistente o disattivato con 404 `USER_NOT_FOUND`. | BR-007 | Must |
+| FR-065 | Chi ha il permesso deve poter iscrivere a un evento il modello di un altro; l'iscrizione è intestata al titolare. | BR-007 | Should |
+| FR-066 | Il permesso non deve superare la chiusura delle iscrizioni: solo `manager` e `admin` la ignorano. [TODO: da validare con product owner] | BR-007 | Must |
+| FR-067 | La procedura guidata deve mostrare il campo "Iscrivi per conto di" solo a chi ha il permesso, con "Me stesso" predefinito, e nel riepilogo deve dichiarare il titolare senza mostrarne il totale già dovuto. | BR-007 | Must |
+
+| ID | Requirement | Metric | Target |
+|----|-------------|--------|--------|
+| NFR-060 | Autorizzazione del permesso applicata lato server | Operazioni per conto di altri riuscite senza permesso | 0 |
+
+**Limiti noti**
+
+- [TODO: da validare con product owner] Un ruolo inferiore a `manager` con il permesso non può modificare né cancellare il modello creato per altri, caricarne le foto, né vederlo nel proprio elenco.
+- [TODO: da validare con product owner] A iscrizioni chiuse possono operare solo `manager` e `admin`.
+- [TODO: da validare con product owner] `DELETE /admin/models/:id` non rimuove i coautori e le immagini del modello.
+- [TODO: da validare con product owner] L'interfaccia offre l'iscrizione per conto di solo alla creazione del modello; l'iscrizione all'evento del modello altrui è disponibile solo via API.
+
+**Dependencies:** modulo identity; 5.1; 5.2.
+
+### 5.8 Module — Guida pop-up e pagina Guida
+
+**BR coverage:** BR-008
+
+| ID | Requirement | Traces to | Priority |
+|----|-------------|-----------|----------|
+| FR-070 | Ogni pagina e scheda dell'applicazione deve avere una guida passo per passo (26 guide alla baseline). | BR-008 | Must |
+| FR-071 | La guida deve avviarsi da sola alla prima visita, una sola volta per browser, e mai sopra una finestra, un menu o un pannello aperto. | BR-008 | Must |
+| FR-072 | Il pulsante "?" deve avviare in ogni momento la guida di ciò che è visibile; il menu account deve permettere di riattivare tutte le guide. | BR-008 | Must |
+| FR-073 | La guida deve offrire Salta, Indietro, Avanti, Fine, supportare frecce ed Esc e omettere i passi il cui elemento non è visibile. | BR-008 | Must |
+| FR-074 | Guide e passi devono rispettare ruolo, sezioni visibili e permessi. | BR-008 | Must |
+| FR-075 | La pagina `/help` deve elencare, dalle stesse definizioni delle guide, le funzioni disponibili con descrizione, destinatari, passi e pulsante di avvio; è accessibile anche senza accesso. | BR-008 | Must |
+
+| ID | Requirement | Metric | Target |
+|----|-------------|--------|--------|
+| NFR-070 | Accessibilità della guida | Fumetto modale con titolo e testo associati, focus intrappolato e restituito alla chiusura | 100% dei passi |
+| NFR-071 | Disattivazione dell'avvio automatico per i test | Chiave `guidedTours.disabled` = `true` | Nessuna guida avviata da sola |
+
+- [TODO: da validare con product owner] Lo stato "guida già vista" è per browser, non per account.
+
+**Dependencies:** 5.4; 5.7.
+
+### 5.9 Module — Suggerimenti sui pulsanti
+
+**BR coverage:** BR-008
+
+| ID | Requirement | Traces to | Priority |
+|----|-------------|-----------|----------|
+| FR-080 | Ogni pulsante, pulsante a icona e voce di menu d'azione deve avere un suggerimento che descrive l'effetto, non la ripetizione dell'etichetta. È un requisito obbligatorio anche per i pulsanti futuri. | BR-008 | Must |
+| FR-081 | Il suggerimento deve comparire anche sui pulsanti disattivati. | BR-008 | Must |
+
+| ID | Requirement | Metric | Target |
+|----|-------------|--------|--------|
+| NFR-080 | Copertura dei suggerimenti, verificata dal test `tooltipCoverage` | Pulsanti senza suggerimento | 0 |
+| NFR-081 | Il suggerimento è esposto come descrizione accessibile senza sostituire il nome | Pulsanti coperti da FR-080 | 100% |
+| NFR-082 | Le stringhe dei suggerimenti esistono in italiano e inglese | Chiavi mancanti | 0 |
+
+- [TODO: da validare con product owner] Schede (tab), interruttori, caselle e voci della barra inferiore non rientrano nella regola automatica.
+
+### 5.10 Module — Navigazione laterale
+
+**BR coverage:** BR-008, BR-006
+
+| ID | Requirement | Traces to | Priority |
+|----|-------------|-----------|----------|
+| FR-090 | Su desktop la navigazione deve essere una barra laterale **a sinistra** con icona e nome di ogni sezione disponibile, evidenziando quella attiva. | BR-008 | Must |
+| FR-091 | La barra deve essere collassabile a sole icone, con il nome nel suggerimento, ed espandibile. | BR-008 | Must |
+| FR-092 | Lo stato compresso o espanso deve essere ricordato nel browser. | BR-008 | Should |
+| FR-093 | Su schermi stretti le sezioni devono essere in un pannello che si apre da sinistra con il pulsante menu. | BR-008 | Must |
+
+| ID | Requirement | Metric | Target |
+|----|-------------|--------|--------|
+| NFR-090 | Accessibilità della barra | Landmark di navigazione, `aria-current`, `aria-expanded` sul comando di compressione | Presenti |
 
 ---
 
@@ -298,6 +389,8 @@ Valori predefiniti: `user` = dashboard, models, enrollments, teams; `staff` = + 
 |----|-------------|---------------------|
 | NFR-100 | Un partecipante legge solo le proprie quote. | `/pricing/me` non restituisce dati di altri utenti; `/admin/pricing` richiede manager |
 | NFR-101 | Il giudice vota solo nel proprio ambito. | Voti fuori assegnazione = 0 |
+| NFR-102 | Le operazioni per conto di altri sono tracciate nei log. | Creazioni e iscrizioni per altri con autore, ruolo, titolare e modello = 100% |
+| NFR-103 | L'elenco iscrivibili espone solo i dati necessari. | Campi: id, email, nome, cognome, numero partecipante |
 
 ### 6.6 Internationalization / localization
 
@@ -319,6 +412,11 @@ Valori predefiniti: `user` = dashboard, models, enrollments, teams; `staff` = + 
 | Primo modello team del partecipante 173 | Codice `173T1` |
 | Voto 3 su display con una categoria chiusa e una aperta | Voto sul modello aperto; l'altro in `skippedClosedModelIds` |
 | Presidente di giuria con `stats` nascosta | 403 `SECTION_HIDDEN` |
+| Stesso coautore su 2 modelli team | Totale 40 € |
+| Utente senza permesso invia `userId` altrui | 403 `PERMISSION_DENIED` |
+| Manager iscrive per il partecipante 173 il suo primo modello team | Codice `173T1`, quota del partecipante 173 |
+| Prima visita a una pagina, poi seconda visita | La guida parte solo la prima volta |
+| Barra compressa e pagina ricaricata | Resta compressa |
 
 ### 8.2 Definition of Done
 
@@ -335,3 +433,4 @@ Valori predefiniti: `user` = dashboard, models, enrollments, teams; `staff` = + 
 | Version | Date | Author | Change |
 |--------:|------------|--------|--------|
 | 0.1 | 2026-11-26 | team documentazione | Prima stesura |
+| 0.2 | 2026-11-26 | team documentazione | BR-007/008; FR-019, FR-060–067, FR-070–075, FR-080–081, FR-090–093; NFR-060, 070–071, 080–082, 090, 102–103; FR-038 risolto |
