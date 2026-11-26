@@ -293,11 +293,6 @@ export default function App() {
       <Box sx={{ minHeight: "100vh", bgcolor: "background.default", display: "flex", flexDirection: "column" }}>
         <AppBar position="static" elevation={0} sx={{ bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" }}>
           <Toolbar sx={{ gap: 2 }}>
-            {isMobile && (
-              <IconButton color="default" edge="start" aria-label={t(language, "navOpenMenu")} onClick={() => setDrawerOpen(true)}>
-                <MenuIcon />
-              </IconButton>
-            )}
             <Typography variant="h6" sx={{ flexGrow: 1, color: "text.primary" }}>
               {appName}
             </Typography>
@@ -347,6 +342,11 @@ export default function App() {
                 </>
               )}
             </Stack>
+            {isMobile && (
+              <IconButton color="default" edge="end" aria-label={t(language, "navOpenMenu")} onClick={() => setDrawerOpen(true)}>
+                <MenuIcon />
+              </IconButton>
+            )}
           </Toolbar>
         </AppBar>
         <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
