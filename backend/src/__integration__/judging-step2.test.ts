@@ -92,6 +92,7 @@ describe("integration judging step 2: multi-class, own models, stand-ins, reconc
     expect(modelIds(await request("GET", `/judge/models?eventId=${eventId}`, judge.token))).toEqual([theirs1]);
     const displays = await request("GET", `/judge/displays?eventId=${eventId}`, judge.token);
     expect(displays.json.map((d: any) => d.displayNumber)).toEqual([1]);
+    expect(displays.json[0]).toMatchObject({ categoryId: c1 });
     expect(modelIds({ json: displays.json[0].models })).toEqual([theirs1]);
 
     const detail = await request("GET", `/judge/models/${own1}`, judge.token);

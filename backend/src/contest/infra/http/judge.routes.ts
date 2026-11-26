@@ -281,6 +281,10 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     }));
     return groupDisplays(models).map((display) => ({
       ...display,
+      // A display number belongs to one (participant, category, level): the class of its first model.
+      categoryId: display.models[0].categoryId,
+      categoryName: display.models[0].categoryName,
+      categoryStatus: display.models[0].categoryStatus,
       // The visible models are exactly those this judge is expected to vote: judged = all open ones are voted.
       judged: display.models.filter((m) => m.categoryStatus === "open").every((m) => latest.has(m.id)),
       issues: display.models.some((m) => discordant.has(m.id)) ? ["DISCORDANT_VOTES"] : [],
