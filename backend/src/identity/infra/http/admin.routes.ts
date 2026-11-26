@@ -38,7 +38,15 @@ export const enrollableUserRoutes = new Elysia({ prefix: "/admin/users" })
       .leftJoin(userProfilesTable, eq(usersTable.id, userProfilesTable.userId))
       .where(and(
         eq(usersTable.isActive, true),
-        pattern ? or(ilike(usersTable.email, pattern), ilike(fullName, pattern), ilike(reverseName, pattern)) : undefined
+        pattern
+          ? or(
+              ilike(usersTable.email, pattern),
+              ilike(fullName, pattern),
+              ilike(reverseName, pattern),
+              // Participant number: exact match when the term is numeric (e.g. "173").
+              /^\d{1,9}$/.test(q!) ? eq(usersTable.seqId, Number(q)) : undefined
+            )
+          : undefined
       ))
       .orderBy(asc(userProfilesTable.lastName), asc(userProfilesTable.firstName), asc(usersTable.email));
   }, {
