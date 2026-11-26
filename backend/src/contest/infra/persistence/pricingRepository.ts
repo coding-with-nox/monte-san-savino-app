@@ -8,7 +8,7 @@ import { computePricing, DEFAULT_MEMBER_PRICE_CENTS, parseBaseFeeCents, type Pri
 
 export const BASE_FEE_KEY = "baseFeeCents";
 
-type MemberRow = { name: string; surname: string; role: string; roleId?: string | null };
+type MemberRow = { name: string; surname: string; role: string; roleId?: string | null; email?: string | null };
 type RoleRow = { id: string; name: string; price: number };
 
 /** Price by roleId, falling back to the role name (legacy rows) and then to the default price. */
@@ -18,6 +18,7 @@ export function toPricingMember(row: MemberRow, roles: RoleRow[]): PricingMember
   return {
     name: row.name,
     surname: row.surname,
+    email: row.email ?? null,
     roleId: role?.id ?? null,
     roleName: role?.name ?? row.role,
     priceCents: role?.price ?? DEFAULT_MEMBER_PRICE_CENTS

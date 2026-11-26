@@ -2,6 +2,8 @@ import { describe, it, expect } from "bun:test";
 import { computePricing, formatEuro, parseBaseFeeCents, type PricingModel } from "../pricing";
 
 const member = (priceCents = 1500) => ({ name: "Ada", surname: "Neri", roleId: "r1", roleName: "Pittore", priceCents });
+const other = (priceCents = 1500) => ({ ...member(priceCents), name: "Bruno", surname: "Rossi" });
+const third = (priceCents = 1500) => ({ ...member(priceCents), name: "Carla", surname: "Bianchi" });
 const model = (id: string, over: Partial<PricingModel> = {}): PricingModel => ({
   modelId: id, modelName: id, modelCode: null, free: false, members: [], ...over
 });
@@ -17,14 +19,51 @@ describe("computePricing", () => {
     expect(computePricing({ baseFeeCents: 2500, models: fifty }).totalCents).toBe(2500);
   });
 
-  it("adds each coauthor with its role price", () => {
+  it("adds each distinct coauthor with its role price", () => {
     const s = computePricing({
       baseFeeCents: 2500,
-      models: [model("a", { members: [member(), member(1000)] }), model("b", { members: [member()] })]
+      models: [model("a", { members: [member(), other(1000)] }), model("b", { members: [third()] })]
     });
     expect(s.coauthorLines).toHaveLength(3);
     expect(s.coauthorsTotalCents).toBe(4000);
     expect(s.totalCents).toBe(6500);
+  });
+
+  it("charges a coauthor once across models (horizontal), at the highest role price", () => {
+    const s = computePricing({
+      baseFeeCents: 2500,
+      models: [
+        model("a", { members: [member(1500)] }),
+        model("b", { members: [{ ...member(2000), name: " ada ", surname: "NERI", roleName: "Concept Artist" }] }),
+        model("c", { members: [member(1500)] })
+      ]
+    });
+    expect(s.coauthorLines).toHaveLength(1);
+    expect(s.coauthorLines[0]).toMatchObject({ priceCents: 2000, roleName: "Concept Artist" });
+    expect(s.coauthorLines[0].models.map((m) => m.modelId)).toEqual(["a", "b", "c"]);
+    expect(s.totalCents).toBe(4500);
+  });
+
+  it("identifies coauthors by email when present", () => {
+    const s = computePricing({
+      baseFeeCents: 2500,
+      models: [
+        model("a", { members: [{ ...member(), email: "ada@x.it" }] }),
+        model("b", { members: [{ ...member(), name: "Adelaide", email: "ADA@x.it" }] }),
+        model("c", { members: [{ ...member(), email: "altra@x.it" }] })
+      ]
+    });
+    expect(s.coauthorLines).toHaveLength(2);
+    expect(s.totalCents).toBe(5500);
+  });
+
+  it("ignores coauthors of free models when deduplicating", () => {
+    const s = computePricing({
+      baseFeeCents: 2500,
+      models: [model("a", { free: true, members: [member(3000)] }), model("b", { members: [member(1500)] })]
+    });
+    expect(s.coauthorLines).toHaveLength(1);
+    expect(s.totalCents).toBe(4000);
   });
 
   it("is free when all models are free, coauthors included", () => {

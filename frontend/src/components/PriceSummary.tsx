@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Divider, Stack, Typography } from "@mui/material";
 import { Language, t } from "../lib/i18n";
-import { EventPricing, formatCents } from "../lib/pricing";
+import { EventPricing, coauthorModelsLabel, formatCents } from "../lib/pricing";
 
 export function PriceLine({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
@@ -24,7 +24,7 @@ export default function PriceSummary({ language, pricing }: { language: Language
         {pricing.coauthorLines.map((line, i) => (
           <PriceLine
             key={`${line.modelId}-${i}`}
-            label={`${line.name} ${line.surname}${line.roleName ? `, ${line.roleName}` : ""} (${line.modelCode || line.modelName || "-"})`}
+            label={`${line.name} ${line.surname}${line.roleName ? `, ${line.roleName}` : ""} (${coauthorModelsLabel(line)})`}
             value={formatCents(line.priceCents, language)}
           />
         ))}

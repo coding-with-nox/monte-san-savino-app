@@ -95,7 +95,7 @@ Web desktop e mobile, tema chiaro e scuro, interfaccia in italiano e inglese.
 - Il numero partecipante esiste per ogni utente.
 - I ruoli coautore e i livelli sono gestiti a catalogo.
 - Il livello Juniores è gratuito solo se l'amministrazione attiva "Iscrizione gratuita" (o lo importa così da CSV).
-- [TODO: da validare con product owner] Un coautore è pagato **per ogni modello** in cui compare: la stessa persona su due modelli genera due quote.
+- Confermato dal product owner (2026-11-26): un coautore è pagato **una sola volta**, in orizzontale su tutti i modelli a pagamento del partecipante nello stesso evento. La stessa persona è riconosciuta dall'email, altrimenti da nome + cognome (senza distinzione di maiuscole e spazi); se ha ruoli diversi si applica il prezzo di ruolo più alto.
 - [TODO: da validare con product owner] I prezzi **non sono congelati** all'iscrizione: il totale è ricalcolato con i prezzi correnti a ogni lettura e stampa.
 - [TODO: da validare con product owner] L'ordine di premiazione predefinito include `Highly Commended`: `Highly Commended, Bronze, Silver, Gold`.
 - [TODO: da validare con product owner] Il presidente di giuria **può votare**, nei limiti delle assegnazioni giudice.
@@ -192,7 +192,7 @@ Descrivono il *quanto bene*: qualità misurabili con una soglia.
 | ID | Requirement | Traces to | Priority |
 |----|-------------|-----------|----------|
 | FR-010 | La quota base (predefinita 2500 cent = 25 €) deve essere applicata una sola volta per partecipante ed evento, da 1 a 50 modelli, se almeno un modello è a pagamento. | BR-002 | Must |
-| FR-011 | Ogni coautore di ogni modello a pagamento deve aggiungere il prezzo del proprio ruolo (predefinito 1500 cent = 15 €). | BR-002 | Must |
+| FR-011 | Ogni coautore distinto dei modelli a pagamento deve aggiungere una sola volta il prezzo del proprio ruolo (predefinito 1500 cent = 15 €), anche se compare in più modelli; con ruoli diversi vale il prezzo più alto. | BR-002 | Must |
 | FR-012 | Un modello di livello gratuito (`freeToEnter`, es. Juniores) deve costare 0, coautori inclusi; con soli modelli gratuiti la quota base è 0. | BR-002 | Must |
 | FR-013 | Il manager o superiore deve poter impostare il prezzo di ogni ruolo coautore (intero 0–1.000.000 cent) e contrassegnare un livello come gratuito. | BR-002 | Must |
 | FR-014 | L'admin deve poter impostare la quota base; un valore non intero o negativo deve essere rifiutato con 422. | BR-002 | Must |

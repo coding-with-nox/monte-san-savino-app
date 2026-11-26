@@ -12,7 +12,15 @@ export type CoauthorLine = {
   roleId?: string | null;
   roleName?: string | null;
   priceCents: number;
+  /** All paid models of this coauthor (charged once across models). */
+  models?: { modelId: string; modelName?: string | null; modelCode?: string | null }[];
 };
+
+/** "173T1, 173T2" — every model of a coauthor line, falling back to the first one. */
+export function coauthorModelsLabel(line: CoauthorLine): string {
+  const models = line.models?.length ? line.models : [line];
+  return models.map((m) => m.modelCode || m.modelName || "-").join(", ");
+}
 
 /** Per-event fee breakdown computed by the backend (GET /pricing/me). */
 export type EventPricing = {

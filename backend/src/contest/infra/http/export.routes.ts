@@ -360,7 +360,7 @@ export function renderPricingHtml(entries: (PricingSummary & { eventName: string
     <table>
       <tbody>
         ${row("Base fee", e.baseFeeCents)}
-        ${e.coauthorLines.map((l) => row(`Co-author ${l.name} ${l.surname} (${l.roleName}) - ${l.modelName}`, l.priceCents)).join("")}
+        ${e.coauthorLines.map((l) => row(`Co-author ${l.name} ${l.surname} (${l.roleName}) - ${l.models.map((m) => m.modelCode || m.modelName).join(", ")}`, l.priceCents)).join("")}
         ${e.freeModels.map((m) => row(`Free entry - ${m.modelName}`, 0)).join("")}
         <tr><th>Total</th><th class="amount">${formatEuro(e.totalCents)}</th></tr>
       </tbody>

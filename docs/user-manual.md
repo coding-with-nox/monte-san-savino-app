@@ -68,7 +68,7 @@ per partecipante e per evento.
 
 ### Quota di iscrizione
 - **Quota base** (di norma 25 €): una volta per evento, da 1 a 50 modelli.
-- **Coautori**: ogni coautore aggiunge il prezzo del suo ruolo (di norma 15 €), per ogni modello in cui compare.
+- **Coautori**: ogni coautore aggiunge il prezzo del suo ruolo (di norma 15 €) **una sola volta**, anche se compare in più modelli. Viene riconosciuto dall'email o, se manca, da nome e cognome.
 - **Livelli gratuiti** (es. Juniores): per quei modelli non si paga nulla, coautori compresi. Se hai solo modelli gratuiti il totale è zero.
 
 L'anteprima è indicativa e mostra il totale attuale dell'evento, non quello
