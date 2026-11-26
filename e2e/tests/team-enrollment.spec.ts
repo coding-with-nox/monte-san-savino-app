@@ -80,7 +80,6 @@ test.describe("Team model enrollment", () => {
   }
 
   test("enrolls a team model and shows the total in the fee summary", async ({ page }) => {
-    // Notes are filled to get around the bug covered by the next test.
     await submitTeamModel(page, "Nota E2E");
 
     // Success toast carries the team code <participant number>T<n>.
@@ -98,10 +97,8 @@ test.describe("Team model enrollment", () => {
     await expect(summary).toContainText(new RegExp(`(Totale|Total)\\D*${total}[,.]00`));
   });
 
-  // BUG: the UI sends `notes: null` for empty notes and POST /models answers 422.
-  // Remove test.fail() once fixed (Playwright reports an unexpected pass).
+  // Regression: the UI sends `notes: null` for empty notes; POST /models must accept it.
   test("enrolls a team model without notes", async ({ page }) => {
-    test.fail();
     const response = page.waitForResponse((r) => r.url().endsWith("/api/models") && r.request().method() === "POST");
     await submitTeamModel(page);
     expect((await response).status()).toBe(200);

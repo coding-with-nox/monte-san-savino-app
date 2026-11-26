@@ -232,7 +232,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       categoryId: t.String(),
       levelId: t.String(),
       description: t.Optional(t.String()),
-      notes: t.Optional(t.String({ maxLength: 2000 })),
+      notes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
       teamId: t.Optional(t.String()),
@@ -362,7 +362,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     if (body.levelId !== undefined) updateData.levelId = body.levelId;
     if (body.description !== undefined) updateData.description = body.description;
     if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
-    if (body.notes !== undefined) updateData.notes = body.notes.trim() || null;
+    if (body.notes !== undefined) updateData.notes = body.notes?.trim() || null;
     if (body.isTeam !== undefined) updateData.isTeam = body.isTeam;
     if ("teamId" in body) updateData.teamId = body.teamId ?? null;
     if (becomesTeam && !model.teamCode) updateData.teamCode = await nextTeamCodeForUser(tenantDb, user!.id);
@@ -387,7 +387,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       categoryId: t.Optional(t.String()),
       levelId: t.Optional(t.String()),
       description: t.Optional(t.String()),
-      notes: t.Optional(t.String({ maxLength: 2000 })),
+      notes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
       teamId: t.Optional(t.String()),
