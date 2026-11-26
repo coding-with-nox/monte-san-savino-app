@@ -7,6 +7,8 @@ import { planEnrollment } from "../../domain/enrollment";
 import { isEventEnrollmentClosed } from "./enrollment-guard";
 import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { domainErrorHandler } from "../../../shared/infra/http/domainErrorHandler";
+import { hasPermission } from "../../../identity/infra/http/permission.middleware";
+import { logger } from "../../../shared/infra/logger/logger";
 
 export const eventRoutes = new Elysia({ prefix: "/events" })
   .use(tenantMiddleware)
@@ -114,7 +116,8 @@ export const enrollmentRoutes = new Elysia({ prefix: "/events" })
       category: category ?? null,
       model: model ?? null,
       requested: { modelId: body.modelId ?? null, categoryId: body.categoryId ?? null },
-      windowClosed: await isEventEnrollmentClosed(db, params.eventId)
+      windowClosed: await isEventEnrollmentClosed(db, params.eventId),
+      canEnrollOnBehalf: await hasPermission(db, user!.role, "enrollOnBehalf")
     });
 
     // Task 02: one enrollment per user+event+model (multiple models allowed).
@@ -149,6 +152,12 @@ export const enrollmentRoutes = new Elysia({ prefix: "/events" })
       set.status = 400;
       return { error: "Already enrolled" };
     }
+    if (plan.ownerUserId !== user!.id) {
+      logger.info(
+        { actorId: user!.id, actorRole: user!.role, ownerId: plan.ownerUserId, modelId: plan.modelId, registrationId: id },
+        "Enrollment on behalf of another user"
+      );
+    }
     return { id, status: "accepted" };
   }, {
     params: t.Object({ eventId: t.String({ format: "uuid" }) }),
@@ -158,7 +167,7 @@ export const enrollmentRoutes = new Elysia({ prefix: "/events" })
     }),
     detail: {
       summary: "Iscrivi utente a evento",
-      description: "Il modello deve appartenere all'utente (manager/admin: qualsiasi), la categoria deve essere coerente con modello ed evento ed essere aperta; periodo iscrizioni rispettato (manager esenti).",
+      description: "Il modello deve appartenere all'utente (manager/admin o permesso enrollOnBehalf: qualsiasi), la categoria deve essere coerente con modello ed evento ed essere aperta; periodo iscrizioni rispettato (manager esenti).",
       tags: ["Enrollments"],
       security: [{ bearerAuth: [] }]
     }

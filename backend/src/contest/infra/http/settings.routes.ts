@@ -4,6 +4,8 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 import { settingsTable } from "../persistence/schema";
 import { loadSectionVisibility, SECTION_VISIBILITY_KEY } from "../../../identity/infra/http/section.middleware";
 import { findInvalidVisibilityEntry, parseSectionVisibility, SECTIONS } from "../../../identity/domain/sectionVisibility";
+import { PERMISSIONS, parseRolePermissions } from "../../../identity/domain/permissions";
+import { loadRolePermissions, ROLE_PERMISSIONS_KEY } from "../../../identity/infra/http/permission.middleware";
 import { ROLES, type Role } from "../../../identity/domain/Role";
 import { parsePrizeOrder } from "../../domain/prizeOrder";
 import { DEFAULT_BASE_FEE_CENTS } from "../../domain/pricing";
@@ -55,9 +57,10 @@ export const settingsRoutes = new Elysia({ prefix: "/settings" })
   .get("/section-visibility", async ({ tenantDb, user }) => {
     const role = user!.role as Role;
     const visibility = await loadSectionVisibility(tenantDb);
-    return { role, sections: visibility[role] ?? [] };
+    const permissions = await loadRolePermissions(tenantDb);
+    return { role, sections: visibility[role] ?? [], permissions: permissions[role] ?? [] };
   }, {
-    detail: { summary: "Sezioni visibili per il proprio ruolo", tags: ["Settings"], security: [{ bearerAuth: [] }] }
+    detail: { summary: "Sezioni visibili e permessi per il proprio ruolo", tags: ["Settings"], security: [{ bearerAuth: [] }] }
   })
   .get("/prize-order", async ({ tenantDb }) => {
     const rows = await tenantDb.select().from(settingsTable);
@@ -86,9 +89,15 @@ export const adminSettingsRoutes = new Elysia({ prefix: "/admin/settings" })
     }
   })
   .get("/section-visibility", async ({ tenantDb }) => {
-    return { sections: SECTIONS, roles: ROLES, visibility: await loadSectionVisibility(tenantDb) };
+    return {
+      sections: SECTIONS,
+      roles: ROLES,
+      visibility: await loadSectionVisibility(tenantDb),
+      permissions: await loadRolePermissions(tenantDb),
+      availablePermissions: PERMISSIONS
+    };
   }, {
-    detail: { summary: "Configurazione visibilità sezioni (admin)", tags: ["Settings"], security: [{ bearerAuth: [] }] }
+    detail: { summary: "Configurazione visibilità sezioni e permessi (admin)", tags: ["Settings"], security: [{ bearerAuth: [] }] }
   })
   .put("/section-visibility", async ({ tenantDb, body, set }) => {
     const invalid = findInvalidVisibilityEntry(body.visibility);
@@ -99,10 +108,19 @@ export const adminSettingsRoutes = new Elysia({ prefix: "/admin/settings" })
     const merged = { ...(await loadSectionVisibility(tenantDb)), ...body.visibility };
     const visibility = parseSectionVisibility(JSON.stringify(merged));
     await saveSetting(tenantDb, SECTION_VISIBILITY_KEY, JSON.stringify(visibility));
-    return { updated: true, visibility };
+    // Unknown roles/permissions are ignored and admin is forced by the parser.
+    let permissions = await loadRolePermissions(tenantDb);
+    if (body.permissions) {
+      permissions = parseRolePermissions(JSON.stringify({ ...permissions, ...body.permissions }));
+      await saveSetting(tenantDb, ROLE_PERMISSIONS_KEY, JSON.stringify(permissions));
+    }
+    return { updated: true, visibility, permissions };
   }, {
-    body: t.Object({ visibility: t.Record(t.String(), t.Array(t.String())) }),
-    detail: { summary: "Aggiorna visibilità sezioni (admin)", tags: ["Settings"], security: [{ bearerAuth: [] }] }
+    body: t.Object({
+      visibility: t.Record(t.String(), t.Array(t.String())),
+      permissions: t.Optional(t.Record(t.String(), t.Array(t.String())))
+    }),
+    detail: { summary: "Aggiorna visibilità sezioni e permessi (admin)", tags: ["Settings"], security: [{ bearerAuth: [] }] }
   })
   .put("/prize-order", async ({ tenantDb, body }) => {
     const order = parsePrizeOrder(JSON.stringify(body.order));

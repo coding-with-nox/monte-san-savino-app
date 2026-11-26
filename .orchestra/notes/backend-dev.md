@@ -53,3 +53,17 @@ Stato: IMPLEMENTATO (contratto invariato). `GET /judge/models` aggiunge anche `t
 
 ## Tema (richiesta frontend-dev)
 - Default `themePreset` = `"savino"`; nessuna validazione server che lo rifiuti.
+
+## Permessi / iscrizione per conto di
+
+Stato: IMPLEMENTATO, contratto rispettato. Precisazioni e aggiunte:
+- Chiave `enrollOnBehalf` (`backend/src/identity/domain/permissions.ts`). Default: admin (fisso) e manager. Setting `rolePermissions`.
+- `GET /settings/section-visibility` -> `{ role, sections, permissions }`.
+- `GET /admin/settings/section-visibility` -> `{ sections, roles, visibility, permissions:{<role>:[]}, availablePermissions:[] }`.
+- `PUT /admin/settings/section-visibility` `{ visibility, permissions? }` (`visibility` resta obbligatorio, anche `{}`; `permissions` parziale per ruolo) -> `{ updated, visibility, permissions }`.
+- `GET /admin/users/enrollable?q=` -> `[{ id, email, firstName|null, lastName|null, participantNumber }]`; `q` cerca su email, "nome cognome", "cognome nome". 403 `{code:"PERMISSION_DENIED"}`.
+- `POST /models` `userId?`: 403 `PERMISSION_DENIED`, 404 `USER_NOT_FOUND`, 422 se non uuid. Risposta invariata `{id, code}`.
+- `POST /events/:eventId/enroll` con `modelId` altrui: ora ammesso anche a chi ha `enrollOnBehalf` (registrazione intestata al titolare).
+- La finestra iscrizioni resta legata al ruolo: solo manager/admin la ignorano, il permesso da solo no.
+- Modello altrui dopo la creazione: non compare in `GET /models` del chiamante e le route `/models/:id*` restano solo del titolare. Esistono per manager+ (ruolo, non permesso): `GET /admin/models`, `PUT /admin/models/:id` (name, categoryId, description, code, imageUrl, notes, internalNotes), `DELETE /admin/models/:id`, `POST /models/:id/image-upload`. Un ruolo sotto manager con il permesso non può modificare, cancellare né caricare foto.
+- Preesistente, non toccato: `DELETE /admin/models/:id` non cancella coautori e immagini collegati (`DELETE /models/:id` sì).

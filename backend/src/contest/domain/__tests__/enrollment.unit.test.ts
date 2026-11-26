@@ -37,6 +37,11 @@ describe("planEnrollment", () => {
     const p = planEnrollment(base({ role: "manager", windowClosed: true, model: { id: "m1", userId: "other", categoryId: "c1" } }));
     expect(p.ownerUserId).toBe("other");
   });
+  it("enrollOnBehalf may enroll another user's model, but not outside the window", () => {
+    const other = { id: "m1", userId: "other", categoryId: "c1" };
+    expect(planEnrollment(base({ role: "staff", canEnrollOnBehalf: true, model: other })).ownerUserId).toBe("other");
+    fails(base({ role: "staff", canEnrollOnBehalf: true, model: other, windowClosed: true }), 403);
+  });
   it("422 when categoryId mismatches the model", () => {
     fails(base({ requested: { modelId: "m1", categoryId: "c2" } }), 422);
   });

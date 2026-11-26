@@ -12,6 +12,8 @@ export type EnrollmentContext = {
   requested: { modelId?: string | null; categoryId?: string | null };
   /** Result of the campaign window check (true = enrollment period over). */
   windowClosed: boolean;
+  /** Caller holds the enrollOnBehalf permission: may enroll other users' models (the window still applies). */
+  canEnrollOnBehalf?: boolean;
 };
 
 export type EnrollmentPlan = { ownerUserId: string; modelId: string | null; categoryId: string | null };
@@ -20,8 +22,9 @@ const isPrivileged = (role?: string) => role === "manager" || role === "admin";
 
 /**
  * Validates an enrollment request. Throws a typed DomainError (404/403/409/422) or returns the
- * normalized values to persist. Managers/admins may enroll any model (the registration is then
- * owned by the model owner) and bypass the enrollment window, like model creation does.
+ * normalized values to persist. Managers/admins and holders of enrollOnBehalf may enroll any model
+ * (the registration is then owned by the model owner); only managers/admins bypass the enrollment
+ * window, like model creation does.
  */
 export function planEnrollment(ctx: EnrollmentContext): EnrollmentPlan {
   const privileged = isPrivileged(ctx.role);
@@ -34,7 +37,7 @@ export function planEnrollment(ctx: EnrollmentContext): EnrollmentPlan {
   let ownerUserId = ctx.userId;
   if (ctx.requested.modelId) {
     if (!ctx.model) throw new DomainError("Model not found", 404, "NOT_FOUND");
-    if (ctx.model.userId !== ctx.userId && !privileged) {
+    if (ctx.model.userId !== ctx.userId && !privileged && !ctx.canEnrollOnBehalf) {
       // do not disclose existence of other users' models
       throw new DomainError("Model not found", 404, "NOT_FOUND");
     }

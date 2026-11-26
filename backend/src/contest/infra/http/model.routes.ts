@@ -2,6 +2,9 @@ import { Elysia, t } from "elysia";
 import { and, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
+import { hasPermission, permissionDenied } from "../../../identity/infra/http/permission.middleware";
+import { usersTable } from "../../../identity/infra/persistence/schema";
+import { logger } from "../../../shared/infra/logger/logger";
 import { checkEnrollmentOpen } from "./enrollment-guard";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { isAllowedImageUrl, allowedImageBase } from "../../../shared/domain/imageUrl";
@@ -142,6 +145,26 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     }
   })
   .post("/", async ({ tenantDb, user, body, set }) => {
+    // The model (numbers, codes, limit, pricing) belongs to ownerId, which differs from the caller
+    // only when enrolling on behalf of another participant.
+    let ownerId = user!.id;
+    if (body.userId && body.userId.toLowerCase() !== user!.id.toLowerCase()) {
+      if (!(await hasPermission(tenantDb, user!.role, "enrollOnBehalf"))) {
+        set.status = 403;
+        return permissionDenied;
+      }
+      const [target] = await tenantDb
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(and(eq(usersTable.id, body.userId as any), eq(usersTable.isActive, true)))
+        .limit(1);
+      if (!target) {
+        set.status = 404;
+        return { error: "User not found", code: "USER_NOT_FOUND" };
+      }
+      ownerId = target.id;
+    }
+
     // Temporal guard: block creation when enrollment period is closed
     // Managers and admins can always create models (spec §5b)
     if (user?.role !== "manager" && user?.role !== "admin") {
@@ -154,7 +177,7 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       return { error: "Invalid image url" };
     }
 
-    if (await countParticipantModels(tenantDb, user!.id, body.categoryId) >= MAX_MODELS_PER_PARTICIPANT) {
+    if (await countParticipantModels(tenantDb, ownerId, body.categoryId) >= MAX_MODELS_PER_PARTICIPANT) {
       set.status = 409;
       return modelLimit;
     }
@@ -171,11 +194,11 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     }
 
     if (body.isTeam && body.teamId) {
-      // verify team belongs to user
+      // verify team belongs to the model owner
       const [teamRow] = await tenantDb
         .select({ id: teamsTable.id })
         .from(teamsTable)
-        .where(and(eq(teamsTable.id, body.teamId as any), eq(teamsTable.userId, user!.id as any)))
+        .where(and(eq(teamsTable.id, body.teamId as any), eq(teamsTable.userId, ownerId as any)))
         .limit(1);
       if (!teamRow) {
         set.status = 422;
@@ -186,16 +209,16 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
     const modelId = crypto.randomUUID();
     let lastError: unknown = null;
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
-    const displayNumber = await computeDisplayNumber(tenantDb, user!.id, body.categoryId, body.levelId);
+    const displayNumber = await computeDisplayNumber(tenantDb, ownerId, body.categoryId, body.levelId);
     const categorySeqId = await getCategorySeqId(tenantDb, body.categoryId);
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const code = await generateModelCode(tenantDb);
-      const teamCode = body.isTeam ? await nextTeamCodeForUser(tenantDb, user!.id) : null;
+      const teamCode = body.isTeam ? await nextTeamCodeForUser(tenantDb, ownerId) : null;
       try {
         await tenantDb.insert(modelsTable).values({
           id: modelId,
-          userId: user!.id as any,
+          userId: ownerId as any,
           categoryId: body.categoryId,
           levelId: body.levelId,
           name: body.name,
@@ -213,6 +236,10 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
           await tenantDb.insert(modelTeamMembersTable).values(
             members.map((m) => ({ id: crypto.randomUUID(), modelId, ...m }))
           );
+        }
+
+        if (ownerId !== user!.id) {
+          logger.info({ actorId: user!.id, actorRole: user!.role, ownerId, modelId }, "Model created on behalf of another user");
         }
 
         return {
@@ -236,7 +263,8 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       imageUrl: t.Optional(t.String()),
       isTeam: t.Optional(t.Boolean()),
       teamId: t.Optional(t.String()),
-      teamMembers: teamMembersSchema()
+      teamMembers: teamMembersSchema(),
+      userId: t.Optional(t.String({ format: "uuid" }))
     }),
     detail: {
       summary: "Crea modello",

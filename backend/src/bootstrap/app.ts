@@ -8,7 +8,7 @@ import { identityRoutes } from "../identity/infra/http/identity.routes";
 import { judgeRoutes } from "../contest/infra/http/judge.routes";
 import { modelUploadRoutes } from "../contest/infra/http/modelUpload.routes";
 import { userRoutes } from "../identity/infra/http/user.routes";
-import { adminUserRoutes } from "../identity/infra/http/admin.routes";
+import { adminUserRoutes, enrollableUserRoutes } from "../identity/infra/http/admin.routes";
 import { modelRoutes } from "../contest/infra/http/model.routes";
 import { eventRoutes, enrollmentRoutes } from "../contest/infra/http/event.routes";
 import { categoryRoutes } from "../contest/infra/http/category.routes";
@@ -128,6 +128,7 @@ export function buildApp() {
     })
     .use(identityRoutes)
     .use(userRoutes)
+    .use(enrollableUserRoutes)
     .use(adminUserRoutes)
     .use(modelRoutes)
     .use(judgeRoutes)
