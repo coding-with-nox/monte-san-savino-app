@@ -43,6 +43,7 @@ import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import SettingsIcon from "@mui/icons-material/Settings";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import PrivacyTipIcon from "@mui/icons-material/PrivacyTip";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import ReplayIcon from "@mui/icons-material/Replay";
 import Login from "./pages/Login";
@@ -61,6 +62,7 @@ const Labels = lazy(() => import("./pages/Labels"));
 const Stats = lazy(() => import("./pages/Stats"));
 const Podium = lazy(() => import("./pages/Podium"));
 const Help = lazy(() => import("./pages/Help"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 import PageSkeleton from "./components/PageSkeleton";
 import SideNav from "./components/SideNav";
 import { ActionButton, TipIconButton, TipMenuItem } from "./components/ActionButton";
@@ -92,7 +94,10 @@ export default function App() {
   });
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === "undefined") return "it";
-    return (window.localStorage.getItem("language") as Language) || "it";
+    const stored = window.localStorage.getItem("language");
+    if (stored === "it" || stored === "en") return stored;
+    // First visit: international participants get English unless their browser is Italian.
+    return (window.navigator.language || "it").toLowerCase().startsWith("it") ? "it" : "en";
   });
   const [appName, setAppName] = useState("Miniatures Contest");
   const [backendDown, setBackendDown] = useState(false);
@@ -129,6 +134,7 @@ export default function App() {
 
   useEffect(() => {
     window.localStorage.setItem("language", language);
+    document.documentElement.lang = language;
   }, [language]);
 
   useEffect(() => {
@@ -231,7 +237,8 @@ export default function App() {
     { label: t(language, "navStats"), path: "/stats", minRole: "jury_president" as Role, section: "stats", icon: <BarChartIcon /> },
     { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role, section: "podium", icon: <EmojiEventsIcon /> },
     { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role, section: "settings", icon: <SettingsIcon /> },
-    { label: t(language, "navHelp"), path: "/help", minRole: null, section: null, icon: <MenuBookIcon /> }
+    { label: t(language, "navHelp"), path: "/help", minRole: null, section: null, icon: <MenuBookIcon /> },
+    { label: t(language, "navPrivacy"), path: "/privacy", minRole: null, section: null, icon: <PrivacyTipIcon /> }
   ];
 
   const navItems = allNavItems.filter((item) => {
@@ -414,6 +421,7 @@ export default function App() {
             <Route path="/podium" element={<Protected><RequireRole min="manager">{guard("podium", <Podium language={language} />)}</RequireRole></Protected>} />
             <Route path="/settings" element={<Protected><RequireRole min="admin">{guard("settings", <Settings language={language} />)}</RequireRole></Protected>} />
             <Route path="/help" element={<Help language={language} />} />
+            <Route path="/privacy" element={<Privacy language={language} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>

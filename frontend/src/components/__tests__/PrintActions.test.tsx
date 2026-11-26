@@ -25,13 +25,13 @@ describe("PrintActions", () => {
   it("opens the list export with the given filters", async () => {
     renderWithProviders(<PrintActions language="it" params={{ eventId: "e1", categoryId: "c1" }} />);
     await userEvent.click(screen.getByRole("button", { name: "Stampa lista" }));
-    await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/exports/models/print?eventId=e1&categoryId=c1"));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/exports/models/print?eventId=e1&categoryId=c1&lang=it"));
     expect(window.open).toHaveBeenCalled();
   });
 
   it("opens the label export for a single model", async () => {
     renderWithProviders(<PrintActions language="it" params={{ modelId: "m1" }} />);
     await userEvent.click(screen.getByRole("button", { name: "Stampa etichetta" }));
-    await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/exports/labels/pdf?modelId=m1"));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/exports/labels/pdf?modelId=m1&lang=it"));
   });
 });

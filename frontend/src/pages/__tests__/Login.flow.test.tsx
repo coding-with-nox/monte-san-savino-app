@@ -51,7 +51,7 @@ describe("Login flow", () => {
   it("stores the session and navigates home on successful login", async () => {
     apiMock.mockResolvedValueOnce({ accessToken: "a", refreshToken: "r", expiresIn: 3600 });
     const user = await fillAndSubmit();
-    await user.click(screen.getByRole("button", { name: "Login" }));
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/"));
     expect(setSessionMock).toHaveBeenCalledWith("a", "r", 3600);
     expect(apiMock).toHaveBeenCalledWith("/auth/login", expect.objectContaining({ method: "POST" }));
@@ -61,7 +61,7 @@ describe("Login flow", () => {
   it("accepts snake_case expires_in", async () => {
     apiMock.mockResolvedValueOnce({ accessToken: "a", refreshToken: "r", expires_in: 99 });
     const user = await fillAndSubmit();
-    await user.click(screen.getByRole("button", { name: "Login" }));
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => expect(setSessionMock).toHaveBeenCalledWith("a", "r", 99));
   });
 
@@ -71,7 +71,7 @@ describe("Login flow", () => {
       .mockResolvedValueOnce({ code: "c1" })
       .mockResolvedValueOnce({ accessToken: "a2", refreshToken: "r2", expiresIn: 10 });
     const user = await fillAndSubmit();
-    await user.click(screen.getByRole("button", { name: "Login" }));
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/"));
     expect(apiMock.mock.calls.map((c) => c[0])).toEqual(["/auth/login", "/auth/authorize", "/auth/token"]);
     expect(JSON.parse(apiMock.mock.calls[1][1].body)).toMatchObject({ code_challenge: "challenge", code_challenge_method: "S256" });
@@ -82,7 +82,7 @@ describe("Login flow", () => {
   it("does not fall back on other errors and shows the message", async () => {
     apiMock.mockRejectedValueOnce(new ApiError(401, "Wrong password"));
     const user = await fillAndSubmit();
-    await user.click(screen.getByRole("button", { name: "Login" }));
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByText("Wrong password")).toBeInTheDocument();
     expect(apiMock).toHaveBeenCalledTimes(1);
     expect(navigateMock).not.toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe("Login flow", () => {
 
   it("validates the email format before calling the API", async () => {
     const user = await fillAndSubmit("not-an-email");
-    await user.click(screen.getByRole("button", { name: "Login" }));
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByText("Invalid email format")).toBeInTheDocument();
     expect(apiMock).not.toHaveBeenCalled();
   });
@@ -121,7 +121,7 @@ describe("Signup flow", () => {
     await user.type(screen.getByLabelText(/phone/i), "3331234567");
     await user.type(screen.getByLabelText(/^city/i), "Arezzo");
     await user.click(screen.getByRole("button", { name: "Next" }));
-    await user.click(await screen.findByRole("checkbox", { name: /consent/i }));
+    await user.click(await screen.findByRole("checkbox", { name: /privacy notice/i }));
   }
 
   it("switches between the Sign in and Sign up tabs", async () => {
@@ -156,9 +156,9 @@ describe("Signup flow", () => {
   it("requires the privacy consent", async () => {
     const user = await openSignup();
     await completeSteps(user);
-    await user.click(screen.getByRole("checkbox", { name: /consent/i })); // uncheck
+    await user.click(screen.getByRole("checkbox", { name: /privacy notice/i })); // uncheck
     await user.click(screen.getByRole("button", { name: /create account/i }));
-    expect(await screen.findByText(/must consent/i)).toBeInTheDocument();
+    expect(await screen.findByText(/must confirm/i)).toBeInTheDocument();
     expect(apiMock).not.toHaveBeenCalled();
   });
 
@@ -172,7 +172,7 @@ describe("Signup flow", () => {
     await user.click(screen.getByRole("button", { name: /create account/i }));
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/"));
     expect(apiMock.mock.calls.map((c) => c[0])).toEqual(["/auth/register", "/auth/login", "/users/profile"]);
-    expect(JSON.parse(apiMock.mock.calls[0][1].body)).toEqual({ email: "new@b.it", password: "secret123" });
+    expect(JSON.parse(apiMock.mock.calls[0][1].body)).toEqual({ email: "new@b.it", password: "secret123", privacyAccepted: true, privacyVersion: expect.any(String) });
     expect(JSON.parse(apiMock.mock.calls[2][1].body)).toMatchObject({
       firstName: "Anna", lastName: "Verdi", city: "Arezzo", country: "IT", phone: expect.stringContaining("333")
     });

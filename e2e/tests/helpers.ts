@@ -17,7 +17,7 @@ export async function login(page: Page, email: string, password: string) {
   await disableTours(page);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Login" }).click();
+  await page.getByRole("button", { name: "Accedi", exact: true }).click();
 }
 
 export async function loginAs(page: Page, user: { email: string; password: string }) {

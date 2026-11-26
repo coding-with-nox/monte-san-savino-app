@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { buildQuery } from "./exports";
 
 export type LabelRow = { utente: string; categoria: string; nomeModello: string; codice: string };
 
@@ -142,9 +143,7 @@ export async function printDymoLabels(params: Record<string, string | undefined>
   const printers: any[] = dymo.label.framework.getPrinters();
   const printer = printers.find((p: any) => p.printerType === "LabelWriterPrinter");
   if (!printer) return "noPrinter";
-  const query = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v) query.set(k, v);
-  const rows = await api<LabelRow[]>(`/exports/labels/data?${query.toString()}`);
+  const rows = await api<LabelRow[]>(`/exports/labels/data${buildQuery(params)}`);
   if (!rows || rows.length === 0) return "noData";
   for (const row of rows) {
     const label = dymo.label.framework.openLabelXml(buildDymoLabelXml(row));

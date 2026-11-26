@@ -480,6 +480,11 @@ export async function ensureTenantSchema() {
     `);
     await pool.query(`ALTER TABLE IF EXISTS models ADD COLUMN IF NOT EXISTS team_code text`);
     await pool.query(`
+      ALTER TABLE IF EXISTS users
+        ADD COLUMN IF NOT EXISTS privacy_accepted_at timestamptz,
+        ADD COLUMN IF NOT EXISTS privacy_policy_version text;
+    `);
+    await pool.query(`
       DO $$
       BEGIN
         IF to_regclass('public.models') IS NOT NULL THEN

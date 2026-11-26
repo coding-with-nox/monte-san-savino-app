@@ -9,12 +9,12 @@ const TEST_PASSWORD = "password123";
 describe("integration POST /auth/login", () => {
   beforeAll(async () => {
     await truncateUsers();
-    await postJson(app, "/auth/register", { email: TEST_EMAIL, password: TEST_PASSWORD });
+    await postJson(app, "/auth/register", { email: TEST_EMAIL, password: TEST_PASSWORD, privacyAccepted: true, privacyVersion: "test" });
   });
   afterAll(async () => { await truncateUsers(); });
 
   it("returns accessToken, refreshToken, expiresIn and role on valid credentials", async () => {
-    const res = await postJson(app, "/auth/login", { email: TEST_EMAIL, password: TEST_PASSWORD });
+    const res = await postJson(app, "/auth/login", { email: TEST_EMAIL, password: TEST_PASSWORD, privacyAccepted: true, privacyVersion: "test" });
     expect(res.status).toBe(200);
     const body = await res.json() as { accessToken: string; refreshToken: string; expiresIn: number; role: string };
     expect(typeof body.accessToken).toBe("string");
@@ -43,8 +43,8 @@ describe("integration POST /auth/refresh", () => {
   // after this describe's beforeAll, which would delete a user created in a shared beforeAll.
   async function registerAndLogin() {
     await truncateUsers();
-    await postJson(app, "/auth/register", { email: TEST_EMAIL, password: TEST_PASSWORD });
-    const loginRes = await postJson(app, "/auth/login", { email: TEST_EMAIL, password: TEST_PASSWORD });
+    await postJson(app, "/auth/register", { email: TEST_EMAIL, password: TEST_PASSWORD, privacyAccepted: true, privacyVersion: "test" });
+    const loginRes = await postJson(app, "/auth/login", { email: TEST_EMAIL, password: TEST_PASSWORD, privacyAccepted: true, privacyVersion: "test" });
     const loginBody = await loginRes.json() as { refreshToken: string };
     return loginBody.refreshToken;
   }

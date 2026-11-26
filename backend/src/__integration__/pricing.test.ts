@@ -138,8 +138,11 @@ describe("integration enrollment pricing", () => {
     await createModel({ name: "Drago", isTeam: true, teamMembers: [member(painter)] });
     const res = await request("GET", `/exports/model-card/pdf?eventId=${eventId}`, user.token);
     expect(res.status).toBe(200);
-    expect(res.text).toContain("Registration fee");
-    expect(res.text).toMatch(/<th>Total<\/th><th class="amount">€ 40,00<\/th>/);
+    expect(res.text).toContain("Quota di iscrizione");
+    expect(res.text).toMatch(/<th>Totale<\/th><th class="amount">€ 40,00<\/th>/);
     expect(res.text).toContain(`${user.seqId}T1`);
+    const en = await request("GET", `/exports/model-card/pdf?eventId=${eventId}&lang=en`, user.token);
+    expect(en.text).toContain("Registration fee");
+    expect(en.text).toMatch(/<th>Total<\/th><th class="amount">€40\.00<\/th>/);
   });
 });

@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { and, eq } from "drizzle-orm";
 import QRCode from "qrcode";
 import { escapeHtml } from "../../../shared/domain/escapeHtml";
+import { parsePrintLang, pt, type PrintLang } from "../../../shared/domain/printI18n";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable } from "../persistence/schema";
@@ -27,6 +28,13 @@ type ZipEntry = {
 };
 
 const textEncoder = new TextEncoder();
+
+const EN_EURO = new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR" });
+
+/** Italian keeps the app's "€ 25,00" format; English uses en-GB. */
+function formatMoney(lang: PrintLang, cents: number) {
+  return lang === "en" ? EN_EURO.format(cents / 100) : formatEuro(cents);
+}
 
 const CRC32_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -151,9 +159,9 @@ function columnName(index: number) {
   return name;
 }
 
-function buildWorksheetXml(headers: string[], rows: Record<string, any>[]) {
-  const normalizedRows = rows.length > 0 ? rows : [{ info: "Nessun dato" }];
-  const effectiveHeaders = rows.length > 0 ? headers : ["info"];
+function buildWorksheetXml(headers: string[], rows: Record<string, any>[], emptyText: string) {
+  const normalizedRows = rows.length > 0 ? rows : [{ [headers[0]]: emptyText }];
+  const effectiveHeaders = headers;
 
   const xmlRows: string[] = [];
 
@@ -185,9 +193,9 @@ function buildWorksheetXml(headers: string[], rows: Record<string, any>[]) {
 </worksheet>`;
 }
 
-function toXlsx(sheetName: string, rows: Record<string, any>[]) {
+function toXlsx(sheetName: string, rows: Record<string, any>[], lang: PrintLang) {
   const safeSheetName = sanitizeSheetName(sheetName);
-  const headers = rows.length > 0 ? Object.keys(rows[0]) : ["info"];
+  const headers = rows.length > 0 ? Object.keys(rows[0]) : [pt(lang, "col.info")];
 
   const contentTypes = `<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>
 <Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">
@@ -238,7 +246,7 @@ function toXlsx(sheetName: string, rows: Record<string, any>[]) {
   </cellXfs>
 </styleSheet>`;
 
-  const worksheet = buildWorksheetXml(headers, rows);
+  const worksheet = buildWorksheetXml(headers, rows, pt(lang, "common.noData"));
 
   return buildZip([
     { name: "[Content_Types].xml", data: textEncoder.encode(contentTypes) },
@@ -270,7 +278,7 @@ function normalizeFilePart(value: string | undefined, fallback: string) {
   return cleaned || fallback;
 }
 
-async function loadExportSettings(tenantDb: any): Promise<ExportSettings> {
+async function loadExportSettings(tenantDb: any, lang: PrintLang): Promise<ExportSettings> {
   const rows = await tenantDb.select().from(settingsTable);
   const map = new Map<string, string>();
   for (const row of rows as Array<{ key: string; value: string }>) {
@@ -281,7 +289,7 @@ async function loadExportSettings(tenantDb: any): Promise<ExportSettings> {
     includeModelCode: boolFromSetting(map.get("exportIncludeModelCode"), true),
     includeModelDescription: boolFromSetting(map.get("exportIncludeModelDescription"), true),
     includeParticipantEmail: boolFromSetting(map.get("exportIncludeParticipantEmail"), true),
-    excelSheetName: normalizePlainText(map.get("excelSheetName"), "Export", 31),
+    excelSheetName: normalizePlainText(map.get("excelSheetName"), pt(lang, "sheet.export"), 31),
     excelFilePrefix: normalizeFilePart(map.get("excelFilePrefix"), "contest-export"),
     displayNumberPadding: codeFormat.displayNumberPadding
   };
@@ -352,24 +360,29 @@ export function renderSocialHtml(u: {
 }
 
 /** Enrollment totals block of the printed registration sheet. */
-export function renderPricingHtml(entries: (PricingSummary & { eventName: string })[]) {
+export function renderPricingHtml(entries: (PricingSummary & { eventName: string })[], lang: PrintLang = "it") {
   if (!entries.length) return "";
-  const row = (label: string, cents: number) => `<tr><td>${escapeHtml(label)}</td><td class="amount">${formatEuro(cents)}</td></tr>`;
+  const row = (label: string, cents: number) => `<tr><td>${escapeHtml(label)}</td><td class="amount">${formatMoney(lang, cents)}</td></tr>`;
   const blocks = entries.map((e) => `
     <h3>${escapeHtml(e.eventName)}</h3>
     <table>
       <tbody>
-        ${row("Base fee", e.baseFeeCents)}
-        ${e.coauthorLines.map((l) => row(`Co-author ${l.name} ${l.surname} (${l.roleName}) - ${l.models.map((m) => m.modelCode || m.modelName).join(", ")}`, l.priceCents)).join("")}
-        ${e.freeModels.map((m) => row(`Free entry - ${m.modelName}`, 0)).join("")}
-        <tr><th>Total</th><th class="amount">${formatEuro(e.totalCents)}</th></tr>
+        ${row(pt(lang, "pricing.baseFee"), e.baseFeeCents)}
+        ${e.coauthorLines.map((l) => row(pt(lang, "pricing.coauthor", {
+          name: l.name,
+          surname: l.surname,
+          role: l.roleName,
+          models: l.models.map((m) => m.modelCode || m.modelName).join(", ")
+        }), l.priceCents)).join("")}
+        ${e.freeModels.map((m) => row(pt(lang, "pricing.freeEntry", { model: m.modelName }), 0)).join("")}
+        <tr><th>${pt(lang, "pricing.total")}</th><th class="amount">${formatMoney(lang, e.totalCents)}</th></tr>
       </tbody>
     </table>`);
   const grandTotal = entries.length > 1
-    ? `<p><strong>Grand total:</strong> ${formatEuro(entries.reduce((sum, e) => sum + e.totalCents, 0))}</p>`
+    ? `<p><strong>${pt(lang, "pricing.grandTotal")}:</strong> ${formatMoney(lang, entries.reduce((sum, e) => sum + e.totalCents, 0))}</p>`
     : "";
   return `<div class="section">
-    <h2>Registration fee</h2>${blocks.join("")}${grandTotal}
+    <h2>${pt(lang, "pricing.heading")}</h2>${blocks.join("")}${grandTotal}
   </div>`;
 }
 
@@ -423,7 +436,8 @@ export const exportFilterQuerySchema = t.Object({
   eventId: t.Optional(t.String()),
   categoryId: t.Optional(t.String()),
   userId: t.Optional(t.String()),
-  modelId: t.Optional(t.String())
+  modelId: t.Optional(t.String()),
+  lang: t.Optional(t.String())
 });
 
 function filtersFileSuffix(filters: ExportFilters) {
@@ -470,7 +484,8 @@ const managerExportRoutes = new Elysia()
   .use(requireRole("manager"))
   .get("/enrollments", async ({ tenantDb, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
-    const exportSettings = await loadExportSettings(tenantDb);
+    const lang = parsePrintLang(query?.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
 
     const queryBuilder = tenantDb
       .select({
@@ -508,31 +523,31 @@ const managerExportRoutes = new Elysia()
     const excelRows = rows.map((row: any) => {
       const base: Record<string, string> = {
         enrollmentId: row.enrollmentId,
-        eventName: row.eventName ?? "",
-        partecipante: fullName(row.participant, row.participantLastName, row.email ?? row.userId),
-        modello: row.modelName ?? "",
-        categoria: row.categoryName ?? "",
-        checkIn: row.checkedIn ? "true" : "false",
-        assente: row.absent ? "true" : "false",
+        [pt(lang, "col.event")]: row.eventName ?? "",
+        [pt(lang, "col.participant")]: fullName(row.participant, row.participantLastName, row.email ?? row.userId),
+        [pt(lang, "col.model")]: row.modelName ?? "",
+        [pt(lang, "col.category")]: row.categoryName ?? "",
+        [pt(lang, "col.checkIn")]: row.checkedIn ? "true" : "false",
+        [pt(lang, "col.absent")]: row.absent ? "true" : "false",
         patreon: row.patreon ?? "",
         pinterest: row.pinterest ?? "",
         tiktok: row.tiktok ?? ""
       };
 
       if (exportSettings.includeParticipantEmail) {
-        base.email = row.email ?? "";
+        base[pt(lang, "col.email")] = row.email ?? "";
       }
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber, row.teamCode);
+        base[pt(lang, "col.code")] = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber, row.teamCode);
       }
       if (exportSettings.includeModelDescription) {
-        base.descrizione = row.modelDescription ?? "";
+        base[pt(lang, "col.description")] = row.modelDescription ?? "";
       }
       return base;
     });
 
     setXlsxHeaders(set, buildFileName(exportSettings, "enrollments", eventId ?? undefined));
-    return toXlsx(buildSheetName(exportSettings, "Enrollments"), excelRows);
+    return toXlsx(buildSheetName(exportSettings, pt(lang, "sheet.enrollments")), excelRows, lang);
   }, {
     detail: {
       summary: "Export iscrizioni Excel (XLSX)",
@@ -542,7 +557,8 @@ const managerExportRoutes = new Elysia()
   })
   .get("/models", async ({ tenantDb, query, set }) => {
     const categoryId = query?.categoryId ? String(query.categoryId) : null;
-    const exportSettings = await loadExportSettings(tenantDb);
+    const lang = parsePrintLang(query?.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
 
     const baseQuery = tenantDb
       .select({
@@ -569,19 +585,19 @@ const managerExportRoutes = new Elysia()
         id: row.id,
         userId: row.userId,
         categoryId: row.categoryId,
-        nome: row.name
+        [pt(lang, "col.name")]: row.name
       };
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber, row.teamCode);
+        base[pt(lang, "col.code")] = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber, row.teamCode);
       }
       if (exportSettings.includeModelDescription) {
-        base.descrizione = row.description ?? "";
+        base[pt(lang, "col.description")] = row.description ?? "";
       }
       return base;
     });
 
     setXlsxHeaders(set, buildFileName(exportSettings, "models"));
-    return toXlsx(buildSheetName(exportSettings, "Models"), excelRows);
+    return toXlsx(buildSheetName(exportSettings, pt(lang, "sheet.models")), excelRows, lang);
   }, {
     detail: {
       summary: "Export modelli Excel (XLSX)",
@@ -596,7 +612,8 @@ const managerExportRoutes = new Elysia()
       return { error: "eventId is required" };
     }
 
-    const exportSettings = await loadExportSettings(tenantDb);
+    const lang = parsePrintLang(query.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
 
     // Task 04: deduplicate users (multiple registrations post Task-02 fix)
     const allUserRows = await tenantDb
@@ -661,11 +678,11 @@ const managerExportRoutes = new Elysia()
 
     const excelRows = (users as any[]).map((u) => {
       const base: Record<string, string> = {
-        utente: fullName(u.firstName, u.lastName, u.email),
-        modelli: (modelsByUser.get(u.userId) ?? []).join(" | ")
+        [pt(lang, "col.user")]: fullName(u.firstName, u.lastName, u.email),
+        [pt(lang, "col.models")]: (modelsByUser.get(u.userId) ?? []).join(" | ")
       };
       if (exportSettings.includeParticipantEmail) {
-        base.email = u.email;
+        base[pt(lang, "col.email")] = u.email;
       }
       base.instagram = u.instagram ?? "";
       base.facebook = u.facebook ?? "";
@@ -677,9 +694,9 @@ const managerExportRoutes = new Elysia()
     });
 
     setXlsxHeaders(set, buildFileName(exportSettings, "users-by-event", eventId));
-    return toXlsx(buildSheetName(exportSettings, "Users"), excelRows);
+    return toXlsx(buildSheetName(exportSettings, pt(lang, "sheet.users")), excelRows, lang);
   }, {
-    query: t.Object({ eventId: t.String() }),
+    query: t.Object({ eventId: t.String(), lang: t.Optional(t.String()) }),
     detail: {
       summary: "Export utenti per evento Excel (XLSX)",
       tags: ["Exports"],
@@ -692,7 +709,8 @@ const managerExportRoutes = new Elysia()
       set.status = 400;
       return { error: "eventId is required" };
     }
-    const exportSettings = await loadExportSettings(tenantDb);
+    const lang = parsePrintLang(query.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
 
     const [event] = await tenantDb
       .select({ id: eventsTable.id, name: eventsTable.name })
@@ -765,10 +783,10 @@ const managerExportRoutes = new Elysia()
     set.headers["content-disposition"] = `inline; filename=\"users-by-event-${normalizeFilePart(eventId, "event")}.html\"`;
 
     return `<!DOCTYPE html>
-<html>
+<html lang="${lang}">
   <head>
     <meta charset=\"utf-8\" />
-    <title>Export utenti ${escapeHtml(event?.name ?? eventId)}</title>
+    <title>${escapeHtml(`${pt(lang, "users.title")} ${event?.name ?? eventId}`)}</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 24px; }
       h1 { margin-bottom: 8px; }
@@ -782,26 +800,26 @@ const managerExportRoutes = new Elysia()
     </style>
   </head>
   <body>
-    <h1>Utenti per evento</h1>
-    <p><strong>Evento:</strong> ${escapeHtml(event?.name ?? eventId)}</p>
+    <h1>${pt(lang, "users.heading")}</h1>
+    <p><strong>${pt(lang, "label.event")}:</strong> ${escapeHtml(event?.name ?? eventId)}</p>
     <table>
       <thead>
         <tr>
-          <th>Partecipante</th>
-          <th>Email</th>
-          <th>Social</th>
-          <th>Modelli</th>
+          <th>${pt(lang, "col.participant")}</th>
+          <th>${pt(lang, "col.email")}</th>
+          <th>${pt(lang, "col.social")}</th>
+          <th>${pt(lang, "col.models")}</th>
         </tr>
       </thead>
       <tbody>
-        ${rows || "<tr><td colspan=\"4\">Nessun dato</td></tr>"}
+        ${rows || `<tr><td colspan=\"4\">${pt(lang, "common.noData")}</td></tr>`}
       </tbody>
     </table>
     <script>window.onload = () => window.print();</script>
   </body>
 </html>`;
   }, {
-    query: t.Object({ eventId: t.String() }),
+    query: t.Object({ eventId: t.String(), lang: t.Optional(t.String()) }),
     detail: {
       summary: "Export utenti per evento (stampa PDF)",
       tags: ["Exports"],
@@ -814,7 +832,8 @@ const managerExportRoutes = new Elysia()
       set.status = parsed.status;
       return { error: parsed.error };
     }
-    const exportSettings = await loadExportSettings(tenantDb);
+    const lang = parsePrintLang(query.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
 
     const filters = buildModelFilterConditions(parsed.filters);
     const baseQuery = tenantDb
@@ -848,11 +867,11 @@ const managerExportRoutes = new Elysia()
         <img class="qr" alt="${escapeHtml(modelQrPayload(row.id))}" src="${escapeHtml(qr)}" width="120" height="120"/>
         <div class="info">
           <h2>${escapeHtml(row.name)}</h2>
-          <p><strong>Codice:</strong> ${escapeHtml(code)}</p>
-          <p><strong>Categoria:</strong> ${escapeHtml(row.categoryName)}</p>
-          <p><strong>Utente:</strong> ${escapeHtml(fullName(row.firstName, row.lastName, row.userEmail))}</p>
-          ${row.description && exportSettings.includeModelDescription ? `<p><strong>Descrizione:</strong> ${escapeHtml(row.description)}</p>` : ""}
-          ${row.notes ? `<p><strong>Note:</strong> ${escapeHtml(row.notes)}</p>` : ""}
+          <p><strong>${pt(lang, "label.code")}:</strong> ${escapeHtml(code)}</p>
+          <p><strong>${pt(lang, "label.category")}:</strong> ${escapeHtml(row.categoryName)}</p>
+          <p><strong>${pt(lang, "label.user")}:</strong> ${escapeHtml(fullName(row.firstName, row.lastName, row.userEmail))}</p>
+          ${row.description && exportSettings.includeModelDescription ? `<p><strong>${pt(lang, "label.description")}:</strong> ${escapeHtml(row.description)}</p>` : ""}
+          ${row.notes ? `<p><strong>${pt(lang, "label.notes")}:</strong> ${escapeHtml(row.notes)}</p>` : ""}
         </div>
       </section>`;
     });
@@ -861,10 +880,10 @@ const managerExportRoutes = new Elysia()
     set.headers["content-disposition"] = `inline; filename="models-print.html"`;
 
     return `<!DOCTYPE html>
-<html>
+<html lang="${lang}">
   <head>
     <meta charset="utf-8" />
-    <title>Stampa modelli</title>
+    <title>${pt(lang, "models.title")}</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 24px; }
       .card { display: flex; gap: 16px; border: 1px solid #ccc; padding: 12px; margin-bottom: 12px; page-break-inside: avoid; break-inside: avoid; }
@@ -877,8 +896,8 @@ const managerExportRoutes = new Elysia()
     </style>
   </head>
   <body>
-    <h1>Modelli</h1>
-    ${cards.join("") || "<p>Nessun modello</p>"}
+    <h1>${pt(lang, "models.heading")}</h1>
+    ${cards.join("") || `<p>${pt(lang, "common.noModels")}</p>`}
     <script>window.onload = () => window.print();</script>
   </body>
 </html>`;
@@ -896,7 +915,8 @@ const managerExportRoutes = new Elysia()
       set.status = parsed.status;
       return { error: parsed.error };
     }
-    const exportSettings = await loadExportSettings(tenantDb);
+    // JSON keys are a machine contract (DYMO/direct print): `lang` is accepted but does not change them.
+    const exportSettings = await loadExportSettings(tenantDb, parsePrintLang(query.lang));
     const labelRows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
     if (!labelRows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
     return labelRows;
@@ -915,11 +935,19 @@ const managerExportRoutes = new Elysia()
       return { error: parsed.error };
     }
 
-    const exportSettings = await loadExportSettings(tenantDb);
+    const lang = parsePrintLang(query.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
     const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
     if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
     setXlsxHeaders(set, buildFileName(exportSettings, "labels", filtersFileSuffix(parsed.filters)));
-    return toXlsx(buildSheetName(exportSettings, "Labels"), rows.map(({ qr: _qr, ...rest }) => rest));
+    return toXlsx(buildSheetName(exportSettings, pt(lang, "sheet.labels")), rows.map(({ utente, categoria, nomeModello, codice, note, qrPayload }) => ({
+      [pt(lang, "col.user")]: utente,
+      [pt(lang, "col.category")]: categoria,
+      [pt(lang, "col.modelName")]: nomeModello,
+      [pt(lang, "col.code")]: codice,
+      [pt(lang, "col.notes")]: note,
+      [pt(lang, "col.qrPayload")]: qrPayload
+    })), lang);
   }, {
     query: exportFilterQuerySchema,
     detail: {
@@ -935,6 +963,7 @@ const managerExportRoutes = new Elysia()
       return { error: parsed.error };
     }
     const eventId = parsed.filters.eventId;
+    const lang = parsePrintLang(query.lang);
 
     const [event] = eventId
       ? await tenantDb
@@ -944,7 +973,7 @@ const managerExportRoutes = new Elysia()
         .limit(1)
       : [];
 
-    const exportSettings = await loadExportSettings(tenantDb);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
     const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
     if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
     const bodyRows = rows
@@ -955,10 +984,10 @@ const managerExportRoutes = new Elysia()
     set.headers["content-disposition"] = `inline; filename=\"labels-${normalizeFilePart(filtersFileSuffix(parsed.filters), "labels")}.html\"`;
 
     return `<!DOCTYPE html>
-<html>
+<html lang="${lang}">
   <head>
     <meta charset=\"utf-8\" />
-    <title>Etichette ${escapeHtml(event?.name ?? eventId ?? "")}</title>
+    <title>${pt(lang, "labels.title")} ${escapeHtml(event?.name ?? eventId ?? "")}</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 24px; }
       h1 { margin-bottom: 8px; }
@@ -972,21 +1001,21 @@ const managerExportRoutes = new Elysia()
     </style>
   </head>
   <body>
-    <h1>Stampa etichette</h1>
-    ${eventId ? `<p><strong>Evento:</strong> ${escapeHtml(event?.name ?? eventId)}</p>` : ""}
+    <h1>${pt(lang, "labels.heading")}</h1>
+    ${eventId ? `<p><strong>${pt(lang, "label.event")}:</strong> ${escapeHtml(event?.name ?? eventId)}</p>` : ""}
     <table>
       <thead>
         <tr>
-          <th>Utente</th>
-          <th>Categoria</th>
-          <th>Nome modello</th>
-          <th>Codice</th>
-          <th>Note</th>
-          <th>QR</th>
+          <th>${pt(lang, "col.user")}</th>
+          <th>${pt(lang, "col.category")}</th>
+          <th>${pt(lang, "col.modelName")}</th>
+          <th>${pt(lang, "col.code")}</th>
+          <th>${pt(lang, "col.notes")}</th>
+          <th>${pt(lang, "col.qr")}</th>
         </tr>
       </thead>
       <tbody>
-        ${bodyRows || "<tr><td colspan=\"6\">Nessun dato</td></tr>"}
+        ${bodyRows || `<tr><td colspan=\"6\">${pt(lang, "common.noData")}</td></tr>`}
       </tbody>
     </table>
     <script>window.onload = () => window.print();</script>
@@ -1003,8 +1032,9 @@ const managerExportRoutes = new Elysia()
 
 const userExportRoutes = new Elysia()
   .use(requireRole("user"))
-  .get("/my-enrollments", async ({ tenantDb, user, set }) => {
-    const exportSettings = await loadExportSettings(tenantDb);
+  .get("/my-enrollments", async ({ tenantDb, user, query, set }) => {
+    const lang = parsePrintLang(query?.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
 
     const rows = await tenantDb
       .select({
@@ -1031,26 +1061,26 @@ const userExportRoutes = new Elysia()
     const excelRows = (rows as any[]).map((row) => {
       const base: Record<string, string> = {
         enrollmentId: row.enrollmentId,
-        eventName: row.eventName ?? "",
-        modello: row.modelName ?? "",
-        categoria: row.categoryName ?? "",
-        checkIn: row.checkedIn ? "true" : "false",
-        assente: row.absent ? "true" : "false",
+        [pt(lang, "col.event")]: row.eventName ?? "",
+        [pt(lang, "col.model")]: row.modelName ?? "",
+        [pt(lang, "col.category")]: row.categoryName ?? "",
+        [pt(lang, "col.checkIn")]: row.checkedIn ? "true" : "false",
+        [pt(lang, "col.absent")]: row.absent ? "true" : "false",
         patreon: row.patreon ?? "",
         pinterest: row.pinterest ?? "",
         tiktok: row.tiktok ?? ""
       };
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber, row.teamCode);
+        base[pt(lang, "col.code")] = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber, row.teamCode);
       }
       if (exportSettings.includeModelDescription) {
-        base.descrizione = row.modelDescription ?? "";
+        base[pt(lang, "col.description")] = row.modelDescription ?? "";
       }
       return base;
     });
 
     setXlsxHeaders(set, buildFileName(exportSettings, "my-enrollments"));
-    return toXlsx(buildSheetName(exportSettings, "MyEnrollments"), excelRows);
+    return toXlsx(buildSheetName(exportSettings, pt(lang, "sheet.myEnrollments")), excelRows, lang);
   }, {
     detail: {
       summary: "Export mie iscrizioni Excel (XLSX)",
@@ -1061,7 +1091,8 @@ const userExportRoutes = new Elysia()
   // Task 06+07: stampa scheda utente con modelli e info team
   .get("/model-card/pdf", async ({ tenantDb, user, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
-    const exportSettings = await loadExportSettings(tenantDb);
+    const lang = parsePrintLang(query?.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
 
     const [profile] = await tenantDb
       .select({
@@ -1120,7 +1151,7 @@ const userExportRoutes = new Elysia()
     set.headers["content-disposition"] = `inline; filename="model-card-${paddedUserId}.html"`;
 
     return `<!DOCTYPE html>
-<html>
+<html lang="${lang}">
 <head>
   <meta charset="utf-8"/>
   <title>${title}</title>
@@ -1140,29 +1171,29 @@ const userExportRoutes = new Elysia()
 <body>
   <h1>${title}</h1>
   <div class="section">
-    <h2>User Details</h2>
-    <p><strong>User ID:</strong> ${paddedUserId}</p>
-    <p><strong>First name:</strong> ${escapeHtml(profile.firstName)}</p>
-    <p><strong>Last name:</strong> ${escapeHtml(profile.lastName)}</p>
-    <p><strong>Country:</strong> ${escapeHtml(profile.city)}</p>
-    <p><strong>E-mail address:</strong> ${escapeHtml(profile.email)}</p>
-    <p><strong>Model Total:</strong> ${allModels.length}</p>
+    <h2>${pt(lang, "modelCard.userDetails")}</h2>
+    <p><strong>${pt(lang, "label.userId")}:</strong> ${paddedUserId}</p>
+    <p><strong>${pt(lang, "label.firstName")}:</strong> ${escapeHtml(profile.firstName)}</p>
+    <p><strong>${pt(lang, "label.lastName")}:</strong> ${escapeHtml(profile.lastName)}</p>
+    <p><strong>${pt(lang, "label.country")}:</strong> ${escapeHtml(profile.city)}</p>
+    <p><strong>${pt(lang, "label.email")}:</strong> ${escapeHtml(profile.email)}</p>
+    <p><strong>${pt(lang, "label.modelTotal")}:</strong> ${allModels.length}</p>
   </div>
   <div class="section">
     <table>
       <thead>
         <tr>
-          <th>Model ID</th>
-          <th>Model Title</th>
-          <th>Class Title</th>
+          <th>${pt(lang, "col.modelId")}</th>
+          <th>${pt(lang, "col.modelTitle")}</th>
+          <th>${pt(lang, "col.classTitle")}</th>
         </tr>
       </thead>
       <tbody>
-        ${modelRowsHtml.join("") || "<tr><td colspan=\"3\">Nessun modello</td></tr>"}
+        ${modelRowsHtml.join("") || `<tr><td colspan=\"3\">${pt(lang, "common.noModels")}</td></tr>`}
       </tbody>
     </table>
   </div>
-  ${renderPricingHtml(pricing)}
+  ${renderPricingHtml(pricing, lang)}
   <script>window.onload = () => window.print();</script>
 </body>
 </html>`;

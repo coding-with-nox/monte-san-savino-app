@@ -27,6 +27,16 @@ describe("class print", () => {
   it("renders empty states", () => {
     expect(renderJuryListHtml({ name: "C" }, [])).toContain("Nessun giudice");
   });
+  it("renders english headings and html lang for lang en", () => {
+    const en = renderExhibitorsHtml({ name: "Pittura" }, [], "en");
+    expect(en).toContain('<html lang="en">');
+    expect(en).toContain("<h1>Exhibitors and models</h1>");
+    expect(en).toContain("<strong>Class:</strong> Pittura");
+    expect(en).toContain("<th>Exhibitor</th>");
+    expect(en).toContain("No models");
+    expect(en).not.toContain("Espositori e modelli");
+    expect(renderExhibitorsHtml({ name: "Pittura" }, [])).toContain('<html lang="it">');
+  });
 });
 
 describe("stats overview", () => {

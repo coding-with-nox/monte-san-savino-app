@@ -9,6 +9,7 @@ import {
   FormHelperText,
   Grid,
   InputAdornment,
+  Link,
   MenuItem,
   Paper,
   Stack,
@@ -27,6 +28,7 @@ import { ApiError, api } from "../lib/api";
 import { createCodeChallenge, generateCodeVerifier, setSession } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
 import { countryOptions } from "../lib/countries";
+import { PRIVACY_POLICY_VERSION } from "../lib/privacyNotice";
 import useToast from "../components/useToast";
 import { ActionButton, TipIconButton } from "../components/ActionButton";
 
@@ -173,7 +175,7 @@ export default function Login({ language }: LoginProps) {
     const userEmail = form.email.trim();
     setBusy(true);
     try {
-      await api("/auth/register", { method: "POST", body: JSON.stringify({ email: userEmail, password: form.password }) });
+      await api("/auth/register", { method: "POST", body: JSON.stringify({ email: userEmail, password: form.password, privacyAccepted: true, privacyVersion: PRIVACY_POLICY_VERSION }) });
       await signIn(userEmail, form.password);
     } catch (err) {
       handleError(err);
@@ -414,6 +416,9 @@ export default function Login({ language }: LoginProps) {
                       control={<Checkbox checked={form.privacy} onChange={(e) => set("privacy", e.target.checked)} />}
                       label={<Typography variant="body2">{tr("signupPrivacy")}</Typography>}
                     />
+                    <Box sx={{ pl: 4 }}>
+                      <Link href="/privacy" target="_blank" rel="noopener" variant="body2">{tr("signupPrivacyLink")}</Link>
+                    </Box>
                     {errors.privacy && <FormHelperText error>{errors.privacy}</FormHelperText>}
                   </Box>
                 </Stack>

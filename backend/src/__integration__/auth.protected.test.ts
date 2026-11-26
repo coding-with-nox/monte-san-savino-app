@@ -11,8 +11,8 @@ describe("integration GET /users/profile (protected route)", () => {
 
   beforeAll(async () => {
     await truncateUsers();
-    await postJson(app, "/auth/register", { email: TEST_EMAIL, password: TEST_PASSWORD });
-    const loginRes = await postJson(app, "/auth/login", { email: TEST_EMAIL, password: TEST_PASSWORD });
+    await postJson(app, "/auth/register", { email: TEST_EMAIL, password: TEST_PASSWORD, privacyAccepted: true, privacyVersion: "test" });
+    const loginRes = await postJson(app, "/auth/login", { email: TEST_EMAIL, password: TEST_PASSWORD, privacyAccepted: true, privacyVersion: "test" });
     const loginBody = await loginRes.json() as { accessToken: string };
     accessToken = loginBody.accessToken;
   });

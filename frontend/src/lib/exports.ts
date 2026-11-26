@@ -2,9 +2,19 @@ import { api } from "./api";
 
 export type ExportParams = Record<string, string | null | undefined>;
 
+/** UI language, sent as `lang` so server-side prints match the interface (it | en). */
+export function currentLang(): string {
+  try {
+    return window.localStorage.getItem("language") === "en" ? "en" : "it";
+  } catch {
+    return "it";
+  }
+}
+
 export function buildQuery(params: ExportParams): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+  if (!q.has("lang")) q.set("lang", currentLang());
   const s = q.toString();
   return s ? `?${s}` : "";
 }
