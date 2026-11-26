@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Chip, Grid, Stack, Typography } from "@mui/material";
+import { Chip, Grid, Stack, Typography } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import PersonIcon from "@mui/icons-material/Person";
 import PhoneIcon from "@mui/icons-material/Phone";
@@ -16,6 +16,7 @@ import SocialLinks from "../components/SocialLinks";
 import useToast from "../components/useToast";
 import { hasInvalidSocial, socialPayload } from "../lib/social";
 import { countryName } from "../lib/countries";
+import { ActionButton } from "../components/ActionButton";
 
 type Profile = {
   email?: string;
@@ -106,17 +107,19 @@ export default function Profile({ language }: ProfileProps) {
         <Stack spacing={3}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Typography variant="h4">{t(language, "profileTitle")}</Typography>
-            <Button
+            <ActionButton
+              tip={t(language, "tipProfileEdit")}
+              data-tour="profile-edit"
               variant="contained"
               color="secondary"
               startIcon={<EditIcon />}
               onClick={startEdit}
             >
               {t(language, "profileEditButton")}
-            </Button>
+            </ActionButton>
           </Stack>
 
-          <SectionCard icon={<PersonIcon />} title={t(language, "profilePersonalSection")}>
+          <SectionCard tourId="profile-data" icon={<PersonIcon />} title={t(language, "profilePersonalSection")}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <Field label={t(language, "profileFirstName")} value={profile.firstName} />
@@ -169,7 +172,7 @@ export default function Profile({ language }: ProfileProps) {
             </Grid>
           </SectionCard>
 
-          <SectionCard icon={<ShareIcon />} title={t(language, "profileSocialSection")}>
+          <SectionCard tourId="profile-social" icon={<ShareIcon />} title={t(language, "profileSocialSection")}>
             <SocialLinks
               language={language}
               instagram={profile.instagram}
@@ -208,12 +211,12 @@ export default function Profile({ language }: ProfileProps) {
           showIdentityFields
         />
         <Stack direction="row" spacing={2}>
-          <Button variant="contained" onClick={save}>
+          <ActionButton tip={t(language, "tipProfileSave")} variant="contained" onClick={save}>
             {t(language, "profileSaveButton")}
-          </Button>
-          <Button variant="outlined" onClick={cancelEdit}>
+          </ActionButton>
+          <ActionButton tip={t(language, "tipEditCancel")} variant="outlined" onClick={cancelEdit}>
             {t(language, "profileCancelButton")}
-          </Button>
+          </ActionButton>
         </Stack>
       </Stack>
     </PageContainer>

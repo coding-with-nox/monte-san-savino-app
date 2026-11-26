@@ -1,9 +1,10 @@
 import React from "react";
-import { Box, Button, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Box, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { Language, t } from "../lib/i18n";
 import { formatCents, MemberRole } from "../lib/pricing";
+import { ActionButton, TipIconButton } from "./ActionButton";
 
 export type Coauthor = {
   name: string;
@@ -68,19 +69,20 @@ export default function CoauthorsEditor({ language, members, roles, onChange }: 
               </MenuItem>
             ))}
           </TextField>
-          <IconButton
+          <TipIconButton
+            tip={t(language, "tipCoauthorRemove")}
             size="small"
             color="error"
             aria-label={`${t(language, "coauthorRemove")} ${index + 1}`}
             onClick={() => onChange(members.filter((_, i) => i !== index))}
           >
             <DeleteIcon fontSize="small" />
-          </IconButton>
+          </TipIconButton>
         </Box>
       ))}
-      <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => onChange([...members, emptyCoauthor()])} sx={{ alignSelf: "flex-start" }}>
+      <ActionButton tip={t(language, "tipCoauthorAdd")} variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => onChange([...members, emptyCoauthor()])} sx={{ alignSelf: "flex-start" }}>
         {t(language, "coauthorAdd")}
-      </Button>
+      </ActionButton>
     </Stack>
   );
 }

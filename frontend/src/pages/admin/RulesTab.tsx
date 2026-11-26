@@ -1,7 +1,20 @@
 import React, { useEffect, useState } from "react";
 import {
-  Alert, Button, Checkbox, IconButton, InputAdornment, List, ListItem, ListItemText, Stack,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography
+  Alert,
+  Checkbox,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemText,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography
 } from "@mui/material";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
@@ -12,8 +25,19 @@ import { DEFAULT_PRIZE_ORDER } from "../../lib/podium";
 import { roleLabel } from "../../lib/roles";
 import SectionCard from "../../components/SectionCard";
 import useToast from "../../components/useToast";
+import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
-type Visibility = { sections: string[]; roles: string[]; visibility: Record<string, string[]> };
+type Visibility = {
+  sections: string[];
+  roles: string[];
+  visibility: Record<string, string[]>;
+  permissions?: Record<string, string[]>;
+  availablePermissions?: string[];
+};
+
+const PERMISSION_KEYS: Record<string, TranslationKey> = {
+  enrollOnBehalf: "permissionEnrollOnBehalf"
+};
 
 const SECTION_KEYS: Record<string, TranslationKey> = {
   dashboard: "sectionDashboard",
@@ -87,6 +111,25 @@ export default function RulesTab({ language }: { language: Language }) {
     });
   }
 
+  function togglePermission(role: string, permission: string) {
+    setMatrix((m) => {
+      if (!m) return m;
+      const current = m.permissions?.[role] ?? [];
+      const next = current.includes(permission) ? current.filter((p) => p !== permission) : [...current, permission];
+      return { ...m, permissions: { ...m.permissions, [role]: next } };
+    });
+  }
+
+  function saveMatrix() {
+    if (!matrix) return;
+    const pick = (source: Record<string, string[]> | undefined) =>
+      Object.fromEntries(editableRoles.map((r) => [r, source?.[r] ?? []]));
+    void save("/admin/settings/section-visibility", {
+      visibility: pick(matrix.visibility),
+      ...(matrix.availablePermissions ? { permissions: pick(matrix.permissions) } : {})
+    });
+  }
+
   function move(index: number, delta: -1 | 1) {
     setOrder((current) => {
       const next = [...current];
@@ -97,11 +140,14 @@ export default function RulesTab({ language }: { language: Language }) {
 
   const sectionName = (key: string) => (SECTION_KEYS[key] ? t(language, SECTION_KEYS[key]) : key);
   const editableRoles = matrix?.roles.filter((r) => r !== "admin") ?? [];
+  // Admin is shown among the permissions as always granted.
+  const permissionRoles = [...editableRoles, "admin"];
+  const permissionName = (key: string) => (PERMISSION_KEYS[key] ? t(language, PERMISSION_KEYS[key]) : key);
 
   return (
     <Stack spacing={2}>
       {toast.node}
-      <SectionCard title={t(language, "rulesFeeTitle")}>
+      <SectionCard tourId="rules-fee" title={t(language, "rulesFeeTitle")}>
         <Stack spacing={1.5}>
           <Typography variant="body2" color="text.secondary">{t(language, "rulesFeeHelp")}</Typography>
           <Stack direction="row" spacing={1} alignItems="center">
@@ -113,14 +159,14 @@ export default function RulesTab({ language }: { language: Language }) {
               inputProps={{ inputMode: "decimal" }}
               InputProps={{ startAdornment: <InputAdornment position="start">€</InputAdornment> }}
             />
-            <Button variant="contained" size="small" onClick={saveFee} disabled={saving || !fee.trim()}>
+            <ActionButton tip={t(language, "tipRulesSaveFee")} variant="contained" size="small" onClick={saveFee} disabled={saving || !fee.trim()}>
               {t(language, "adminSave")}
-            </Button>
+            </ActionButton>
           </Stack>
         </Stack>
       </SectionCard>
 
-      <SectionCard title={t(language, "rulesVisibilityTitle")}>
+      <SectionCard tourId="rules-visibility" title={t(language, "rulesVisibilityTitle")}>
         {matrixError && <Alert severity="warning">{t(language, "rulesLoadError")}</Alert>}
         {matrix && (
           <Stack spacing={1.5}>
@@ -154,22 +200,57 @@ export default function RulesTab({ language }: { language: Language }) {
                 </TableBody>
               </Table>
             </TableContainer>
-            <Button
+            {!!matrix.availablePermissions?.length && (
+              <Stack spacing={1} data-tour="rules-permissions">
+                <Typography variant="subtitle1" component="h3">{t(language, "rulesPermissionsTitle")}</Typography>
+                <Typography variant="body2" color="text.secondary">{t(language, "rulesPermissionsHelp")}</Typography>
+                <TableContainer>
+                  <Table size="small" aria-label={t(language, "rulesPermissionsTitle")}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700 }}>{t(language, "rulesPermission")}</TableCell>
+                        {permissionRoles.map((role) => (
+                          <TableCell key={role} align="center" sx={{ fontWeight: 700 }}>{roleLabel(language, role)}</TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {matrix.availablePermissions.map((permission) => (
+                        <TableRow key={permission}>
+                          <TableCell component="th" scope="row">{permissionName(permission)}</TableCell>
+                          {permissionRoles.map((role) => (
+                            <TableCell key={role} align="center">
+                              <Checkbox
+                                size="small"
+                                disabled={role === "admin"}
+                                checked={role === "admin" || (matrix.permissions?.[role] ?? []).includes(permission)}
+                                onChange={() => togglePermission(role, permission)}
+                                inputProps={{ "aria-label": `${roleLabel(language, role)}: ${permissionName(permission)}` }}
+                              />
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Stack>
+            )}
+            <ActionButton
+              tip={t(language, "tipRulesSaveMatrix")}
               variant="contained"
               size="small"
-              sx={{ alignSelf: "flex-start" }}
+              wrapperSx={{ alignSelf: "flex-start" }}
               disabled={saving}
-              onClick={() => save("/admin/settings/section-visibility", {
-                visibility: Object.fromEntries(editableRoles.map((r) => [r, matrix.visibility[r] ?? []]))
-              })}
+              onClick={saveMatrix}
             >
               {t(language, "adminSave")}
-            </Button>
+            </ActionButton>
           </Stack>
         )}
       </SectionCard>
 
-      <SectionCard title={t(language, "rulesPrizeTitle")}>
+      <SectionCard tourId="rules-prize" title={t(language, "rulesPrizeTitle")}>
         <Stack spacing={1}>
           <Typography variant="body2" color="text.secondary">{t(language, "rulesPrizeHelp")}</Typography>
           <List dense disablePadding data-testid="prize-order" sx={{ maxWidth: 360 }}>
@@ -179,12 +260,12 @@ export default function RulesTab({ language }: { language: Language }) {
                 disableGutters
                 secondaryAction={
                   <>
-                    <IconButton size="small" aria-label={`${t(language, "rulesMoveUp")}: ${label}`} disabled={i === 0} onClick={() => move(i, -1)}>
+                    <TipIconButton tip={t(language, "tipRulesMoveUp")} size="small" aria-label={`${t(language, "rulesMoveUp")}: ${label}`} disabled={i === 0} onClick={() => move(i, -1)}>
                       <ArrowUpwardIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" aria-label={`${t(language, "rulesMoveDown")}: ${label}`} disabled={i === order.length - 1} onClick={() => move(i, 1)}>
+                    </TipIconButton>
+                    <TipIconButton tip={t(language, "tipRulesMoveDown")} size="small" aria-label={`${t(language, "rulesMoveDown")}: ${label}`} disabled={i === order.length - 1} onClick={() => move(i, 1)}>
                       <ArrowDownwardIcon fontSize="small" />
-                    </IconButton>
+                    </TipIconButton>
                   </>
                 }
               >
@@ -192,15 +273,16 @@ export default function RulesTab({ language }: { language: Language }) {
               </ListItem>
             ))}
           </List>
-          <Button
+          <ActionButton
+            tip={t(language, "tipRulesSaveOrder")}
             variant="contained"
             size="small"
-            sx={{ alignSelf: "flex-start" }}
+            wrapperSx={{ alignSelf: "flex-start" }}
             disabled={saving}
             onClick={() => save("/admin/settings/prize-order", { order })}
           >
             {t(language, "adminSave")}
-          </Button>
+          </ActionButton>
         </Stack>
       </SectionCard>
     </Stack>

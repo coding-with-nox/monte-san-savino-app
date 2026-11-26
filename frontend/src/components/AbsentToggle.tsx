@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FormControlLabel, Switch } from "@mui/material";
+import { FormControlLabel, Switch, Tooltip } from "@mui/material";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import useToast from "./useToast";
@@ -35,10 +35,12 @@ export default function AbsentToggle({ language, enrollmentId, absent, onChanged
   return (
     <>
       {toast.node}
+      <Tooltip title={t(language, "tipAbsent")} describeChild>
       <FormControlLabel
         control={<Switch size="small" checked={absent} disabled={busy} onChange={(e) => change(e.target.checked)} />}
         label={t(language, "enrollmentsMarkAbsent")}
       />
+      </Tooltip>
     </>
   );
 }

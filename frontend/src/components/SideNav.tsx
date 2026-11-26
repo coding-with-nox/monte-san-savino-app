@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
-import { Box, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip } from "@mui/material";
+import { Box, List, ListItemButton, ListItemIcon, ListItemText, Tooltip } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { Language, t } from "../lib/i18n";
+import { TipIconButton } from "./ActionButton";
 
 export const SIDE_NAV_STORAGE_KEY = "sideNavCollapsed";
 const EXPANDED_WIDTH = 240;
@@ -49,6 +50,7 @@ export default function SideNav({ items, isActive, language }: SideNavProps) {
       component="nav"
       className="no-print"
       aria-label={t(language, "navMainLabel")}
+      data-tour="topbar-nav"
       sx={{
         width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH,
         flexShrink: 0,
@@ -60,11 +62,16 @@ export default function SideNav({ items, isActive, language }: SideNavProps) {
     >
       <Box sx={{ position: "sticky", top: 0, maxHeight: "100vh", overflowX: "hidden", overflowY: "auto" }}>
         <Box sx={{ display: "flex", justifyContent: collapsed ? "center" : "flex-end", px: 1.5, pt: 1 }}>
-          <Tooltip title={toggleLabel} placement="right">
-            <IconButton aria-label={toggleLabel} aria-expanded={!collapsed} aria-controls="side-nav-list" onClick={toggle}>
-              {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-            </IconButton>
-          </Tooltip>
+          <TipIconButton
+            tip={t(language, collapsed ? "tipNavExpand" : "tipNavCollapse")}
+            tipPlacement="right"
+            aria-label={toggleLabel}
+            aria-expanded={!collapsed}
+            aria-controls="side-nav-list"
+            onClick={toggle}
+          >
+            {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+          </TipIconButton>
         </Box>
         <List id="side-nav-list">
           {items.map((item) => {

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, FormControl, Grid, IconButton, InputLabel, List, ListItem, ListItemText, MenuItem, Select, TextField } from "@mui/material";
+import { FormControl, Grid, InputLabel, List, ListItem, ListItemText, MenuItem, Select, TextField } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { api } from "../../lib/api";
 import { Language, t } from "../../lib/i18n";
@@ -8,6 +8,7 @@ import PageSkeleton from "../../components/PageSkeleton";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { SectionErrors, useSections } from "./useSections";
 import type { AdminData } from "./useAdminData";
+import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
 type EventCampaign = { id: string; eventId: string; name: string; enrollmentOpenDate?: string | null; enrollmentCloseDate?: string | null };
 
@@ -44,7 +45,7 @@ export default function CampaignsCard({ language, data }: { language: Language; 
   return (
     <>
       <SectionErrors language={language} errors={errors} onRetry={() => void reload()} />
-      <SectionCard title={t(language, "adminEventCampaignsTitle")}>
+      <SectionCard tourId="admin-campaigns" title={t(language, "adminEventCampaignsTitle")}>
         <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
           <Grid item xs={12} md={3}>
             <FormControl fullWidth size="small">
@@ -90,9 +91,9 @@ export default function CampaignsCard({ language, data }: { language: Language; 
             />
           </Grid>
           <Grid item xs={12} md={2}>
-            <Button variant="contained" onClick={createCampaign} disabled={!form.eventId || !form.name.trim()} fullWidth>
+            <ActionButton tip={t(language, "tipCampaignCreate")} variant="contained" onClick={createCampaign} disabled={!form.eventId || !form.name.trim()} fullWidth>
               {t(language, "adminCreateButton")}
-            </Button>
+            </ActionButton>
           </Grid>
         </Grid>
         {loading ? (
@@ -101,9 +102,9 @@ export default function CampaignsCard({ language, data }: { language: Language; 
           <List dense>
             {campaigns.map((c) => (
               <ListItem key={c.id} disableGutters secondaryAction={
-                <IconButton size="small" color="error" onClick={() => deleteCampaign(c.id)}>
+                <TipIconButton tip={t(language, "tipCampaignDelete")} aria-label={`${t(language, "actionDelete")} ${c.name}`} size="small" color="error" onClick={() => deleteCampaign(c.id)}>
                   <DeleteIcon fontSize="small" />
-                </IconButton>
+                </TipIconButton>
               }>
                 <ListItemText
                   primary={`${c.name} — ${eventName(c.eventId)}`}

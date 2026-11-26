@@ -6,11 +6,13 @@ interface SectionCardProps {
   title: string;
   action?: React.ReactNode;
   children: React.ReactNode;
+  /** Anchor of the guided tour. */
+  tourId?: string;
 }
 
-export default function SectionCard({ icon, title, action, children }: SectionCardProps) {
+export default function SectionCard({ icon, title, action, children, tourId }: SectionCardProps) {
   return (
-    <Card>
+    <Card data-tour={tourId}>
       <CardContent>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
           <Stack direction="row" spacing={1.5} alignItems="center">

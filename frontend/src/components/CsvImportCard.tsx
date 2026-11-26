@@ -1,10 +1,11 @@
 import React, { useRef, useState } from "react";
-import { Alert, Box, Button, FormControl, InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
+import { Alert, Box, FormControl, InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import SectionCard from "./SectionCard";
 import useToast from "./useToast";
+import { ActionButton } from "./ActionButton";
 
 export type ImportResult = { created: number; errors: { line: number; message: string }[] };
 
@@ -92,14 +93,14 @@ export default function CsvImportCard({ language, title, help, endpoint, onImpor
           </FormControl>
         )}
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-          <Button variant="outlined" component="label" startIcon={<UploadFileIcon />}>
+          <ActionButton tip={t(language, "tipImportChoose")} variant="outlined" component="label" startIcon={<UploadFileIcon />}>
             {t(language, "importChooseFile")}
             <input ref={inputRef} type="file" accept=".csv,text/csv" hidden data-testid="csv-input" aria-label={`${title} - ${t(language, "importChooseFile")}`} onChange={onFile} />
-          </Button>
+          </ActionButton>
           {fileName && <Typography variant="body2">{fileName}</Typography>}
-          <Button variant="contained" onClick={send} disabled={!text || busy || (!!events && !eventId)}>
+          <ActionButton tip={t(language, "tipImportSend")} variant="contained" onClick={send} disabled={!text || busy || (!!events && !eventId)}>
             {busy ? "..." : t(language, "importSend")}
-          </Button>
+          </ActionButton>
         </Stack>
 
         {lines.length > 0 && (

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Button } from "@mui/material";
+import { Alert } from "@mui/material";
 import { Language, t } from "../../lib/i18n";
+import { ActionButton } from "../../components/ActionButton";
 
 export type Section = { titleKey: Parameters<typeof t>[1]; run: () => Promise<unknown> };
 
@@ -37,7 +38,7 @@ export function SectionErrors({ language, errors, onRetry }: { language: Languag
         <Alert
           key={section}
           severity="error"
-          action={<Button color="inherit" size="small" onClick={onRetry}>{t(language, "retryButton")}</Button>}
+          action={<ActionButton tip={t(language, "tipRetry")} color="inherit" size="small" onClick={onRetry}>{t(language, "retryButton")}</ActionButton>}
         >
           {t(language, "adminLoadSectionError")}: {section}
         </Alert>

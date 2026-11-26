@@ -1,6 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Button, Checkbox, IconButton, InputAdornment, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField
+  Box,
+  Checkbox,
+  Tooltip,
+  InputAdornment,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { api } from "../../lib/api";
@@ -12,6 +23,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import useToast from "../../components/useToast";
 import { MemberRole, parseEuros } from "../../lib/pricing";
 import type { AdminData } from "./useAdminData";
+import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
 type Level = { id: string; name: string; sortOrder?: number | null; freeToEnter?: boolean };
 
@@ -100,12 +112,15 @@ export default function CatalogTab({ language, data }: { language: Language; dat
 
   return (
     <Stack spacing={2}>
+      <Box data-tour="admin-move">
       <ModelMoveCard
         language={language}
         models={models}
         categories={moveTargets}
         onMoved={() => { void refreshModels(); }}
       />
+      </Box>
+      <Box data-tour="admin-import" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <CsvImportCard
         language={language}
         title={`${t(language, "importTitle")}: ${t(language, "importLevels")}`}
@@ -121,13 +136,14 @@ export default function CatalogTab({ language, data }: { language: Language; dat
         events={events}
         onImported={() => { void refresh(); }}
       />
-      <SectionCard title={t(language, "adminLevelsTitle")}>
+      </Box>
+      <SectionCard tourId="admin-levels" title={t(language, "adminLevelsTitle")}>
         <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
           <TextField size="small" label={t(language, "adminLevelName")} value={newLevelName} onChange={(e) => setNewLevelName(e.target.value)} />
           <TextField size="small" label={t(language, "adminLevelSortOrder")} type="number" value={newLevelSortOrder} onChange={(e) => setNewLevelSortOrder(e.target.value)} sx={{ width: 120 }} />
-          <Button variant="contained" size="small" onClick={createLevel} disabled={!newLevelName.trim()}>
+          <ActionButton tip={t(language, "tipLevelAdd")} variant="contained" size="small" onClick={createLevel} disabled={!newLevelName.trim()}>
             {t(language, "adminLevelsAddButton")}
-          </Button>
+          </ActionButton>
         </Stack>
         <TableContainer>
           <Table size="small">
@@ -145,17 +161,19 @@ export default function CatalogTab({ language, data }: { language: Language; dat
                   <TableCell>{lvl.name}</TableCell>
                   <TableCell>{lvl.sortOrder ?? "-"}</TableCell>
                   <TableCell>
-                    <Checkbox
+                    <Tooltip title={t(language, "tipLevelFree")} describeChild>
+                      <Checkbox
                       size="small"
                       checked={!!lvl.freeToEnter}
                       onChange={() => toggleFreeLevel(lvl)}
                       inputProps={{ "aria-label": `${t(language, "adminLevelFree")}: ${lvl.name}` }}
-                    />
+                      />
+                    </Tooltip>
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" color="error" onClick={() => deleteLevel(lvl.id)}>
+                    <TipIconButton tip={t(language, "tipLevelDelete")} aria-label={`${t(language, "actionDelete")} ${lvl.name}`} size="small" color="error" onClick={() => deleteLevel(lvl.id)}>
                       <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    </TipIconButton>
                   </TableCell>
                 </TableRow>
               ))}
@@ -164,12 +182,12 @@ export default function CatalogTab({ language, data }: { language: Language; dat
         </TableContainer>
       </SectionCard>
 
-      <SectionCard title={t(language, "adminMemberRolesTitle")}>
+      <SectionCard tourId="admin-roles" title={t(language, "adminMemberRolesTitle")}>
         <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
           <TextField size="small" label={t(language, "adminMemberRoleName")} value={newMemberRoleName} onChange={(e) => setNewMemberRoleName(e.target.value)} />
-          <Button variant="contained" size="small" onClick={createMemberRole} disabled={!newMemberRoleName.trim()}>
+          <ActionButton tip={t(language, "tipMemberRoleAdd")} variant="contained" size="small" onClick={createMemberRole} disabled={!newMemberRoleName.trim()}>
             {t(language, "adminMemberRolesAddButton")}
-          </Button>
+          </ActionButton>
         </Stack>
         <TableContainer>
           <Table size="small">
@@ -194,15 +212,15 @@ export default function CatalogTab({ language, data }: { language: Language; dat
                         inputProps={{ inputMode: "decimal", "aria-label": `${t(language, "adminMemberRolePrice")}: ${role.name}` }}
                         InputProps={{ startAdornment: <InputAdornment position="start">€</InputAdornment> }}
                       />
-                      <Button size="small" onClick={() => savePrice(role)} disabled={priceDrafts[role.id] === undefined}>
+                      <ActionButton tip={t(language, "tipMemberRolePrice")} size="small" onClick={() => savePrice(role)} disabled={priceDrafts[role.id] === undefined}>
                         {t(language, "adminSave")}
-                      </Button>
+                      </ActionButton>
                     </Stack>
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" color="error" onClick={() => deleteMemberRole(role.id)}>
+                    <TipIconButton tip={t(language, "tipMemberRoleDelete")} aria-label={`${t(language, "actionDelete")} ${role.name}`} size="small" color="error" onClick={() => deleteMemberRole(role.id)}>
                       <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    </TipIconButton>
                   </TableCell>
                 </TableRow>
               ))}

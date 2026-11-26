@@ -1,7 +1,18 @@
 import React, { useMemo, useState } from "react";
 import {
-  Button, FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, TextField, Typography
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { api } from "../../lib/api";
@@ -9,6 +20,7 @@ import { Language, t } from "../../lib/i18n";
 import SectionCard from "../../components/SectionCard";
 import { useConfirm } from "../../components/ConfirmDialog";
 import type { AdminData } from "./useAdminData";
+import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
 type AwardBracket = { id: string; eventId: string; medalLabel: string; medalRank: number; lowLimit: number; highLimit: number };
 
@@ -40,7 +52,7 @@ export default function BracketsCard({ language, data }: { language: Language; d
 
   return (
     <>
-      <SectionCard title={t(language, "judgeAwardBracketsTitle")}>
+      <SectionCard tourId="admin-brackets" title={t(language, "judgeAwardBracketsTitle")}>
         <Stack spacing={1} sx={{ mb: 2 }}>
           <FormControl size="small" fullWidth>
             <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
@@ -61,10 +73,10 @@ export default function BracketsCard({ language, data }: { language: Language; d
               onChange={(e) => setForm({ ...form, lowLimit: Number(e.target.value) })} sx={{ width: 90 }} />
             <TextField size="small" label={t(language, "judgeAwardBracketHigh")} type="number" value={form.highLimit}
               onChange={(e) => setForm({ ...form, highLimit: Number(e.target.value) })} sx={{ width: 90 }} />
-            <Button variant="contained" size="small" onClick={createBracket}
+            <ActionButton tip={t(language, "tipBracketAdd")} variant="contained" size="small" onClick={createBracket}
               disabled={!eventId || !form.medalLabel.trim()}>
               {t(language, "judgeAwardBracketAdd")}
-            </Button>
+            </ActionButton>
           </Stack>
         </Stack>
         <TableContainer>
@@ -86,9 +98,9 @@ export default function BracketsCard({ language, data }: { language: Language; d
                   <TableCell>{br.lowLimit}</TableCell>
                   <TableCell>{br.highLimit}</TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" color="error" onClick={() => deleteBracket(br.id)}>
+                    <TipIconButton tip={t(language, "tipBracketDelete")} aria-label={`${t(language, "actionDelete")} ${br.medalLabel}`} size="small" color="error" onClick={() => deleteBracket(br.id)}>
                       <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    </TipIconButton>
                   </TableCell>
                 </TableRow>
               ))}

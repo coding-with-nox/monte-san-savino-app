@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Button,
   Card,
   CardContent,
   Chip,
@@ -15,6 +14,7 @@ import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import EmptyState from "../components/EmptyState";
 import useToast from "../components/useToast";
+import { ActionButton } from "../components/ActionButton";
 
 type Event = { id: string; name: string; status: string; startDate?: string | null; endDate?: string | null };
 
@@ -44,11 +44,11 @@ export default function PublicEvents({ language }: PublicEventsProps) {
       <Stack spacing={3}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">{t(language, "publicEventsTitle")}</Typography>
-          <Button variant="contained" color="secondary" onClick={load}>
+          <ActionButton tip={t(language, "tipEventsRefresh")} data-tour="events-refresh" variant="contained" color="secondary" onClick={load}>
             {t(language, "publicEventsRefreshButton")}
-          </Button>
+          </ActionButton>
         </Stack>
-        <Card>
+        <Card data-tour="events-list">
           <CardContent>
             <List dense>
               {events.map((event) => (

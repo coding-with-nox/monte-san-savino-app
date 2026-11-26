@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   Box,
-  Button,
   Chip,
   Dialog,
   DialogActions,
@@ -11,7 +10,6 @@ import {
   FormControl,
   FormControlLabel,
   Grid,
-  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -49,6 +47,7 @@ import { hasInvalidSocial, socialPayload } from "../lib/social";
 import { countryName, countryOptions } from "../lib/countries";
 import useToast from "../components/useToast";
 import { roleLabel } from "../lib/roles";
+import { ActionButton, TipIconButton } from "../components/ActionButton";
 
 type User = { id: string; email: string; role: string; isActive: boolean };
 type Event = { id: string; name: string; status: string };
@@ -339,7 +338,7 @@ export default function Users({ language }: UsersProps) {
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
           <Typography variant="h4">{t(language, "usersTitle")}</Typography>
-          <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Stack direction="row" spacing={1} flexWrap="wrap" data-tour="users-export">
             <FormControl size="small" sx={{ minWidth: 220 }}>
               <InputLabel>{t(language, "enrollmentsEventSelect")}</InputLabel>
               <Select
@@ -353,25 +352,27 @@ export default function Users({ language }: UsersProps) {
                 ))}
               </Select>
             </FormControl>
-            <Button
+            <ActionButton
+              tip={t(language, "tipUsersExcel")}
               variant="outlined"
               startIcon={<TableChartIcon />}
               onClick={exportUsersExcel}
               disabled={exportingExcel || !exportEventId}
             >
               {exportingExcel ? "..." : "Excel"}
-            </Button>
-            <Button
+            </ActionButton>
+            <ActionButton
+              tip={t(language, "tipUsersPdf")}
               variant="outlined"
               startIcon={<PictureAsPdfIcon />}
               onClick={exportUsersPdf}
               disabled={exportingPdf || !exportEventId}
             >
               {exportingPdf ? "..." : "PDF"}
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+            </ActionButton>
+            <ActionButton tip={t(language, "tipUsersNew")} data-tour="users-new" variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
               {t(language, "usersCreateButton")}
-            </Button>
+            </ActionButton>
           </Stack>
         </Stack>
         {loading && <PageSkeleton variant="table" />}
@@ -379,7 +380,7 @@ export default function Users({ language }: UsersProps) {
           <EmptyState title={t(language, "emptyUsersTitle")} />
         )}
         {!loading && (
-        <TableContainer component={Paper} variant="outlined">
+        <TableContainer data-tour="users-list" component={Paper} variant="outlined">
           <Table>
             <TableHead>
               <TableRow>
@@ -400,18 +401,19 @@ export default function Users({ language }: UsersProps) {
                         checked={user.isActive}
                         onChange={() => toggleUserActive(user.id, user.isActive)}
                         disabled={!canAct(user)}
+                        tip={t(language, "tipUserActive")}
                         activeLabel={t(language, "adminUserActive")}
                         inactiveLabel={t(language, "adminUserInactive")}
                       />
                     </Box>
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEditDialog(user.id); }} color="secondary">
+                    <TipIconButton tip={t(language, "tipUserView")} aria-label={`${t(language, "actionView")} ${user.email}`} size="small" onClick={(e) => { e.stopPropagation(); openEditDialog(user.id); }} color="secondary">
                       <VisibilityIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEditDialog(user.id); }} color="primary">
+                    </TipIconButton>
+                    <TipIconButton tip={t(language, "tipUserEdit")} aria-label={`${t(language, "actionEdit")} ${user.email}`} size="small" onClick={(e) => { e.stopPropagation(); openEditDialog(user.id); }} color="primary">
                       <EditIcon fontSize="small" />
-                    </IconButton>
+                    </TipIconButton>
                   </TableCell>
                 </TableRow>
               ))}
@@ -463,14 +465,15 @@ export default function Users({ language }: UsersProps) {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateOpen(false)}>{t(language, "profileCancelButton")}</Button>
-          <Button
+          <ActionButton tip={t(language, "tipDialogCancel")} onClick={() => setCreateOpen(false)}>{t(language, "profileCancelButton")}</ActionButton>
+          <ActionButton
+            tip={t(language, "tipUsersCreate")}
             variant="contained"
             onClick={createUser}
             disabled={saving || !createEmail.trim() || createPassword.length < 8}
           >
             {saving ? "..." : t(language, "usersCreateButton")}
-          </Button>
+          </ActionButton>
         </DialogActions>
       </Dialog>
 
@@ -504,13 +507,14 @@ export default function Users({ language }: UsersProps) {
                     checked={editProfile.isActive}
                     onChange={toggleActive}
                     disabled={!canAct(editProfile)}
+                    tip={t(language, "tipUserActive")}
                     activeLabel={t(language, "adminUserActive")}
                     inactiveLabel={t(language, "adminUserInactive")}
                   />
                   {canManageRole(myRole, editProfile.role) && (
-                    <Button variant="outlined" size="small" startIcon={<LockResetIcon />} onClick={resetPassword}>
+                    <ActionButton tip={t(language, "tipResetPassword")} variant="outlined" size="small" startIcon={<LockResetIcon />} onClick={resetPassword}>
                       {t(language, "adminResetPasswordButton")}
-                    </Button>
+                    </ActionButton>
                   )}
                   {/* Print shortcuts for this user's models/labels (userId, optionally narrowed by the selected event) */}
                   <PrintActions
@@ -581,7 +585,7 @@ export default function Users({ language }: UsersProps) {
             <DialogActions>
               {!editingFields ? (
                 <>
-                  <Button onClick={() => {
+                  <ActionButton tip={t(language, "tipUserEditFields")} onClick={() => {
                     setEditingFields(true);
                     setPhoneError(false);
                     setEmergencyPhoneError(false);
@@ -603,13 +607,13 @@ export default function Users({ language }: UsersProps) {
                     });
                   }}>
                     {t(language, "profileEditButton")}
-                  </Button>
-                  <Button onClick={closeEditDialog}>{t(language, "adminDialogClose")}</Button>
+                  </ActionButton>
+                  <ActionButton tip={t(language, "tipDialogClose")} onClick={closeEditDialog}>{t(language, "adminDialogClose")}</ActionButton>
                 </>
               ) : (
                 <>
-                  <Button onClick={saveProfile} variant="contained">{t(language, "profileSaveButton")}</Button>
-                  <Button onClick={() => setEditingFields(false)}>{t(language, "profileCancelButton")}</Button>
+                  <ActionButton tip={t(language, "tipUserSave")} onClick={saveProfile} variant="contained">{t(language, "profileSaveButton")}</ActionButton>
+                  <ActionButton tip={t(language, "tipEditCancel")} onClick={() => setEditingFields(false)}>{t(language, "profileCancelButton")}</ActionButton>
                 </>
               )}
             </DialogActions>

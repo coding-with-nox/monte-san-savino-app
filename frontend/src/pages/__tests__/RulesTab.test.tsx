@@ -39,3 +39,40 @@ describe("Admin rules tab", () => {
     expect(body("/admin/settings/prize-order")).toEqual({ order: ["Bronze", "Gold", "Silver"] });
   });
 });
+
+describe("Admin rules tab: permissions matrix", () => {
+  beforeEach(() => {
+    apiMock.mockReset().mockImplementation(async (path: string, init?: RequestInit) => {
+      if (init?.method === "PUT") return { updated: true };
+      if (path === "/settings") return {};
+      if (path === "/admin/settings/section-visibility")
+        return {
+          sections: ["stats"],
+          roles: ["staff", "manager", "admin"],
+          visibility: { staff: [], manager: ["stats"], admin: ["stats"] },
+          permissions: { staff: [], manager: ["enrollOnBehalf"] },
+          availablePermissions: ["enrollOnBehalf"]
+        };
+      return {};
+    });
+  });
+
+  it("shows admin as always granted and saves the permissions of the other roles", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<RulesTab language="en" />);
+    const box = (role: string) => screen.getByRole("checkbox", { name: `${role}: Enroll models on behalf of others` });
+    expect(await screen.findByText("Permissions")).toBeInTheDocument();
+    expect(box("admin")).toBeChecked();
+    expect(box("admin")).toBeDisabled();
+    expect(box("manager")).toBeChecked();
+    expect(box("staff")).not.toBeChecked();
+
+    await user.click(box("staff"));
+    await user.click(box("manager"));
+    await user.click(screen.getAllByRole("button", { name: "Save" })[1]);
+    expect(body("/admin/settings/section-visibility")).toEqual({
+      visibility: { staff: [], manager: ["stats"] },
+      permissions: { staff: ["enrollOnBehalf"], manager: [] }
+    });
+  });
+});

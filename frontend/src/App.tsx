@@ -4,12 +4,10 @@ import {
   AppBar,
   Avatar,
   Box,
-  Button,
   CssBaseline,
   Divider,
   Drawer,
   FormControl,
-  IconButton,
   InputLabel,
   List,
   ListItemButton,
@@ -21,6 +19,7 @@ import {
   Stack,
   ThemeProvider,
   Toolbar,
+  Tooltip,
   Typography,
   useMediaQuery
 } from "@mui/material";
@@ -43,6 +42,9 @@ import ViewInArIcon from "@mui/icons-material/ViewInAr";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import SettingsIcon from "@mui/icons-material/Settings";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import ReplayIcon from "@mui/icons-material/Replay";
 import Login from "./pages/Login";
 const Judge = lazy(() => import("./pages/Judge"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -58,8 +60,12 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Labels = lazy(() => import("./pages/Labels"));
 const Stats = lazy(() => import("./pages/Stats"));
 const Podium = lazy(() => import("./pages/Podium"));
+const Help = lazy(() => import("./pages/Help"));
 import PageSkeleton from "./components/PageSkeleton";
 import SideNav from "./components/SideNav";
+import { ActionButton, TipIconButton, TipMenuItem } from "./components/ActionButton";
+import usePageTour from "./components/usePageTour";
+import { Access, AccessContext, NO_ACCESS } from "./lib/access";
 import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
@@ -175,16 +181,25 @@ export default function App() {
   const role = getRole();
 
   // null = unknown (loading or endpoint unavailable): fall back to the role-based behaviour.
-  const [sections, setSections] = useState<string[] | null>(null);
+  const [access, setAccess] = useState<Access>(NO_ACCESS);
   useEffect(() => {
-    setSections(null);
+    setAccess(NO_ACCESS);
     if (!role) return;
     let cancelled = false;
-    api<{ sections?: string[] }>("/settings/section-visibility")
-      .then((res) => { if (!cancelled && Array.isArray(res?.sections)) setSections(res.sections); })
+    api<{ sections?: string[]; permissions?: string[] }>("/settings/section-visibility")
+      .then((res) => {
+        if (cancelled) return;
+        setAccess({
+          sections: Array.isArray(res?.sections) ? res.sections : null,
+          permissions: Array.isArray(res?.permissions) ? res.permissions : []
+        });
+      })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [role]);
+  const { sections } = access;
+  const tourContext = useMemo(() => ({ role, ...access }), [role, access]);
+  const tour = usePageTour(language, tourContext);
   const sectionVisible = (section: string | null) =>
     !section || sections === null || role === "admin" || sections.includes(section);
   const guard = (section: string, element: React.ReactNode) =>
@@ -215,7 +230,8 @@ export default function App() {
     { label: t(language, "navLabels"), path: "/labels", minRole: "manager" as Role, section: "labels", icon: <LocalOfferIcon /> },
     { label: t(language, "navStats"), path: "/stats", minRole: "jury_president" as Role, section: "stats", icon: <BarChartIcon /> },
     { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role, section: "podium", icon: <EmojiEventsIcon /> },
-    { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role, section: "settings", icon: <SettingsIcon /> }
+    { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role, section: "settings", icon: <SettingsIcon /> },
+    { label: t(language, "navHelp"), path: "/help", minRole: null, section: null, icon: <MenuBookIcon /> }
   ];
 
   const navItems = allNavItems.filter((item) => {
@@ -264,10 +280,12 @@ export default function App() {
         {role && (
           <>
             <Divider />
-            <ListItemButton onClick={handleLogout}>
-              <ListItemIcon><LogoutIcon /></ListItemIcon>
-              <ListItemText primary={t(language, "logoutButton")} />
-            </ListItemButton>
+            <Tooltip title={t(language, "tipLogout")} describeChild>
+              <ListItemButton onClick={handleLogout}>
+                <ListItemIcon><LogoutIcon /></ListItemIcon>
+                <ListItemText primary={t(language, "logoutButton")} />
+              </ListItemButton>
+            </Tooltip>
           </>
         )}
       </List>
@@ -281,7 +299,7 @@ export default function App() {
         <Box sx={{ minHeight: "100vh", bgcolor: "background.default", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2, p: 4 }}>
           <Typography variant="h4" sx={{ color: "error.main" }}>⚠ {t(language, "maintenanceTitle")}</Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center">{t(language, "maintenanceSubtitle")}</Typography>
-          <Button variant="outlined" onClick={() => { setBackendDown(false); window.location.reload(); }}>{t(language, "retryButton")}</Button>
+          <ActionButton tip={t(language, "tipMaintenanceRetry")} variant="outlined" onClick={() => { setBackendDown(false); window.location.reload(); }}>{t(language, "retryButton")}</ActionButton>
         </Box>
       </ThemeProvider>
     );
@@ -290,19 +308,21 @@ export default function App() {
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
+      <AccessContext.Provider value={access}>
       <Box sx={{ minHeight: "100vh", bgcolor: "background.default", display: "flex", flexDirection: "column" }}>
         <AppBar position="static" elevation={0} sx={{ bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" }}>
           <Toolbar sx={{ gap: 2 }}>
             {isMobile && (
-              <IconButton color="default" edge="start" aria-label={t(language, "navOpenMenu")} onClick={() => setDrawerOpen(true)}>
+              <TipIconButton tip={t(language, "tipMenuOpen")} data-tour="topbar-nav" color="default" edge="start" aria-label={t(language, "navOpenMenu")} onClick={() => setDrawerOpen(true)}>
                 <MenuIcon />
-              </IconButton>
+              </TipIconButton>
             )}
             <Typography variant="h6" sx={{ flexGrow: 1, color: "text.primary" }}>
               {appName}
             </Typography>
             <Stack direction="row" spacing={1} alignItems="center">
               <Select
+                data-tour="topbar-lang"
                 size="small"
                 value={language}
                 onChange={(event) => setLanguage(event.target.value as Language)}
@@ -312,21 +332,31 @@ export default function App() {
                 <MenuItem value="it">🇮🇹 Italiano</MenuItem>
                 <MenuItem value="en">🇬🇧 English</MenuItem>
               </Select>
-              <IconButton
+              <TipIconButton
+                tip={t(language, "tipHelpPage")}
+                color="default"
+                data-tour="topbar-help"
+                aria-label={t(language, "helpButtonLabel")}
+                onClick={tour.start}
+              >
+                <HelpOutlineIcon />
+              </TipIconButton>
+              <TipIconButton
+                tip={t(language, themeMode === "light" ? "tipThemeToDark" : "tipThemeToLight")}
+                data-tour="topbar-theme"
                 color="default"
                 onClick={() => setThemeMode(themeMode === "light" ? "dark" : "light")}
                 aria-label={`${labels.themeToggle}: ${themeMode === "light" ? labels.themeDark : labels.themeLight}`}
-                title={`${labels.themeToggle}: ${themeMode === "light" ? labels.themeDark : labels.themeLight}`}
               >
                 {themeMode === "light" ? <Brightness4Icon /> : <Brightness7Icon />}
-              </IconButton>
+              </TipIconButton>
               {role && (
                 <>
-                  <IconButton aria-label={t(language, "navProfile")} onClick={(e) => setAvatarMenuAnchor(e.currentTarget)} sx={{ p: 0 }}>
+                  <TipIconButton tip={t(language, "tipAccountMenu")} data-tour="topbar-account" aria-label={t(language, "navProfile")} onClick={(e) => setAvatarMenuAnchor(e.currentTarget)} sx={{ p: 0 }}>
                     <Avatar sx={{ width: 36, height: 36, bgcolor: "secondary.main", fontSize: 16 }}>
                       {userInitial}
                     </Avatar>
-                  </IconButton>
+                  </TipIconButton>
                   <Menu
                     anchorEl={avatarMenuAnchor}
                     open={Boolean(avatarMenuAnchor)}
@@ -334,15 +364,19 @@ export default function App() {
                     anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                     transformOrigin={{ vertical: "top", horizontal: "right" }}
                   >
-                    <MenuItem component={RouterLink} to="/profile" onClick={() => setAvatarMenuAnchor(null)}>
+                    <TipMenuItem tip={t(language, "tipMenuProfile")} component={RouterLink} to="/profile" onClick={() => setAvatarMenuAnchor(null)}>
                       <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
                       {t(language, "navProfile")}
-                    </MenuItem>
+                    </TipMenuItem>
+                    <TipMenuItem tip={t(language, "tipMenuReplayTours")} onClick={() => { setAvatarMenuAnchor(null); tour.replayAll(); }}>
+                      <ListItemIcon><ReplayIcon fontSize="small" /></ListItemIcon>
+                      {t(language, "tourReplay")}
+                    </TipMenuItem>
                     <Divider />
-                    <MenuItem onClick={handleLogout}>
+                    <TipMenuItem tip={t(language, "tipLogout")} onClick={handleLogout}>
                       <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
                       {t(language, "logoutButton")}
-                    </MenuItem>
+                    </TipMenuItem>
                   </Menu>
                 </>
               )}
@@ -379,6 +413,7 @@ export default function App() {
             <Route path="/stats" element={<Protected><RequireRole min="jury_president">{guard("stats", <Stats language={language} />)}</RequireRole></Protected>} />
             <Route path="/podium" element={<Protected><RequireRole min="manager">{guard("podium", <Podium language={language} />)}</RequireRole></Protected>} />
             <Route path="/settings" element={<Protected><RequireRole min="admin">{guard("settings", <Settings language={language} />)}</RequireRole></Protected>} />
+            <Route path="/help" element={<Help language={language} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>
@@ -410,6 +445,8 @@ export default function App() {
           </BottomNavigation>
         )}
       </Box>
+      {tour.node}
+      </AccessContext.Provider>
     </ThemeProvider>
   );
 }

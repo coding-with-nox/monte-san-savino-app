@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { IconButton, Stack, Tooltip } from "@mui/material";
+import { Stack } from "@mui/material";
 import PrintIcon from "@mui/icons-material/Print";
 import LabelIcon from "@mui/icons-material/Label";
 import LocalPrintshopIcon from "@mui/icons-material/LocalPrintshop";
@@ -7,6 +7,7 @@ import { Language, t } from "../lib/i18n";
 import { DymoSdkError, printDymoLabels } from "../lib/dymo";
 import { openHtmlExport } from "../lib/exports";
 import useToast from "./useToast";
+import { TipIconButton } from "./ActionButton";
 
 export type PrintParams = Record<string, string | null | undefined>;
 
@@ -44,36 +45,29 @@ export default function PrintActions({ language, params, showList = true, showLa
     {toast.node}
     <Stack direction="row" spacing={0.5} className="no-print" onClick={stop}>
       {showList && (
-        <Tooltip title={t(language, "printListButton")}>
-          <span>
-            <IconButton
+        <TipIconButton
+              tip={t(language, "tipPrintList")}
               size="small"
               aria-label={t(language, "printListButton")}
               disabled={busy !== null}
               onClick={() => run("list", () => openHtmlExport("/exports/models/print", params))}
             >
               <PrintIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
+            </TipIconButton>
       )}
       {showLabel && (
         <>
-          <Tooltip title={t(language, "printLabelButton")}>
-            <span>
-              <IconButton
+          <TipIconButton
+              tip={t(language, "tipPrintLabel")}
                 size="small"
                 aria-label={t(language, "printLabelButton")}
                 disabled={busy !== null}
                 onClick={() => run("label", () => openHtmlExport("/exports/labels/pdf", params))}
               >
                 <LabelIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title={t(language, "printLabelDymoButton")}>
-            <span>
-              <IconButton
+              </TipIconButton>
+          <TipIconButton
+              tip={t(language, "tipPrintDymo")}
                 size="small"
                 aria-label={t(language, "printLabelDymoButton")}
                 disabled={busy !== null}
@@ -87,9 +81,7 @@ export default function PrintActions({ language, params, showList = true, showLa
                 }
               >
                 <LocalPrintshopIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
+              </TipIconButton>
         </>
       )}
     </Stack>

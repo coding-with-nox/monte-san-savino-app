@@ -1,6 +1,15 @@
 import React, { useState } from "react";
 import {
-  Button, FormControl, Grid, IconButton, InputLabel, List, ListItem, ListItemText, MenuItem, Select, Stack, TextField
+  FormControl,
+  Grid,
+  InputLabel,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
+  Select,
+  Stack,
+  TextField
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { api } from "../../lib/api";
@@ -10,6 +19,7 @@ import PageSkeleton from "../../components/PageSkeleton";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { SectionErrors, useSections } from "./useSections";
 import type { AdminData } from "./useAdminData";
+import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
 type Sponsor = { id: string; eventId: string; name: string; tier: string };
 
@@ -39,7 +49,7 @@ export default function SponsorsTab({ language, data }: { language: Language; da
       <SectionErrors language={language} errors={errors} onRetry={() => void reload()} />
       {loading && <PageSkeleton variant="table" />}
       {!loading && (
-        <SectionCard title={t(language, "adminSponsorsTitle")}>
+        <SectionCard tourId="admin-sponsors" title={t(language, "adminSponsorsTitle")}>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={3}>
               <FormControl fullWidth>
@@ -77,18 +87,18 @@ export default function SponsorsTab({ language, data }: { language: Language; da
               </Select>
             </Grid>
             <Grid item xs={12} md={3}>
-              <Button variant="contained" onClick={createSponsor} fullWidth>
+              <ActionButton tip={t(language, "tipSponsorCreate")} variant="contained" onClick={createSponsor} fullWidth>
                 {t(language, "adminSponsorCreate")}
-              </Button>
+              </ActionButton>
             </Grid>
           </Grid>
           <List dense sx={{ mt: 2 }}>
             {sponsors.map((s) => (
               <ListItem key={s.id} disableGutters>
                 <ListItemText primary={s.name} secondary={`${s.tier} - ${eventName(s.eventId)}`} />
-                <IconButton size="small" color="error" onClick={() => deleteSponsor(s.id)}>
+                <TipIconButton tip={t(language, "tipSponsorDelete")} aria-label={`${t(language, "actionDelete")} ${s.name}`} size="small" color="error" onClick={() => deleteSponsor(s.id)}>
                   <DeleteIcon fontSize="small" />
-                </IconButton>
+                </TipIconButton>
               </ListItem>
             ))}
           </List>

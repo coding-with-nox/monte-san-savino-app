@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, FormControl, Grid, InputLabel, List, ListItem, ListItemText, MenuItem, Select, Stack, TextField } from "@mui/material";
+import { FormControl, Grid, InputLabel, List, ListItem, ListItemText, MenuItem, Select, Stack, TextField } from "@mui/material";
 import { api } from "../../lib/api";
 import { Language, t } from "../../lib/i18n";
 import SectionCard from "../../components/SectionCard";
@@ -8,6 +8,7 @@ import CategoriesCard from "./CategoriesCard";
 import CampaignsCard from "./CampaignsCard";
 import BracketsCard from "./BracketsCard";
 import type { AdminData } from "./useAdminData";
+import { ActionButton } from "../../components/ActionButton";
 
 const eventStatuses = ["draft", "active", "closed"];
 
@@ -28,7 +29,7 @@ export default function EventsTab({ language, data }: { language: Language; data
 
   return (
     <Stack spacing={2}>
-      <SectionCard title={t(language, "adminEventsTitle")}>
+      <SectionCard tourId="admin-events-form" title={t(language, "adminEventsTitle")}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={4}>
             <TextField
@@ -53,9 +54,9 @@ export default function EventsTab({ language, data }: { language: Language; data
             </FormControl>
           </Grid>
           <Grid item xs={12} md={4}>
-            <Button variant="contained" onClick={createEvent} fullWidth>
+            <ActionButton tip={t(language, "tipEventCreate")} variant="contained" onClick={createEvent} fullWidth>
               {t(language, "adminEventCreateButton")}
-            </Button>
+            </ActionButton>
           </Grid>
         </Grid>
         <List dense sx={{ mt: 2 }}>

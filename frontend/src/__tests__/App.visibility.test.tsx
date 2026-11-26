@@ -50,3 +50,25 @@ describe("App navigation visibility", () => {
     expect(link("Statistics")).not.toBeInTheDocument();
   });
 });
+
+describe("App help", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("language", "en");
+    localStorage.setItem("guidedTours.disabled", "true");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("ok")));
+    apiMock.mockReset().mockImplementation(async (path: string) =>
+      path === "/settings/section-visibility" ? { sections: ["models"], permissions: ["enrollOnBehalf"] } : {});
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("documents the features of the role on /help, including granted permissions", async () => {
+    login("user");
+    renderWithProviders(<MemoryRouter initialEntries={["/help"]}><App /></MemoryRouter>);
+    expect(await screen.findByRole("button", { name: "Start the tour: Models" })).toBeInTheDocument();
+    expect(await screen.findByText("On behalf of.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start the tour: Users" })).not.toBeInTheDocument();
+    expect(link("Help")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Help for this page" })).toBeInTheDocument();
+  });
+});

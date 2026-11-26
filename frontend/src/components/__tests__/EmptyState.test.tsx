@@ -32,7 +32,7 @@ describe("EmptyState", () => {
 
   it("renders action button when action prop is provided", () => {
     renderWithProviders(
-      <EmptyState title="Empty" action={{ label: "Add item", onClick: vi.fn() }} />
+      <EmptyState title="Empty" action={{ label: "Add item", tip: "Adds an item", onClick: vi.fn() }} />
     );
     expect(screen.getByRole("button", { name: "Add item" })).toBeInTheDocument();
   });
@@ -40,7 +40,7 @@ describe("EmptyState", () => {
   it("fires action callback when button is clicked", async () => {
     const handleClick = vi.fn();
     renderWithProviders(
-      <EmptyState title="Empty" action={{ label: "Add item", onClick: handleClick }} />
+      <EmptyState title="Empty" action={{ label: "Add item", tip: "Adds an item", onClick: handleClick }} />
     );
     await userEvent.click(screen.getByRole("button", { name: "Add item" }));
     expect(handleClick).toHaveBeenCalledTimes(1);

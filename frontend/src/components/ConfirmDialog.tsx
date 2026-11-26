@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from "react";
-import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from "@mui/material";
+import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from "@mui/material";
 import { Language, t } from "../lib/i18n";
+import { ActionButton } from "./ActionButton";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -11,6 +12,8 @@ interface ConfirmDialogProps {
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Language of the button tooltips. */
+  language?: Language;
 }
 
 export default function ConfirmDialog({
@@ -21,7 +24,8 @@ export default function ConfirmDialog({
   cancelLabel,
   destructive = true,
   onConfirm,
-  onCancel
+  onCancel,
+  language = "it"
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth aria-labelledby="confirm-dialog-title">
@@ -30,10 +34,10 @@ export default function ConfirmDialog({
         <DialogContentText>{message}</DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel}>{cancelLabel ?? "Cancel"}</Button>
-        <Button onClick={onConfirm} variant="contained" color={destructive ? "error" : "primary"} autoFocus>
+        <ActionButton tip={t(language, "tipConfirmCancel")} onClick={onCancel}>{cancelLabel ?? "Cancel"}</ActionButton>
+        <ActionButton tip={t(language, destructive ? "tipConfirmDelete" : "tipConfirmApply")} onClick={onConfirm} variant="contained" color={destructive ? "error" : "primary"} autoFocus>
           {confirmLabel ?? "OK"}
-        </Button>
+        </ActionButton>
       </DialogActions>
     </Dialog>
   );
@@ -65,6 +69,7 @@ export function useConfirm(language: Language) {
 
   const node = (
     <ConfirmDialog
+      language={language}
       open={state !== null}
       message={state?.message ?? ""}
       title={state?.title}

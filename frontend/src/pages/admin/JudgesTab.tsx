@@ -1,7 +1,21 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
-  Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, IconButton,
-  InputLabel, List, ListItem, ListItemText, MenuItem, Select, Stack, Typography
+  Box,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  Grid,
+  InputLabel,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
+  Select,
+  Stack,
+  Typography
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -14,6 +28,7 @@ import useToast from "../../components/useToast";
 import { SectionErrors, useSections } from "./useSections";
 import type { AdminUser } from "./types";
 import type { AdminData } from "./useAdminData";
+import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
 type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null };
 type MonitoringRow = {
@@ -94,7 +109,7 @@ export default function JudgesTab({ language, data }: { language: Language; data
       <SectionErrors language={language} errors={errors} onRetry={() => void reload()} />
       {loading && <PageSkeleton variant="table" />}
       {!loading && (
-        <SectionCard title={t(language, "adminJudgeAssignTitle")}>
+        <SectionCard tourId="admin-judges-assign" title={t(language, "adminJudgeAssignTitle")}>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={3}>
               <FormControl fullWidth>
@@ -142,9 +157,9 @@ export default function JudgesTab({ language, data }: { language: Language; data
               </FormControl>
             </Grid>
             <Grid item xs={12} md={3}>
-              <Button variant="contained" onClick={assignJudge} fullWidth disabled={!form.eventId || !form.judgeId}>
+              <ActionButton tip={t(language, "tipJudgeAssign")} variant="contained" onClick={assignJudge} fullWidth disabled={!form.eventId || !form.judgeId}>
                 {t(language, "adminJudgeAssignButton")}
-              </Button>
+              </ActionButton>
             </Grid>
           </Grid>
           {assignments.length > 0 && (
@@ -159,12 +174,12 @@ export default function JudgesTab({ language, data }: { language: Language; data
                       primary={userEmail(ja.judgeId)}
                       secondary={`${eventName(ja.eventId)} - ${categoryLabel(ja.categoryId)}`}
                     />
-                    <IconButton size="small" onClick={() => openEdit(ja)}>
+                    <TipIconButton tip={t(language, "tipAssignmentEdit")} aria-label={`${t(language, "actionEdit")} ${userEmail(ja.judgeId)}`} size="small" onClick={() => openEdit(ja)}>
                       <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" color="error" onClick={() => deleteAssignment(ja.id)}>
+                    </TipIconButton>
+                    <TipIconButton tip={t(language, "tipAssignmentDelete")} aria-label={`${t(language, "actionDelete")} ${userEmail(ja.judgeId)}`} size="small" color="error" onClick={() => deleteAssignment(ja.id)}>
                       <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    </TipIconButton>
                   </ListItem>
                 ))}
               </List>
@@ -173,7 +188,7 @@ export default function JudgesTab({ language, data }: { language: Language; data
         </SectionCard>
       )}
 
-      <SectionCard title={t(language, "judgeMonitorTitle")}>
+      <SectionCard tourId="admin-judges-monitor" title={t(language, "judgeMonitorTitle")}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={2} alignItems="center">
             <FormControl size="small" sx={{ minWidth: 220 }}>
@@ -186,9 +201,9 @@ export default function JudgesTab({ language, data }: { language: Language; data
                 {events.map((ev) => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
               </Select>
             </FormControl>
-            <Button size="small" variant="outlined" onClick={() => loadMonitoring(monitoringEventId)} disabled={!monitoringEventId}>
+            <ActionButton tip={t(language, "tipMonitorRefresh")} size="small" variant="outlined" onClick={() => loadMonitoring(monitoringEventId)} disabled={!monitoringEventId}>
               {t(language, "adminRefreshButton")}
-            </Button>
+            </ActionButton>
           </Stack>
 
           {monitoringData.map((cat) => (
@@ -274,10 +289,10 @@ export default function JudgesTab({ language, data }: { language: Language; data
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={saveEdit} variant="contained" disabled={!editForm.eventId || !editForm.judgeId}>
+          <ActionButton tip={t(language, "tipAssignmentSave")} onClick={saveEdit} variant="contained" disabled={!editForm.eventId || !editForm.judgeId}>
             {t(language, "profileSaveButton")}
-          </Button>
-          <Button onClick={() => setEditOpen(false)}>{t(language, "profileCancelButton")}</Button>
+          </ActionButton>
+          <ActionButton tip={t(language, "tipDialogCancel")} onClick={() => setEditOpen(false)}>{t(language, "profileCancelButton")}</ActionButton>
         </DialogActions>
       </Dialog>
     </Stack>

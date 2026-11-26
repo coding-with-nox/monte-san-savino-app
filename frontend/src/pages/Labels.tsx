@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Button,
   FormControl,
   InputLabel,
   MenuItem,
@@ -19,6 +18,7 @@ import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import useToast from "../components/useToast";
+import { ActionButton } from "../components/ActionButton";
 
 type Event = { id: string; name: string; status: string };
 
@@ -98,7 +98,7 @@ export default function Labels({ language }: LabelsProps) {
 
         <SectionCard title={t(language, "labelsExportTitle")}>
           <Stack spacing={2}>
-            <FormControl size="small" fullWidth>
+            <FormControl data-tour="labels-event" size="small" fullWidth>
               <InputLabel>{t(language, "enrollmentsEventSelect")}</InputLabel>
               <Select
                 value={eventId}
@@ -112,8 +112,9 @@ export default function Labels({ language }: LabelsProps) {
               </Select>
             </FormControl>
 
-            <Stack direction="row" spacing={1}>
-              <Button
+            <Stack data-tour="labels-actions" direction="row" spacing={1}>
+              <ActionButton
+                tip={t(language, "tipLabelsExcel")}
                 variant="contained"
                 color="secondary"
                 startIcon={<TableChartIcon />}
@@ -121,8 +122,9 @@ export default function Labels({ language }: LabelsProps) {
                 disabled={!eventId || exportingExcel}
               >
                 {exportingExcel ? "..." : t(language, "labelsExportExcel")}
-              </Button>
-              <Button
+              </ActionButton>
+              <ActionButton
+                tip={t(language, "tipLabelsPdf")}
                 variant="contained"
                 color="secondary"
                 startIcon={<PictureAsPdfIcon />}
@@ -130,8 +132,9 @@ export default function Labels({ language }: LabelsProps) {
                 disabled={!eventId || exportingPdf}
               >
                 {exportingPdf ? "..." : t(language, "labelsExportPdf")}
-              </Button>
-              <Button
+              </ActionButton>
+              <ActionButton
+                tip={t(language, "tipLabelsDymo")}
                 variant="contained"
                 color="secondary"
                 startIcon={<PrintIcon />}
@@ -139,7 +142,7 @@ export default function Labels({ language }: LabelsProps) {
                 disabled={!eventId || printingDymo}
               >
                 {printingDymo ? "..." : t(language, "labelsDymoPrint")}
-              </Button>
+              </ActionButton>
             </Stack>
 
             <Typography variant="body2" color="text.secondary">

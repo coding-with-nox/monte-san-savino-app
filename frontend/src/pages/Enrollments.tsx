@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from "react";
 import {
   Box,
-  Button,
   Chip,
   Collapse,
   FormControl,
   Grid,
-  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -36,6 +34,7 @@ import SectionCard from "../components/SectionCard";
 import PriceSummary from "../components/PriceSummary";
 import { openHtmlExport } from "../lib/exports";
 import { EventPricing, PricingResponse } from "../lib/pricing";
+import { ActionButton, TipIconButton } from "../components/ActionButton";
 
 type Enrollment = {
   id: string;
@@ -285,9 +284,9 @@ export default function Enrollments({ language }: EnrollmentsProps) {
           </FormControl>
         </Grid>
         <Grid item xs={12} md={2}>
-          <Button variant="contained" onClick={enroll} fullWidth disabled={saving || !eventId}>
+          <ActionButton tip={t(language, "tipEnrollSubmit")} variant="contained" onClick={enroll} fullWidth disabled={saving || !eventId}>
             {saving ? "..." : t(language, "enrollmentsButton")}
-          </Button>
+          </ActionButton>
         </Grid>
       </Grid>
     </Box>
@@ -298,7 +297,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
       <EmptyState
         title={t(language, isPast ? "emptyEnrollmentsPastTitle" : "emptyEnrollmentsActiveTitle")}
         description={t(language, "emptyEnrollmentsDescription")}
-        action={isPast ? undefined : { label: t(language, "enrollmentsEmptyAction"), onClick: startCreate }}
+        action={isPast ? undefined : { label: t(language, "enrollmentsEmptyAction"), tip: t(language, "tipEnrollNew"), onClick: startCreate }}
       />
     ) : (
       <TableContainer component={Paper} variant="outlined">
@@ -341,17 +340,19 @@ export default function Enrollments({ language }: EnrollmentsProps) {
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
           <Typography variant="h4">{t(language, "enrollmentsTitle")}</Typography>
           <Stack direction="row" spacing={1}>
-            <Button
+            <ActionButton
+              tip={t(language, "tipExportMine")}
+              data-tour="enr-export"
               variant="outlined"
               startIcon={<DownloadIcon />}
               onClick={exportMyEnrollments}
               disabled={exportingMine}
             >
               {exportingMine ? "..." : t(language, "enrollmentsExportMine")}
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
+            </ActionButton>
+            <ActionButton tip={t(language, "tipEnrollNew")} data-tour="enr-new" variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
               {t(language, "enrollmentsButton")}
-            </Button>
+            </ActionButton>
           </Stack>
         </Stack>
 
@@ -359,25 +360,26 @@ export default function Enrollments({ language }: EnrollmentsProps) {
           <Paper variant="outlined" sx={{ mb: 1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
               <Typography variant="subtitle2">{t(language, "enrollmentsButton")}</Typography>
-              <IconButton size="small" aria-label={t(language, "wizardClose")} onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></IconButton>
+              <TipIconButton tip={t(language, "tipPanelClose")} size="small" aria-label={t(language, "wizardClose")} onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></TipIconButton>
             </Stack>
             {createPanel}
           </Paper>
         </Collapse>
 
         {isManager && (
-          <Paper variant="outlined" sx={{ p: 2 }}>
+          <Paper data-tour="enr-manage" variant="outlined" sx={{ p: 2 }}>
             <Stack spacing={2}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
                 <Typography variant="h6">{t(language, "enrollmentsManageTitle")}</Typography>
-                <Button
+                <ActionButton
+                  tip={t(language, "tipExportEvent")}
                   variant="outlined"
                   startIcon={<DownloadIcon />}
                   onClick={exportEnrollmentsByEvent}
                   disabled={exportingAdmin || !adminEventId}
                 >
                   {exportingAdmin ? "..." : t(language, "enrollmentsExportEvent")}
-                </Button>
+                </ActionButton>
               </Stack>
               <FormControl size="small" sx={{ maxWidth: 360 }}>
                 <InputLabel>{t(language, "enrollmentsEventSelect")}</InputLabel>
@@ -440,10 +442,12 @@ export default function Enrollments({ language }: EnrollmentsProps) {
 
         {pricing.map((p) => (
           <SectionCard
+            tourId="enr-fee"
             key={p.eventId}
             title={`${t(language, "priceSummaryTitle")}: ${p.eventName}`}
             action={
-              <Button
+              <ActionButton
+                tip={t(language, "tipPrintEnrollment")}
                 variant="outlined"
                 size="small"
                 startIcon={<PrintIcon />}
@@ -451,14 +455,14 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                 disabled={printingId !== null}
               >
                 {t(language, "enrollmentsPrint")}
-              </Button>
+              </ActionButton>
             }
           >
             <PriceSummary language={language} pricing={p} />
           </SectionCard>
         ))}
 
-        <Typography variant="h6">{t(language, "enrollmentsListTitle")}</Typography>
+        <Typography data-tour="enr-list" variant="h6">{t(language, "enrollmentsListTitle")}</Typography>
         {renderTable(activeEnrollments, false)}
 
         {pastEnrollments.length > 0 && (
