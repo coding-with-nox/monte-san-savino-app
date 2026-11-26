@@ -6,7 +6,7 @@
 #   • utenti (admin / manager / judge / staff / user / inattivo)
 #   • eventi (aperto, chiuso/passato, futuro/draft)
 #   • campagne evento (aperta, chiusa)
-#   • categorie (aperta, chiusa)
+#   • livelli (Juniors gratuito) e classi Monte San Savino Show (aperte, chiusa)
 #   • team + team_mates + award_brackets
 #   • modelli (singolo, team, varie categorie)
 #   • iscrizioni (con/senza modello, checked-in, non checked-in)
@@ -195,28 +195,73 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
--- CATEGORIE
+-- LIVELLI (Juniors: iscrizione gratuita)
 -- ===========================================================================
--- Evento 2026 – categorie aperte e una chiusa
-INSERT INTO categories (id, event_id, name, status)
+INSERT INTO levels (id, name, sort_order, free_to_enter)
 VALUES
-  ('cccccccc-1111-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000001', 'Aerei 1:72',  'open'),
-  ('cccccccc-1111-0000-0000-000000000002', 'eeeeeeee-0000-0000-0000-000000000001', 'Navi',        'open'),
-  ('cccccccc-1111-0000-0000-000000000003', 'eeeeeeee-0000-0000-0000-000000000001', 'Armature',    'closed'),
-  ('cccccccc-1111-0000-0000-000000000004', 'eeeeeeee-0000-0000-0000-000000000001', 'Veicoli',     'open')
+  ('1e1e1e1e-0000-0000-0000-000000000001', 'Juniors',  0, true),
+  ('1e1e1e1e-0000-0000-0000-000000000002', 'Standard', 1, false),
+  ('1e1e1e1e-0000-0000-0000-000000000003', 'Masters',  2, false),
+  ('1e1e1e1e-0000-0000-0000-000000000004', 'All',      3, false)
 ON CONFLICT (id) DO NOTHING;
 
--- Evento 2025 – categorie chiuse (evento concluso)
-INSERT INTO categories (id, event_id, name, status)
+-- ===========================================================================
+-- CATEGORIE — classi del Monte San Savino Show
+-- class_number = Class ID = presentation_order; suffisso UUID = Class ID
+-- ===========================================================================
+-- Evento 2026 – tutte le 33 classi (aperte, tranne la 2)
+INSERT INTO categories (id, event_id, name, status, class_number, level_id, presentation_order, out_of_competition)
 VALUES
-  ('cccccccc-2222-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000002', 'Fantasy',  'closed'),
-  ('cccccccc-2222-0000-0000-000000000002', 'eeeeeeee-0000-0000-0000-000000000002', 'Sci-Fi',   'closed')
+  ('cccccccc-1111-0000-0000-000000000000', 'eeeeeeee-0000-0000-0000-000000000001', 'Juniors', 'open', '0', '1e1e1e1e-0000-0000-0000-000000000001', 0, false),
+  ('cccccccc-1111-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000001', 'Historical Painting', 'open', '1', '1e1e1e1e-0000-0000-0000-000000000002', 1, false),
+  ('cccccccc-1111-0000-0000-000000000002', 'eeeeeeee-0000-0000-0000-000000000001', 'Historical Painting', 'closed', '2', '1e1e1e1e-0000-0000-0000-000000000003', 2, false),
+  ('cccccccc-1111-0000-0000-000000000003', 'eeeeeeee-0000-0000-0000-000000000001', 'Fantasy Painting', 'open', '3', '1e1e1e1e-0000-0000-0000-000000000002', 3, false),
+  ('cccccccc-1111-0000-0000-000000000004', 'eeeeeeee-0000-0000-0000-000000000001', 'Fantasy Painting', 'open', '4', '1e1e1e1e-0000-0000-0000-000000000003', 4, false),
+  ('cccccccc-1111-0000-0000-000000000005', 'eeeeeeee-0000-0000-0000-000000000001', 'Open Historical', 'open', '5', '1e1e1e1e-0000-0000-0000-000000000002', 5, false),
+  ('cccccccc-1111-0000-0000-000000000006', 'eeeeeeee-0000-0000-0000-000000000001', 'Open Historical', 'open', '6', '1e1e1e1e-0000-0000-0000-000000000003', 6, false),
+  ('cccccccc-1111-0000-0000-000000000007', 'eeeeeeee-0000-0000-0000-000000000001', 'Open Fantasy', 'open', '7', '1e1e1e1e-0000-0000-0000-000000000002', 7, false),
+  ('cccccccc-1111-0000-0000-000000000008', 'eeeeeeee-0000-0000-0000-000000000001', 'Open Fantasy', 'open', '8', '1e1e1e1e-0000-0000-0000-000000000003', 8, false),
+  ('cccccccc-1111-0000-0000-000000000009', 'eeeeeeee-0000-0000-0000-000000000001', 'Storytelling', 'open', '9', '1e1e1e1e-0000-0000-0000-000000000002', 9, false),
+  ('cccccccc-1111-0000-0000-000000000010', 'eeeeeeee-0000-0000-0000-000000000001', 'Storytelling', 'open', '10', '1e1e1e1e-0000-0000-0000-000000000003', 10, false),
+  ('cccccccc-1111-0000-0000-000000000011', 'eeeeeeee-0000-0000-0000-000000000001', 'Sculpting', 'open', '11', '1e1e1e1e-0000-0000-0000-000000000002', 11, false),
+  ('cccccccc-1111-0000-0000-000000000012', 'eeeeeeee-0000-0000-0000-000000000001', 'Sculpting', 'open', '12', '1e1e1e1e-0000-0000-0000-000000000003', 12, false),
+  ('cccccccc-1111-0000-0000-000000000013', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Military Modelling - Unaltered', 'open', '13', '1e1e1e1e-0000-0000-0000-000000000002', 13, false),
+  ('cccccccc-1111-0000-0000-000000000014', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Military Modelling - Unaltered', 'open', '14', '1e1e1e1e-0000-0000-0000-000000000003', 14, false),
+  ('cccccccc-1111-0000-0000-000000000015', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Military Modelling - Converted', 'open', '15', '1e1e1e1e-0000-0000-0000-000000000002', 15, false),
+  ('cccccccc-1111-0000-0000-000000000016', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Military Modelling - Converted', 'open', '16', '1e1e1e1e-0000-0000-0000-000000000003', 16, false),
+  ('cccccccc-1111-0000-0000-000000000017', 'eeeeeeee-0000-0000-0000-000000000001', 'Open Ordnance Military Modelling', 'open', '17', '1e1e1e1e-0000-0000-0000-000000000004', 17, false),
+  ('cccccccc-1111-0000-0000-000000000018', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Military Modelling Diorama', 'open', '18', '1e1e1e1e-0000-0000-0000-000000000002', 18, false),
+  ('cccccccc-1111-0000-0000-000000000019', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Military Modelling Diorama', 'open', '19', '1e1e1e1e-0000-0000-0000-000000000003', 19, false),
+  ('cccccccc-1111-0000-0000-000000000020', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Sci-fi - Unaltered', 'open', '20', '1e1e1e1e-0000-0000-0000-000000000002', 20, false),
+  ('cccccccc-1111-0000-0000-000000000021', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Sci-fi - Unaltered', 'open', '21', '1e1e1e1e-0000-0000-0000-000000000003', 21, false),
+  ('cccccccc-1111-0000-0000-000000000022', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Sci-fi - Converted', 'open', '22', '1e1e1e1e-0000-0000-0000-000000000002', 22, false),
+  ('cccccccc-1111-0000-0000-000000000023', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Sci-fi - Converted', 'open', '23', '1e1e1e1e-0000-0000-0000-000000000003', 23, false),
+  ('cccccccc-1111-0000-0000-000000000024', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Sci-fi Diorama', 'open', '24', '1e1e1e1e-0000-0000-0000-000000000004', 24, false),
+  ('cccccccc-1111-0000-0000-000000000025', 'eeeeeeee-0000-0000-0000-000000000001', 'Cow Contest', 'open', '25', '1e1e1e1e-0000-0000-0000-000000000004', 25, false),
+  ('cccccccc-1111-0000-0000-000000000026', 'eeeeeeee-0000-0000-0000-000000000001', 'Out Of Competition', 'open', '26', '1e1e1e1e-0000-0000-0000-000000000004', 26, true),
+  ('cccccccc-1111-0000-0000-000000000027', 'eeeeeeee-0000-0000-0000-000000000001', 'Time Chronicles Painting', 'open', '27', '1e1e1e1e-0000-0000-0000-000000000002', 27, false),
+  ('cccccccc-1111-0000-0000-000000000028', 'eeeeeeee-0000-0000-0000-000000000001', 'Time Chronicles Painting', 'open', '28', '1e1e1e1e-0000-0000-0000-000000000003', 28, false),
+  ('cccccccc-1111-0000-0000-000000000029', 'eeeeeeee-0000-0000-0000-000000000001', 'Open Time Chronicles', 'open', '29', '1e1e1e1e-0000-0000-0000-000000000002', 29, false),
+  ('cccccccc-1111-0000-0000-000000000030', 'eeeeeeee-0000-0000-0000-000000000001', 'Open Time Chronicles', 'open', '30', '1e1e1e1e-0000-0000-0000-000000000003', 30, false),
+  ('cccccccc-1111-0000-0000-000000000031', 'eeeeeeee-0000-0000-0000-000000000001', 'Open Ordnance Time Chronicles', 'open', '31', '1e1e1e1e-0000-0000-0000-000000000004', 31, false),
+  ('cccccccc-1111-0000-0000-000000000032', 'eeeeeeee-0000-0000-0000-000000000001', 'Ordnance Time Chronicles Diorama', 'open', '32', '1e1e1e1e-0000-0000-0000-000000000004', 32, false)
 ON CONFLICT (id) DO NOTHING;
 
--- Evento 2027 – categoria aperta (futuro)
-INSERT INTO categories (id, event_id, name, status)
+-- Evento 2025 – selezione di classi chiuse (evento concluso)
+INSERT INTO categories (id, event_id, name, status, class_number, level_id, presentation_order, out_of_competition)
 VALUES
-  ('cccccccc-3333-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000003', 'Figurini', 'open')
+  ('cccccccc-2222-0000-0000-000000000000', 'eeeeeeee-0000-0000-0000-000000000002', 'Juniors', 'closed', '0', '1e1e1e1e-0000-0000-0000-000000000001', 0, false),
+  ('cccccccc-2222-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000002', 'Historical Painting', 'closed', '1', '1e1e1e1e-0000-0000-0000-000000000002', 1, false),
+  ('cccccccc-2222-0000-0000-000000000003', 'eeeeeeee-0000-0000-0000-000000000002', 'Fantasy Painting', 'closed', '3', '1e1e1e1e-0000-0000-0000-000000000002', 3, false),
+  ('cccccccc-2222-0000-0000-000000000020', 'eeeeeeee-0000-0000-0000-000000000002', 'Ordnance Sci-fi - Unaltered', 'closed', '20', '1e1e1e1e-0000-0000-0000-000000000002', 20, false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Evento 2027 – selezione di classi aperte (futuro)
+INSERT INTO categories (id, event_id, name, status, class_number, level_id, presentation_order, out_of_competition)
+VALUES
+  ('cccccccc-3333-0000-0000-000000000000', 'eeeeeeee-0000-0000-0000-000000000003', 'Juniors', 'open', '0', '1e1e1e1e-0000-0000-0000-000000000001', 0, false),
+  ('cccccccc-3333-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000003', 'Historical Painting', 'open', '1', '1e1e1e1e-0000-0000-0000-000000000002', 1, false),
+  ('cccccccc-3333-0000-0000-000000000027', 'eeeeeeee-0000-0000-0000-000000000003', 'Time Chronicles Painting', 'open', '27', '1e1e1e1e-0000-0000-0000-000000000002', 27, false)
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
@@ -224,8 +269,8 @@ ON CONFLICT (id) DO NOTHING;
 -- ===========================================================================
 INSERT INTO teams (id, user_id, name, display_number, category_id)
 VALUES
-  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Aquile Blu',    'T001', 'cccccccc-1111-0000-0000-000000000001'),
-  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000007', 'Dragoni Verdi', 'T002', 'cccccccc-1111-0000-0000-000000000001')
+  ('d1d1d1d1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000006', 'Aquile Blu',    'T001', 'cccccccc-1111-0000-0000-000000000015'),
+  ('d1d1d1d1-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000007', 'Dragoni Verdi', 'T002', 'cccccccc-1111-0000-0000-000000000017')
 ON CONFLICT (id) DO NOTHING;
 
 -- team_mates Aquile Blu
@@ -246,57 +291,63 @@ ON CONFLICT (id) DO NOTHING;
 -- MODELLI
 -- code è auto-incrementale: impostiamo valori distinti
 -- ===========================================================================
-INSERT INTO models (id, user_id, team_id, category_id, name, description, code, display_number, image_url)
+INSERT INTO models (id, user_id, team_id, category_id, level_id, name, description, code, display_number, image_url)
 VALUES
-  -- user1 — solo — Aerei 1:72 (evento 2026 aperto)
+  -- user1 — solo — classe 15 (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000001',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
-   'cccccccc-1111-0000-0000-000000000001',
+   'cccccccc-1111-0000-0000-000000000015', '1e1e1e1e-0000-0000-0000-000000000002',
    'Spitfire Mk.IX', 'Replica 1:72 con decal originali', 1, 1, NULL),
 
-  -- user1 — solo — Navi (evento 2026 aperto)
+  -- user1 — solo — classe 13 (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000002',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
-   'cccccccc-1111-0000-0000-000000000002',
+   'cccccccc-1111-0000-0000-000000000013', '1e1e1e1e-0000-0000-0000-000000000002',
    'HMS Victory 1:350', 'Modello del veliero famoso', 2, 1, NULL),
 
-  -- user2 — team Aquile Blu — Aerei 1:72 (evento 2026 aperto)
+  -- user2 — team Aquile Blu — classe 15 (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000003',
    'aaaaaaaa-0000-0000-0000-000000000007',
    'd1d1d1d1-0000-0000-0000-000000000001',
-   'cccccccc-1111-0000-0000-000000000001',
+   'cccccccc-1111-0000-0000-000000000015', '1e1e1e1e-0000-0000-0000-000000000002',
    'B-17 Flying Fortress', 'Bombariere USA WWII in team', 3, 2, NULL),
 
-  -- user2 — solo — Armature (categoria CHIUSA, evento 2026)
+  -- user2 — solo — classe 2 (categoria CHIUSA, evento 2026)
   ('a2a2a2a2-0000-0000-0000-000000000004',
    'aaaaaaaa-0000-0000-0000-000000000007', NULL,
-   'cccccccc-1111-0000-0000-000000000003',
+   'cccccccc-1111-0000-0000-000000000002', '1e1e1e1e-0000-0000-0000-000000000003',
    'Cavaliere Medievale', 'Armatura 1:6 dipinta a mano', 4, 2, NULL),
 
-  -- user3 — solo — Fantasy (evento 2025 chiuso)
+  -- user3 — solo — classe 3 (evento 2025 chiuso)
   ('a2a2a2a2-0000-0000-0000-000000000005',
    'aaaaaaaa-0000-0000-0000-000000000008', NULL,
-   'cccccccc-2222-0000-0000-000000000001',
+   'cccccccc-2222-0000-0000-000000000003', '1e1e1e1e-0000-0000-0000-000000000002',
    'Drago Antico', 'Figura fantasy con base diorama', 5, 3, NULL),
 
-  -- user3 — solo — Sci-Fi (evento 2025 chiuso)
+  -- user3 — solo — classe 20 (evento 2025 chiuso)
   ('a2a2a2a2-0000-0000-0000-000000000006',
    'aaaaaaaa-0000-0000-0000-000000000008', NULL,
-   'cccccccc-2222-0000-0000-000000000002',
+   'cccccccc-2222-0000-0000-000000000020', '1e1e1e1e-0000-0000-0000-000000000002',
    'Space Marine', 'Warhammer 40k custom paintjob', 6, 3, NULL),
 
-  -- user1 — solo — Figurini (evento 2027 futuro)
+  -- user1 — solo — classe 1 (evento 2027 futuro)
   ('a2a2a2a2-0000-0000-0000-000000000007',
    'aaaaaaaa-0000-0000-0000-000000000006', NULL,
-   'cccccccc-3333-0000-0000-000000000001',
+   'cccccccc-3333-0000-0000-000000000001', '1e1e1e1e-0000-0000-0000-000000000002',
    'Guerriero Romano', 'Centurione 1:12', 7, 1, NULL),
 
-  -- user2 — team Dragoni Verdi — Veicoli (evento 2026 aperto)
+  -- user2 — team Dragoni Verdi — classe 17 (evento 2026 aperto)
   ('a2a2a2a2-0000-0000-0000-000000000008',
    'aaaaaaaa-0000-0000-0000-000000000007',
    'd1d1d1d1-0000-0000-0000-000000000002',
-   'cccccccc-1111-0000-0000-000000000004',
-   'Tiger I Ausf. E', 'Carro armato tedesco WWII', 8, 2, NULL)
+   'cccccccc-1111-0000-0000-000000000017', '1e1e1e1e-0000-0000-0000-000000000004',
+   'Tiger I Ausf. E', 'Carro armato tedesco WWII', 8, 2, NULL),
+
+  -- user3 — solo — classe 0 Juniors (evento 2026, iscrizione gratuita)
+  ('a2a2a2a2-0000-0000-0000-000000000009',
+   'aaaaaaaa-0000-0000-0000-000000000008', NULL,
+   'cccccccc-1111-0000-0000-000000000000', '1e1e1e1e-0000-0000-0000-000000000001',
+   'Piccolo Cavaliere', 'Figura dipinta da un partecipante Juniors', 24, 3, NULL)
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
@@ -310,7 +361,7 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000006',
    'eeeeeeee-0000-0000-0000-000000000001',
    'a2a2a2a2-0000-0000-0000-000000000001',
-   'cccccccc-1111-0000-0000-000000000001',
+   'cccccccc-1111-0000-0000-000000000015',
    'accepted', true),
 
   -- user1 — MSS 2026 — HMS Victory — non ancora check-in
@@ -318,7 +369,7 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000006',
    'eeeeeeee-0000-0000-0000-000000000001',
    'a2a2a2a2-0000-0000-0000-000000000002',
-   'cccccccc-1111-0000-0000-000000000002',
+   'cccccccc-1111-0000-0000-000000000013',
    'accepted', false),
 
   -- user2 — MSS 2026 — B-17 (team) — check-in effettuato
@@ -326,7 +377,7 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000007',
    'eeeeeeee-0000-0000-0000-000000000001',
    'a2a2a2a2-0000-0000-0000-000000000003',
-   'cccccccc-1111-0000-0000-000000000001',
+   'cccccccc-1111-0000-0000-000000000015',
    'accepted', true),
 
   -- user2 — MSS 2026 — Cavaliere Medievale (categoria chiusa) — non check-in
@@ -334,7 +385,7 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000007',
    'eeeeeeee-0000-0000-0000-000000000001',
    'a2a2a2a2-0000-0000-0000-000000000004',
-   'cccccccc-1111-0000-0000-000000000003',
+   'cccccccc-1111-0000-0000-000000000002',
    'accepted', false),
 
   -- user2 — MSS 2026 — Tiger I (team Dragoni) — non check-in
@@ -342,7 +393,7 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000007',
    'eeeeeeee-0000-0000-0000-000000000001',
    'a2a2a2a2-0000-0000-0000-000000000008',
-   'cccccccc-1111-0000-0000-000000000004',
+   'cccccccc-1111-0000-0000-000000000017',
    'accepted', false),
 
   -- user5 — MSS 2026 — senza modello (iscrizione generica)
@@ -357,7 +408,7 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000008',
    'eeeeeeee-0000-0000-0000-000000000002',
    'a2a2a2a2-0000-0000-0000-000000000005',
-   'cccccccc-2222-0000-0000-000000000001',
+   'cccccccc-2222-0000-0000-000000000003',
    'accepted', true),
 
   -- user3 — MSS 2025 — Space Marine — check-in effettuato
@@ -365,7 +416,7 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000008',
    'eeeeeeee-0000-0000-0000-000000000002',
    'a2a2a2a2-0000-0000-0000-000000000006',
-   'cccccccc-2222-0000-0000-000000000002',
+   'cccccccc-2222-0000-0000-000000000020',
    'accepted', true),
 
   -- user1 — MSS 2025 — senza modello (partecipante spettatore)
@@ -381,6 +432,14 @@ VALUES
    'eeeeeeee-0000-0000-0000-000000000003',
    'a2a2a2a2-0000-0000-0000-000000000007',
    'cccccccc-3333-0000-0000-000000000001',
+   'accepted', false),
+
+  -- user3 — MSS 2026 — Piccolo Cavaliere (Juniors) — non check-in
+  ('a4a00001-0000-0000-0000-000000000011',
+   'aaaaaaaa-0000-0000-0000-000000000008',
+   'eeeeeeee-0000-0000-0000-000000000001',
+   'a2a2a2a2-0000-0000-0000-000000000009',
+   'cccccccc-1111-0000-0000-000000000000',
    'accepted', false)
 ON CONFLICT (id) DO NOTHING;
 
@@ -471,7 +530,7 @@ VALUES
    2, NOW() - INTERVAL '30 minutes'),
 
   -- *** CASISTICA: modello con voti esistenti → spostato di categoria ***
-  -- user3 — Guerriero Romano (Figurini, MSS 2027) — judge1 ha già votato rank=2
+  -- user3 — Guerriero Romano (classe 1, MSS 2027) — judge1 ha già votato rank=2
   -- Questo modello può essere spostato in altra categoria per testare il clear dei voti
   ('e1e1e1e1-0000-0000-0000-000000000012',
    'aaaaaaaa-0000-0000-0000-000000000003',
@@ -497,13 +556,13 @@ ON CONFLICT (id) DO NOTHING;
 -- ===========================================================================
 INSERT INTO modification_requests (id, model_id, judge_id, reason, status, suggested_category_id, created_at)
 VALUES
-  -- judge1 chiede cambio categoria per B-17: da Aerei a Veicoli — PENDING
+  -- judge1 chiede cambio categoria per B-17: da classe 15 (Converted) a 13 (Unaltered) — PENDING
   ('a3a3a3a0-0000-0000-0000-000000000001',
    'a2a2a2a2-0000-0000-0000-000000000003',
    'aaaaaaaa-0000-0000-0000-000000000003',
-   'Il modello sembra più adatto alla categoria Veicoli militari.',
+   'Nessuna conversione evidente: più adatto alla classe 13 (Unaltered).',
    'pending',
-   'cccccccc-1111-0000-0000-000000000004',
+   'cccccccc-1111-0000-0000-000000000013',
    NOW() - INTERVAL '3 hours'),
 
   -- judge2 chiede revisione Spitfire senza categoria suggerita — RESOLVED
@@ -515,7 +574,7 @@ VALUES
    NULL,
    NOW() - INTERVAL '5 hours'),
 
-  -- judge1 chiede cambio Cavaliere Medievale: da Armature a nessuna categ — REJECTED
+  -- judge1 chiede cambio Cavaliere Medievale: classe 2, nessuna categoria suggerita — REJECTED
   ('a3a3a3a0-0000-0000-0000-000000000003',
    'a2a2a2a2-0000-0000-0000-000000000004',
    'aaaaaaaa-0000-0000-0000-000000000003',
@@ -603,8 +662,8 @@ ON CONFLICT (key) DO NOTHING;
 -- ===========================================================================
 INSERT INTO teams (id, user_id, name, display_number, category_id)
 VALUES
-  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'Falchi Rossi',    'T003', 'cccccccc-1111-0000-0000-000000000001'),
-  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'Leoni d''Argento', 'T004', 'cccccccc-1111-0000-0000-000000000002')
+  ('d2d2d2d2-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'Falchi Rossi',    'T003', 'cccccccc-1111-0000-0000-000000000015'),
+  ('d2d2d2d2-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'Leoni d''Argento', 'T004', 'cccccccc-1111-0000-0000-000000000013')
 ON CONFLICT (id) DO NOTHING;
 
 -- team_mates Falchi Rossi: admin (Capogruppo), user1 (Vice), user2 (Membro)
@@ -626,64 +685,64 @@ ON CONFLICT (id) DO NOTHING;
 -- 15 MODELLI ADMIN
 -- code 9–23, distribuiti su eventi e categorie esistenti
 -- ===========================================================================
-INSERT INTO models (id, user_id, team_id, category_id, name, description, code, display_number, image_url)
+INSERT INTO models (id, user_id, team_id, category_id, level_id, name, description, code, display_number, image_url)
 VALUES
   -- Solo — MSS 2026
   ('a2a2a2a2-0001-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000001', 'Messerschmitt Bf 109', 'Caccia tedesco WWII 1:72', 9, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000015', '1e1e1e1e-0000-0000-0000-000000000002', 'Messerschmitt Bf 109', 'Caccia tedesco WWII 1:72', 9, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000002', 'USS Enterprise CV-6', 'Portaerei USA 1:700', 10, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000013', '1e1e1e1e-0000-0000-0000-000000000002', 'USS Enterprise CV-6', 'Portaerei USA 1:700', 10, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000003', 'Samurai Takeda', 'Armatura full-plate periodo Sengoku', 11, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000002', '1e1e1e1e-0000-0000-0000-000000000003', 'Samurai Takeda', 'Armatura full-plate periodo Sengoku', 11, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000004', 'M4 Sherman', 'Carro medio USA WWII 1:35', 12, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000017', '1e1e1e1e-0000-0000-0000-000000000004', 'M4 Sherman', 'Carro medio USA WWII 1:35', 12, 10, NULL),
 
   -- Team Falchi Rossi — MSS 2026
   ('a2a2a2a2-0001-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000001',
-   'cccccccc-1111-0000-0000-000000000001', 'P-51 Mustang', 'Caccia USA WWII in team', 13, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000015', '1e1e1e1e-0000-0000-0000-000000000002', 'P-51 Mustang', 'Caccia USA WWII in team', 13, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000006', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000001',
-   'cccccccc-1111-0000-0000-000000000004', 'Panzer IV Ausf. H', 'Carro tedesco WWII in team', 14, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000017', '1e1e1e1e-0000-0000-0000-000000000004', 'Panzer IV Ausf. H', 'Carro tedesco WWII in team', 14, 10, NULL),
 
   -- Solo — MSS 2025
   ('a2a2a2a2-0001-0000-0000-000000000007', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-2222-0000-0000-000000000001', 'Lich King', 'Figura fantasy non-morta', 15, 10, NULL),
+   'cccccccc-2222-0000-0000-000000000003', '1e1e1e1e-0000-0000-0000-000000000002', 'Lich King', 'Figura fantasy non-morta', 15, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000008', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-2222-0000-0000-000000000002', 'Tau Commander', 'Warhammer 40k xenos', 16, 10, NULL),
+   'cccccccc-2222-0000-0000-000000000020', '1e1e1e1e-0000-0000-0000-000000000002', 'Tau Commander', 'Warhammer 40k xenos', 16, 10, NULL),
 
   -- Solo — MSS 2027
   ('a2a2a2a2-0001-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-3333-0000-0000-000000000001', 'Legionario Romano', 'Fanteria pesante I sec.', 17, 10, NULL),
+   'cccccccc-3333-0000-0000-000000000001', '1e1e1e1e-0000-0000-0000-000000000002', 'Legionario Romano', 'Fanteria pesante I sec.', 17, 10, NULL),
 
   -- Team Leoni d'Argento — MSS 2026
   ('a2a2a2a2-0001-0000-0000-000000000010', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000002',
-   'cccccccc-1111-0000-0000-000000000002', 'Yamato 1:350', 'Corazzata giapponese WWII', 18, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000013', '1e1e1e1e-0000-0000-0000-000000000002', 'Yamato 1:350', 'Corazzata giapponese WWII', 18, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000001',
    'd2d2d2d2-0000-0000-0000-000000000002',
-   'cccccccc-1111-0000-0000-000000000003', 'Cavaliere Templare', 'Armatura medievale in team', 19, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000002', '1e1e1e1e-0000-0000-0000-000000000003', 'Cavaliere Templare', 'Armatura medievale in team', 19, 10, NULL),
 
   -- Solo — MSS 2026 (ulteriori)
   ('a2a2a2a2-0001-0000-0000-000000000012', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000001', 'Zero A6M2', 'Caccia navale giapponese 1:72', 20, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000015', '1e1e1e1e-0000-0000-0000-000000000002', 'Zero A6M2', 'Caccia navale giapponese 1:72', 20, 10, NULL),
 
   ('a2a2a2a2-0001-0000-0000-000000000013', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-1111-0000-0000-000000000004', 'Leopard 2A6', 'MBT tedesco moderno 1:35', 21, 10, NULL),
+   'cccccccc-1111-0000-0000-000000000017', '1e1e1e1e-0000-0000-0000-000000000004', 'Leopard 2A6', 'MBT tedesco moderno 1:35', 21, 10, NULL),
 
   -- Solo — MSS 2025 (ulteriori)
   ('a2a2a2a2-0001-0000-0000-000000000014', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-2222-0000-0000-000000000001', 'Goblin Shaman', 'Figura fantasy con effetti magici', 22, 10, NULL),
+   'cccccccc-2222-0000-0000-000000000003', '1e1e1e1e-0000-0000-0000-000000000002', 'Goblin Shaman', 'Figura fantasy con effetti magici', 22, 10, NULL),
 
   -- Solo — MSS 2027 (ulteriore)
   ('a2a2a2a2-0001-0000-0000-000000000015', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
-   'cccccccc-3333-0000-0000-000000000001', 'Gladiatore Reziario', 'Figura 1:12 con rete e tridente', 23, 10, NULL)
+   'cccccccc-3333-0000-0000-000000000001', '1e1e1e1e-0000-0000-0000-000000000002', 'Gladiatore Reziario', 'Figura 1:12 con rete e tridente', 23, 10, NULL)
 ON CONFLICT (id) DO NOTHING;
 
 -- ===========================================================================
@@ -706,37 +765,37 @@ VALUES
   -- MSS 2026 — solo
   ('a4a00002-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000001', 'cccccccc-1111-0000-0000-000000000001', 'accepted', true),
+   'a2a2a2a2-0001-0000-0000-000000000001', 'cccccccc-1111-0000-0000-000000000015', 'accepted', true),
 
   ('a4a00002-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000002', 'cccccccc-1111-0000-0000-000000000002', 'accepted', true),
+   'a2a2a2a2-0001-0000-0000-000000000002', 'cccccccc-1111-0000-0000-000000000013', 'accepted', true),
 
   ('a4a00002-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000003', 'cccccccc-1111-0000-0000-000000000003', 'accepted', false),
+   'a2a2a2a2-0001-0000-0000-000000000003', 'cccccccc-1111-0000-0000-000000000002', 'accepted', false),
 
   ('a4a00002-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000004', 'cccccccc-1111-0000-0000-000000000004', 'accepted', true),
+   'a2a2a2a2-0001-0000-0000-000000000004', 'cccccccc-1111-0000-0000-000000000017', 'accepted', true),
 
   -- MSS 2026 — team Falchi Rossi
   ('a4a00002-0000-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000005', 'cccccccc-1111-0000-0000-000000000001', 'accepted', true),
+   'a2a2a2a2-0001-0000-0000-000000000005', 'cccccccc-1111-0000-0000-000000000015', 'accepted', true),
 
   ('a4a00002-0000-0000-0000-000000000006', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000006', 'cccccccc-1111-0000-0000-000000000004', 'accepted', false),
+   'a2a2a2a2-0001-0000-0000-000000000006', 'cccccccc-1111-0000-0000-000000000017', 'accepted', false),
 
   -- MSS 2025 — solo
   ('a4a00002-0000-0000-0000-000000000007', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000002',
-   'a2a2a2a2-0001-0000-0000-000000000007', 'cccccccc-2222-0000-0000-000000000001', 'accepted', true),
+   'a2a2a2a2-0001-0000-0000-000000000007', 'cccccccc-2222-0000-0000-000000000003', 'accepted', true),
 
   ('a4a00002-0000-0000-0000-000000000008', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000002',
-   'a2a2a2a2-0001-0000-0000-000000000008', 'cccccccc-2222-0000-0000-000000000002', 'accepted', true),
+   'a2a2a2a2-0001-0000-0000-000000000008', 'cccccccc-2222-0000-0000-000000000020', 'accepted', true),
 
   -- MSS 2027 — solo
   ('a4a00002-0000-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000001',
@@ -746,25 +805,25 @@ VALUES
   -- MSS 2026 — team Leoni d'Argento
   ('a4a00002-0000-0000-0000-000000000010', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000010', 'cccccccc-1111-0000-0000-000000000002', 'accepted', false),
+   'a2a2a2a2-0001-0000-0000-000000000010', 'cccccccc-1111-0000-0000-000000000013', 'accepted', false),
 
   ('a4a00002-0000-0000-0000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000011', 'cccccccc-1111-0000-0000-000000000003', 'accepted', false),
+   'a2a2a2a2-0001-0000-0000-000000000011', 'cccccccc-1111-0000-0000-000000000002', 'accepted', false),
 
   -- MSS 2026 — solo (ulteriori)
   ('a4a00002-0000-0000-0000-000000000012', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000012', 'cccccccc-1111-0000-0000-000000000001', 'accepted', true),
+   'a2a2a2a2-0001-0000-0000-000000000012', 'cccccccc-1111-0000-0000-000000000015', 'accepted', true),
 
   ('a4a00002-0000-0000-0000-000000000013', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000001',
-   'a2a2a2a2-0001-0000-0000-000000000013', 'cccccccc-1111-0000-0000-000000000004', 'accepted', false),
+   'a2a2a2a2-0001-0000-0000-000000000013', 'cccccccc-1111-0000-0000-000000000017', 'accepted', false),
 
   -- MSS 2025 — solo (ulteriori)
   ('a4a00002-0000-0000-0000-000000000014', 'aaaaaaaa-0000-0000-0000-000000000001',
    'eeeeeeee-0000-0000-0000-000000000002',
-   'a2a2a2a2-0001-0000-0000-000000000014', 'cccccccc-2222-0000-0000-000000000001', 'accepted', true),
+   'a2a2a2a2-0001-0000-0000-000000000014', 'cccccccc-2222-0000-0000-000000000003', 'accepted', true),
 
   -- MSS 2027 — solo (ulteriore)
   ('a4a00002-0000-0000-0000-000000000015', 'aaaaaaaa-0000-0000-0000-000000000001',
@@ -784,6 +843,6 @@ echo "  judge2@test.com   -> judge (assegnato a MSS 2026)"
 echo "  staff@test.com    -> staff"
 echo "  user1@test.com    -> user  (Mario Rossi, 3 modelli, check-in su Spitfire)"
 echo "  user2@test.com    -> user  (Luigi Bianchi, team Aquile Blu + Dragoni Verdi)"
-echo "  user3@test.com    -> user  (Anna Verdi, partecipante MSS 2025)"
+echo "  user3@test.com    -> user  (Anna Verdi, partecipante MSS 2025, modello Juniors 2026)"
 echo "  user4@test.com    -> user  (Carlo Neri, DISATTIVATO)"
 echo "  user5@test.com    -> user  (senza profilo, iscrizione senza modello)"

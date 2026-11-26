@@ -1,8 +1,27 @@
 import React, { useEffect, useState } from "react";
 import {
-  Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, IconButton, InputLabel,
-  List, ListItem, ListItemText, MenuItem, Select, Stack, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, TextField, Typography
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  Grid,
+  InputLabel,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
+  Select,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -14,6 +33,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import useToast from "../../components/useToast";
 import { SectionErrors, useSections } from "./useSections";
 import type { AdminData } from "./useAdminData";
+import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
@@ -99,7 +119,7 @@ export default function AwardsTab({ language, data }: { language: Language; data
       {loading && <PageSkeleton variant="table" />}
       {!loading && (
         <>
-          <SectionCard title={t(language, "adminSpecialMentionsTitle")}>
+          <SectionCard tourId="admin-mentions" title={t(language, "adminSpecialMentionsTitle")}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth>
@@ -132,14 +152,15 @@ export default function AwardsTab({ language, data }: { language: Language; data
                 />
               </Grid>
               <Grid item xs={12} md={3}>
-                <Button
+                <ActionButton
+                  tip={t(language, "tipMentionCreate")}
                   variant="contained"
                   onClick={createMention}
                   fullWidth
                   disabled={!mentionForm.eventId || !mentionForm.modelId.trim() || !mentionForm.title.trim()}
                 >
                   {t(language, "adminMentionCreate")}
-                </Button>
+                </ActionButton>
               </Grid>
             </Grid>
             {mentions.length > 0 && (
@@ -154,9 +175,9 @@ export default function AwardsTab({ language, data }: { language: Language; data
                         primary={m.title}
                         secondary={`${data.eventName(m.eventId)} - ${t(language, "adminModelLabel")}: ${modelName(m.modelId)}`}
                       />
-                      <IconButton size="small" color="error" onClick={() => deleteMention(m.id)}>
+                      <TipIconButton tip={t(language, "tipMentionDelete")} aria-label={`${t(language, "actionDelete")} ${m.title}`} size="small" color="error" onClick={() => deleteMention(m.id)}>
                         <DeleteIcon fontSize="small" />
-                      </IconButton>
+                      </TipIconButton>
                     </ListItem>
                   ))}
                 </List>
@@ -164,7 +185,7 @@ export default function AwardsTab({ language, data }: { language: Language; data
             )}
           </SectionCard>
 
-          <SectionCard title={t(language, "adminModRequestsTitle")}>
+          <SectionCard tourId="admin-modrequests" title={t(language, "adminModRequestsTitle")}>
             <Stack spacing={1}>
               {modRequests.map((req) => (
                 <Stack key={req.id} spacing={1}>
@@ -179,12 +200,12 @@ export default function AwardsTab({ language, data }: { language: Language; data
                     />
                     {req.status === "pending" && (
                       <>
-                        <Button size="small" variant="outlined" onClick={() => updateModRequestStatus(req.id, "resolved")}>
+                        <ActionButton tip={t(language, "tipModResolve")} size="small" variant="outlined" onClick={() => updateModRequestStatus(req.id, "resolved")}>
                           {t(language, "adminModRequestResolved")}
-                        </Button>
-                        <Button size="small" variant="outlined" color="error" onClick={() => updateModRequestStatus(req.id, "rejected")}>
+                        </ActionButton>
+                        <ActionButton tip={t(language, "tipModReject")} size="small" variant="outlined" color="error" onClick={() => updateModRequestStatus(req.id, "rejected")}>
                           {t(language, "adminModRequestRejected")}
-                        </Button>
+                        </ActionButton>
                       </>
                     )}
                   </Stack>
@@ -195,7 +216,7 @@ export default function AwardsTab({ language, data }: { language: Language; data
         </>
       )}
 
-      <SectionCard title={t(language, "judgeCorrectionsTitle")}>
+      <SectionCard tourId="admin-corrections" title={t(language, "judgeCorrectionsTitle")}>
         <Stack spacing={2}>
           <FormControl size="small" fullWidth>
             <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
@@ -236,7 +257,7 @@ export default function AwardsTab({ language, data }: { language: Language; data
                     </TableCell>
                     <TableCell align="right">
                       {(row.source === "frozen" || row.source === "override") && (
-                        <IconButton size="small" color="warning" onClick={() => {
+                        <TipIconButton tip={t(language, "tipOverrideOpen")} aria-label={`${t(language, "actionEdit")} ${row.modelName ?? modelName(row.modelId)}`} size="small" color="warning" onClick={() => {
                           // TODO: needs awardId from backend, using row.id (frozen) or modelId as placeholder
                           setOverridingAward(row.id ?? row.modelId);
                           setOverrideMedalLabel(row.medalLabel ?? "");
@@ -244,7 +265,7 @@ export default function AwardsTab({ language, data }: { language: Language; data
                           setOverrideOpen(true);
                         }}>
                           <EditIcon fontSize="small" />
-                        </IconButton>
+                        </TipIconButton>
                       )}
                     </TableCell>
                   </TableRow>
@@ -270,8 +291,8 @@ export default function AwardsTab({ language, data }: { language: Language; data
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={saveOverride} variant="contained">{t(language, "profileSaveButton")}</Button>
-          <Button onClick={() => setOverrideOpen(false)}>{t(language, "profileCancelButton")}</Button>
+          <ActionButton tip={t(language, "tipOverrideSave")} onClick={saveOverride} variant="contained">{t(language, "profileSaveButton")}</ActionButton>
+          <ActionButton tip={t(language, "tipDialogCancel")} onClick={() => setOverrideOpen(false)}>{t(language, "profileCancelButton")}</ActionButton>
         </DialogActions>
       </Dialog>
     </Stack>

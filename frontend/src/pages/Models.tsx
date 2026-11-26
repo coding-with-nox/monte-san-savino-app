@@ -3,14 +3,13 @@ import {
   Alert,
   Avatar,
   Box,
-  Button,
   Chip,
   CircularProgress,
   Collapse,
   Divider,
   FormControl,
+  FormControlLabel,
   Grid,
-  IconButton,
   InputLabel,
   List,
   ListItem,
@@ -19,6 +18,10 @@ import {
   Paper,
   Select,
   Stack,
+  Step,
+  StepLabel,
+  Stepper,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -47,6 +50,13 @@ import PageSkeleton from "../components/PageSkeleton";
 import PrintActions from "../components/PrintActions";
 import { useConfirm } from "../components/ConfirmDialog";
 import useToast from "../components/useToast";
+import Field from "../components/Field";
+import CoauthorsEditor, { Coauthor, coauthorPayload, emptyCoauthor, isCoauthorValid } from "../components/CoauthorsEditor";
+import { PriceLine } from "../components/PriceSummary";
+import { EventPricing, formatCents, MemberRole, PricingResponse } from "../lib/pricing";
+import { ActionButton, TipIconButton } from "../components/ActionButton";
+import OwnerField, { Participant, participantLabel, participantName } from "../components/OwnerField";
+import { hasPermission, useAccess } from "../lib/access";
 
 type Model = {
   id: string;
@@ -57,12 +67,19 @@ type Model = {
   levelId: string;
   imageUrl?: string | null;
   isTeam: boolean;
+  /** Formatted team code from the backend (e.g. 173T1). */
+  teamCode?: string | null;
   displayNumber?: number | null;
   /** Visible to owner, judges and managers. */
   notes?: string | null;
 };
-type Level = { id: string; name: string; sortOrder?: number | null };
-type ModelDetail = { model: Model & { teamId?: string | null }; images: { id: string; url: string }[] };
+type Level = { id: string; name: string; sortOrder?: number | null; freeToEnter?: boolean };
+type TeamMember = { name: string; surname: string; email?: string | null; role?: string | null; roleId?: string | null };
+type ModelDetail = {
+  model: Model & { teamId?: string | null };
+  images: { id: string; url: string }[];
+  teamMembers?: TeamMember[];
+};
 type Category = { id: string; eventId: string; name: string; status: string };
 
 interface ModelsProps {
@@ -77,12 +94,16 @@ export default function Models({ language }: ModelsProps) {
   const { confirm, node: confirmNode } = useConfirm(language);
   const role = getRole();
   const isManager = role ? roleAtLeast(role, "manager") : false;
+  const canEnrollOnBehalf = hasPermission(role, useAccess().permissions, "enrollOnBehalf");
+  /** Owner of the model being enrolled; null = myself. */
+  const [owner, setOwner] = useState<Participant | null>(null);
   const [editNotes, setEditNotes] = useState("");
   const [editInternalNotes, setEditInternalNotes] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ModelDetail | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
+  // "?new=1" (help page) opens the wizard straight away.
+  const [isCreating, setIsCreating] = useState(() => new URLSearchParams(window.location.search).get("new") === "1");
   const [uploading, setUploading] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
   const toast = useToast();
@@ -91,7 +112,11 @@ export default function Models({ language }: ModelsProps) {
   const [editName, setEditName] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [levels, setLevels] = useState<Level[]>([]);
-  const [teams, setTeams] = useState<{ id: string; name: string; displayNumber: string }[]>([]);
+  const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
+  const [members, setMembers] = useState<Coauthor[]>([]);
+  const [baseFeeCents, setBaseFeeCents] = useState<number | null>(null);
+  const [pricing, setPricing] = useState<EventPricing | null>(null);
+  const [step, setStep] = useState(0);
   const [editLevelId, setEditLevelId] = useState("");
   const [editIsTeam, setEditIsTeam] = useState(false);
   const [editTeamId, setEditTeamId] = useState("");
@@ -139,11 +164,8 @@ export default function Models({ language }: ModelsProps) {
     try { setLevels(await api<Level[]>("/public/levels")); } catch { setLevels([]); }
   }
 
-  async function loadTeams() {
-    try {
-      const data = await api<{ id: string; name: string; displayNumber: string }[]>("/teams");
-      setTeams(data);
-    } catch {}
+  async function loadMemberRoles() {
+    try { setMemberRoles(await api<MemberRole[]>("/public/member-roles")); } catch { setMemberRoles([]); }
   }
 
   /** Single GET /admin/models per mount, reused afterwards (updated in place after saves). */
@@ -202,6 +224,13 @@ export default function Models({ language }: ModelsProps) {
       setEditLevelId(d.model.levelId || "");
       setEditIsTeam(d.model.isTeam || false);
       setEditTeamId(d.model.teamId ?? "");
+      setMembers((d.teamMembers ?? []).map((m) => ({
+        name: m.name,
+        surname: m.surname,
+        email: m.email ?? "",
+        roleId: m.roleId ?? "",
+        role: m.role ?? undefined
+      })));
       setEditNotes(d.model.notes ?? "");
       setEditInternalNotes(internal);
       setExpandedId(modelId);
@@ -234,6 +263,15 @@ export default function Models({ language }: ModelsProps) {
     setAttachName("");
   }
 
+  // Legacy team models keep their teamId until members are entered inline.
+  function teamPayload() {
+    if (!editIsTeam) return { isTeam: false };
+    return {
+      isTeam: true,
+      ...(members.length ? { teamMembers: members.map(coauthorPayload) } : { teamId: editTeamId })
+    };
+  }
+
   async function createModel() {
     setSavingModel(true);
     try {
@@ -251,6 +289,10 @@ export default function Models({ language }: ModelsProps) {
       setIsCreating(false);
       if (isManager && created?.id) await saveInternalNotes(created.id);
       await load();
+      const message = created?.code
+        ? t(language, owner ? "onBehalfCreatedWithCode" : "modelsCreatedWithCode").replace("{code}", String(created.code))
+        : t(language, owner ? "onBehalfCreated" : "modelsCreated");
+      toast.success(owner ? message.replace("{name}", participantName(owner)) : message);
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
     } finally {
@@ -280,6 +322,7 @@ export default function Models({ language }: ModelsProps) {
       if (isManager) await saveInternalNotes(detail.model.id);
       closePanel();
       await load();
+      toast.success(t(language, "modelsSaved"));
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
     } finally {
@@ -394,6 +437,8 @@ export default function Models({ language }: ModelsProps) {
     try {
       const s = await api<Record<string, string>>("/settings");
       setImagesEnabled(s.modelImages === "true");
+      const fee = Number.parseInt(s.baseFeeCents ?? "", 10);
+      setBaseFeeCents(Number.isFinite(fee) ? fee : null);
       const max = Number.parseInt(s.maxModelsPerUser ?? "", 10);
       setMaxModelsPerUser(Number.isFinite(max) && max > 0 ? max : null);
     } catch {
@@ -401,7 +446,7 @@ export default function Models({ language }: ModelsProps) {
     }
   }
 
-  useEffect(() => { load(); loadCategories(); loadSettings(); loadLevels(); loadTeams(); }, []);
+  useEffect(() => { load(); loadCategories(); loadSettings(); loadLevels(); loadMemberRoles(); }, []);
 
   const openCategories = categories.filter((c) => c.status === "open");
   const getCategoryName = (catId: string) => {
@@ -409,9 +454,189 @@ export default function Models({ language }: ModelsProps) {
     return cat ? cat.name : catId;
   };
 
+  const pricingEventId = categories.find((c) => c.id === editCategoryId)?.eventId;
+  const panelOpen = isCreating || expandedId !== null;
+
+  // Current fee of the event (computed by the backend), shown next to the price preview.
+  useEffect(() => {
+    if (!panelOpen || !pricingEventId || (isCreating && owner)) { setPricing(null); return; }
+    let cancelled = false;
+    api<PricingResponse>(`/pricing/me?eventId=${encodeURIComponent(pricingEventId)}`)
+      .then((res) => { if (!cancelled) setPricing(res?.events?.[0] ?? null); })
+      .catch(() => { if (!cancelled) setPricing(null); });
+    return () => { cancelled = true; };
+  }, [panelOpen, pricingEventId, isCreating, owner]);
+
+  const selectedLevel = levels.find((l) => l.id === editLevelId);
+  const teamValid = !editIsTeam || (members.length ? members.every(isCoauthorValid) : !!editTeamId);
+
+  const pricePreview = (
+    <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="price-preview">
+      <Stack spacing={0.75}>
+        <Typography variant="subtitle2">{t(language, "pricePreviewTitle")}</Typography>
+        {selectedLevel?.freeToEnter ? (
+          <Typography variant="body2">{t(language, "priceLevelFree")}</Typography>
+        ) : (
+          <>
+            {pricing && pricing.baseFeeCents > 0 ? (
+              <PriceLine label={t(language, "priceBaseFee")} value={t(language, "priceAlreadyApplied")} />
+            ) : (
+              baseFeeCents !== null && <PriceLine label={t(language, "priceBaseFeeOnce")} value={formatCents(baseFeeCents, language)} />
+            )}
+            {editIsTeam && members.map((m, i) => {
+              const role = memberRoles.find((r) => r.id === m.roleId);
+              return role?.price != null ? (
+                <PriceLine
+                  key={i}
+                  label={`${t(language, "coauthorLabel")} ${i + 1}: ${`${m.name} ${m.surname}`.trim() || role.name}`}
+                  value={formatCents(role.price, language)}
+                />
+              ) : null;
+            })}
+          </>
+        )}
+        {pricing && <PriceLine label={t(language, "priceCurrentTotal")} value={formatCents(pricing.totalCents, language)} />}
+        {isCreating && owner && <Typography variant="body2">{t(language, "onBehalfPriceNote")}</Typography>}
+        <Typography variant="body2" color="text.secondary">{t(language, "pricePreviewNote")}</Typography>
+      </Stack>
+    </Paper>
+  );
+
   const showMediaPanel = !isCreating && Boolean(detail);
   const tableColumnCount = imagesEnabled ? 5 : 4;
   const atMaxModels = maxModelsPerUser !== null && models.length >= maxModelsPerUser;
+
+  const nameField = (
+      <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" />
+  );
+  const classFields = (
+    <>
+      <FormControl fullWidth size="small">
+        <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
+        <Select value={editCategoryId} label={t(language, "modelsCategoryPlaceholder")} onChange={(e) => setEditCategoryId(e.target.value)}>
+          {openCategories.map((cat) => <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>)}
+        </Select>
+      </FormControl>
+      {!isCreating && detail?.model && editCategoryId && editCategoryId !== detail.model.categoryId && (
+        <Alert severity="warning" sx={{ py: 0.5 }}>
+          {t(language, "modelsCategoryChangeWarning")}
+        </Alert>
+      )}
+      <FormControl fullWidth size="small">
+        <InputLabel>{t(language, "modelsLevelPlaceholder")}</InputLabel>
+        <Select value={editLevelId} label={t(language, "modelsLevelPlaceholder")} onChange={(e) => setEditLevelId(e.target.value)}>
+          {levels.map((lvl) => <MenuItem key={lvl.id} value={lvl.id}>{lvl.name}</MenuItem>)}
+        </Select>
+      </FormControl>
+    </>
+  );
+  const noteFields = (
+    <>
+      <TextField
+        label={t(language, "modelsNotesLabel")}
+        value={editNotes}
+        onChange={(e) => setEditNotes(e.target.value)}
+        fullWidth
+        multiline
+        minRows={2}
+        size="small"
+        inputProps={{ maxLength: 2000 }}
+      />
+      {isManager && (
+        <TextField
+          label={t(language, "modelsInternalNotesLabel")}
+          value={editInternalNotes}
+          onChange={(e) => setEditInternalNotes(e.target.value)}
+          fullWidth
+          multiline
+          minRows={2}
+          size="small"
+          color="warning"
+          inputProps={{ maxLength: 2000 }}
+        />
+      )}
+    </>
+  );
+  const teamFields = (
+    <>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={editIsTeam}
+            onChange={(e) => {
+              setEditIsTeam(e.target.checked);
+              if (e.target.checked && members.length === 0 && !editTeamId) setMembers([emptyCoauthor()]);
+            }}
+          />
+        }
+        label={t(language, "modelsIsTeamLabel")}
+      />
+      {editIsTeam && <CoauthorsEditor language={language} members={members} roles={memberRoles} onChange={setMembers} />}
+    </>
+  );
+
+  const stepLabels = [
+    t(language, "wizardStepClass"),
+    t(language, "wizardStepModel"),
+    t(language, "wizardStepCoauthors"),
+    t(language, "wizardStepSummary")
+  ];
+  const stepValid = [!!editCategoryId && !!editLevelId, !!editName.trim(), teamValid, true];
+
+  const createPanel = (
+    <Box sx={{ p: 2 }} data-tour-scope="models-wizard">
+      <Stack spacing={2}>
+        <Stepper data-tour="wizard-stepper" activeStep={step} alternativeLabel>
+          {stepLabels.map((label) => (
+            <Step key={label}><StepLabel>{label}</StepLabel></Step>
+          ))}
+        </Stepper>
+        {step === 0 && canEnrollOnBehalf && (
+          <Box data-tour="wizard-owner">
+            <OwnerField language={language} value={owner} onChange={setOwner} />
+          </Box>
+        )}
+        <Stack data-tour="wizard-fields" spacing={2}>
+        {step === 0 && classFields}
+        {step === 1 && <>{nameField}{noteFields}</>}
+        {step === 2 && teamFields}
+        {step === 3 && (
+          <>
+            {canEnrollOnBehalf && owner && (
+              <Alert severity="info">{t(language, "onBehalfWarning").replace("{name}", participantLabel(language, owner))}</Alert>
+            )}
+            <Grid container spacing={2}>
+              {canEnrollOnBehalf && (
+                <Grid item xs={12}>
+                  <Field label={t(language, "onBehalfOwner")} value={owner ? participantLabel(language, owner) : t(language, "onBehalfSelf")} />
+                </Grid>
+              )}
+              <Grid item xs={12} sm={4}><Field label={t(language, "modelsNamePlaceholder")} value={editName.trim()} /></Grid>
+              <Grid item xs={12} sm={4}><Field label={t(language, "modelsCategoryPlaceholder")} value={editCategoryId ? getCategoryName(editCategoryId) : ""} /></Grid>
+              <Grid item xs={12} sm={4}><Field label={t(language, "modelsLevelPlaceholder")} value={selectedLevel?.name} /></Grid>
+              {editIsTeam && (
+                <Grid item xs={12}>
+                  <Field label={t(language, "wizardStepCoauthors")} value={members.map((m) => `${m.name} ${m.surname}`.trim()).join(", ")} />
+                </Grid>
+              )}
+            </Grid>
+            {pricePreview}
+          </>
+        )}
+        </Stack>
+        <Stack data-tour="wizard-nav" direction="row" justifyContent="space-between" spacing={1}>
+          <ActionButton tip={t(language, "tipWizardBack")} onClick={() => setStep((v) => v - 1)} disabled={step === 0}>{t(language, "wizardBack")}</ActionButton>
+          {step < stepLabels.length - 1 ? (
+            <ActionButton key="next" tip={t(language, "tipWizardNext")} variant="contained" onClick={() => setStep((v) => v + 1)} disabled={!stepValid[step]}>{t(language, "wizardNext")}</ActionButton>
+          ) : (
+            <ActionButton key="submit" tip={t(language, "tipModelsSubmit")} variant="contained" onClick={createModel} disabled={savingModel || !stepValid.every(Boolean) || (atMaxModels && !owner)}>
+              {savingModel ? t(language, "modelsUploading") : t(language, "modelsCreateButton")}
+            </ActionButton>
+          )}
+        </Stack>
+      </Stack>
+    </Box>
+  );
 
   const editPanel = (
     <Box sx={{ p: 2 }}>
@@ -419,79 +644,21 @@ export default function Models({ language }: ModelsProps) {
         <Grid item xs={12} md={showMediaPanel && imagesEnabled ? 7 : 12}>
           <Stack spacing={1.5}>
             <Typography variant="subtitle2">
-              {isCreating ? t(language, "modelsCreateButton") : t(language, "modelsEditSection")}
+              {t(language, "modelsEditSection")}
             </Typography>
-            <TextField label={t(language, "modelsNamePlaceholder")} value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth size="small" />
-            <FormControl fullWidth size="small">
-              <InputLabel>{t(language, "modelsCategoryPlaceholder")}</InputLabel>
-              <Select value={editCategoryId} label={t(language, "modelsCategoryPlaceholder")} onChange={(e) => setEditCategoryId(e.target.value)}>
-                {openCategories.map((cat) => <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            {!isCreating && detail?.model && editCategoryId && editCategoryId !== detail.model.categoryId && (
-              <Alert severity="warning" sx={{ py: 0.5 }}>
-                {t(language, "modelsCategoryChangeWarning")}
-              </Alert>
-            )}
-            <FormControl fullWidth size="small">
-              <InputLabel>{t(language, "modelsLevelPlaceholder")}</InputLabel>
-              <Select value={editLevelId} label={t(language, "modelsLevelPlaceholder")} onChange={(e) => setEditLevelId(e.target.value)}>
-                {levels.map((lvl) => <MenuItem key={lvl.id} value={lvl.id}>{lvl.name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <input type="checkbox" id="isTeam" checked={editIsTeam} onChange={(e) => setEditIsTeam(e.target.checked)} />
-              <Typography variant="body2" component="label" htmlFor="isTeam">
-                {t(language, "modelsIsTeamLabel")}
-              </Typography>
-            </Stack>
-            {editIsTeam && (
-              <FormControl fullWidth size="small">
-                <InputLabel>{t(language, "teamsSelectTeamLabel")}</InputLabel>
-                <Select
-                  value={editTeamId}
-                  label={t(language, "teamsSelectTeamLabel")}
-                  onChange={(e) => setEditTeamId(e.target.value)}
-                >
-                  {teams.map((team) => (
-                    <MenuItem key={team.id} value={team.id}>
-                      {team.name} — {team.displayNumber}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-            <TextField
-              label={t(language, "modelsNotesLabel")}
-              value={editNotes}
-              onChange={(e) => setEditNotes(e.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-              size="small"
-              inputProps={{ maxLength: 2000 }}
-            />
-            {isManager && (
-              <TextField
-                label={t(language, "modelsInternalNotesLabel")}
-                value={editInternalNotes}
-                onChange={(e) => setEditInternalNotes(e.target.value)}
-                fullWidth
-                multiline
-                minRows={2}
-                size="small"
-                color="warning"
-                inputProps={{ maxLength: 2000 }}
-              />
-            )}
+            {nameField}
+            {classFields}
+            {teamFields}
+            {editIsTeam && pricePreview}
+            {noteFields}
             {!isCreating && detail?.model && (
               <Stack direction="row" alignItems="center" spacing={1}>
                 <PrintActions language={language} params={{ modelId: detail.model.id }} />
               </Stack>
             )}
-            <Button variant="contained" onClick={isCreating ? createModel : saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || (isCreating && !editLevelId)} fullWidth>
-              {savingModel ? t(language, "modelsUploading") : isCreating ? t(language, "modelsCreateButton") : t(language, "modelsSaveButton")}
-            </Button>
+            <ActionButton tip={t(language, "tipModelsSave")} variant="contained" onClick={saveModelChanges} disabled={savingModel || !editName.trim() || !editCategoryId || !teamValid} fullWidth>
+              {savingModel ? t(language, "modelsUploading") : t(language, "modelsSaveButton")}
+            </ActionButton>
           </Stack>
         </Grid>
         {showMediaPanel && imagesEnabled && (
@@ -523,9 +690,9 @@ export default function Models({ language }: ModelsProps) {
                       <List dense disablePadding>
                         {detail.images.map((img) => (
                           <ListItem key={img.id} disableGutters secondaryAction={
-                            <IconButton size="small" color="error" onClick={() => deleteImage(img.id)}>
+                            <TipIconButton tip={t(language, "tipImageDelete")} aria-label={`${t(language, "actionDelete")} ${img.url.split("/").pop() || img.url}`} size="small" color="error" onClick={() => deleteImage(img.id)}>
                               <DeleteIcon fontSize="small" />
-                            </IconButton>
+                            </TipIconButton>
                           }>
                             <ListItemText
                               primary={img.url.split("/").pop() || img.url}
@@ -552,12 +719,12 @@ export default function Models({ language }: ModelsProps) {
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                       <input type="file" accept="image/*" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileChange} />
                       <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} style={{ display: "none" }} onChange={handleFileChange} />
-                      <Button variant="outlined" size="small" startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                      <ActionButton tip={t(language, "tipImageUpload")} variant="outlined" size="small" startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                         {uploading ? t(language, "modelsUploading") : t(language, "modelsUploadButton")}
-                      </Button>
-                      <Button variant="outlined" size="small" startIcon={<PhotoCameraIcon />} onClick={() => cameraInputRef.current?.click()} disabled={uploading}>
+                      </ActionButton>
+                      <ActionButton tip={t(language, "tipImageCamera")} variant="outlined" size="small" startIcon={<PhotoCameraIcon />} onClick={() => cameraInputRef.current?.click()} disabled={uploading}>
                         {t(language, "modelsCameraButton")}
-                      </Button>
+                      </ActionButton>
                     </Stack>
                     {attachName && <Typography variant="caption" color="text.secondary">{attachName}</Typography>}
                   </>
@@ -579,25 +746,29 @@ export default function Models({ language }: ModelsProps) {
           <Typography variant="h4">{t(language, "modelsTitle")}</Typography>
           <Stack direction="row" spacing={1}>
             {/* Task 06: stampa scheda */}
-            <Button variant="outlined" startIcon={<PrintIcon />} onClick={printScheda}>
+            <ActionButton tip={t(language, "tipModelsPrintCard")} data-tour="models-print" variant="outlined" startIcon={<PrintIcon />} onClick={printScheda}>
               {t(language, "modelsPrintCard")}
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate} disabled={atMaxModels}>{t(language, "modelsCreateButton")}</Button>
+            </ActionButton>
+            <ActionButton tip={t(language, "tipModelsNew")} data-tour="models-new" variant="contained" startIcon={<AddIcon />} onClick={startCreate} disabled={atMaxModels && !canEnrollOnBehalf}>{t(language, "modelsCreateButton")}</ActionButton>
           </Stack>
         </Stack>
         <Collapse in={isCreating}>
           <Paper variant="outlined" sx={{ mb: 1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
               <Typography variant="subtitle2">{t(language, "modelsCreateButton")}</Typography>
-              <IconButton size="small" onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></IconButton>
+              <TipIconButton tip={t(language, "tipPanelClose")} size="small" aria-label={t(language, "wizardClose")} onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></TipIconButton>
             </Stack>
-            {editPanel}
+            {isCreating && createPanel}
           </Paper>
         </Collapse>
-        <SectionCard title={t(language, "modelsTitle")}>
+        <SectionCard tourId="models-list" title={t(language, "modelsTitle")}>
           {loading && <PageSkeleton variant="table" rows={4} />}
           {!loading && models.length === 0 && (
-            <EmptyState title={t(language, "emptyModelsTitle")} description={t(language, "emptyModelsDescription")} />
+            <EmptyState
+              title={t(language, "emptyModelsTitle")}
+              description={t(language, "emptyModelsDescription")}
+              action={atMaxModels && !canEnrollOnBehalf ? undefined : { label: t(language, "modelsCreateButton"), tip: t(language, "tipModelsNew"), onClick: startCreate }}
+            />
           )}
           {models.length > 0 && (
             <TableContainer component={Paper} variant="outlined">
@@ -639,15 +810,15 @@ export default function Models({ language }: ModelsProps) {
                           <Chip
                             size="small"
                             variant="outlined"
-                            label={model.code || "-"}
+                            label={model.teamCode || model.code || "-"}
                             sx={{ "& .MuiChip-label": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }}
                           />
                         </TableCell>
                         <TableCell><Chip size="small" label={getCategoryName(model.categoryId)} /></TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); openModel(model.id); }} color="primary"><EditIcon fontSize="small" /></IconButton>
-                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); deleteModel(model.id); }} color="error"><DeleteIcon fontSize="small" /></IconButton>
+                            <TipIconButton tip={t(language, "tipModelEdit")} size="small" aria-label={`${t(language, "modelsEditSection")} ${model.name}`} onClick={(e) => { e.stopPropagation(); openModel(model.id); }} color="primary"><EditIcon fontSize="small" /></TipIconButton>
+                            <TipIconButton tip={t(language, "tipModelDelete")} size="small" aria-label={`${t(language, "confirmDelete")} ${model.name}`} onClick={(e) => { e.stopPropagation(); deleteModel(model.id); }} color="error"><DeleteIcon fontSize="small" /></TipIconButton>
                           </Stack>
                         </TableCell>
                       </TableRow>

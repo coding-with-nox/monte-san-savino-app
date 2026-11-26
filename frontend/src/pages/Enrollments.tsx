@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from "react";
 import {
   Box,
-  Button,
   Chip,
   Collapse,
   FormControl,
   Grid,
-  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -23,6 +21,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import DownloadIcon from "@mui/icons-material/Download";
+import PrintIcon from "@mui/icons-material/Print";
 import { api } from "../lib/api";
 import { getRole, roleAtLeast } from "../lib/auth";
 import { downloadAuthenticatedFile } from "../lib/download";
@@ -31,6 +30,11 @@ import PageContainer from "../components/PageContainer";
 import EmptyState from "../components/EmptyState";
 import AbsentToggle from "../components/AbsentToggle";
 import useToast from "../components/useToast";
+import SectionCard from "../components/SectionCard";
+import PriceSummary from "../components/PriceSummary";
+import { openHtmlExport } from "../lib/exports";
+import { EventPricing, PricingResponse } from "../lib/pricing";
+import { ActionButton, TipIconButton } from "../components/ActionButton";
 
 type Enrollment = {
   id: string;
@@ -70,6 +74,8 @@ export default function Enrollments({ language }: EnrollmentsProps) {
   const [saving, setSaving] = useState(false);
   const [exportingMine, setExportingMine] = useState(false);
   const [exportingAdmin, setExportingAdmin] = useState(false);
+  const [pricing, setPricing] = useState<EventPricing[]>([]);
+  const [printingId, setPrintingId] = useState<string | null>(null);
 
   async function load() {
     setEnrollments(await api<Enrollment[]>("/enrollments"));
@@ -119,6 +125,27 @@ export default function Enrollments({ language }: EnrollmentsProps) {
     }
   }
 
+  // The fee breakdown is optional information: the page works without it.
+  async function loadPricing() {
+    try {
+      const res = await api<PricingResponse>("/pricing/me");
+      setPricing(res?.events ?? []);
+    } catch {
+      setPricing([]);
+    }
+  }
+
+  async function printEnrollment(id: string) {
+    setPrintingId(id);
+    try {
+      await openHtmlExport("/exports/model-card/pdf", { eventId: id });
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
   async function enroll() {
     setSaving(true);
     try {
@@ -134,6 +161,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
       setModelId("");
       setCategoryId("");
       await load();
+      await loadPricing();
       if (isManager) {
         await loadAdminEnrollments();
       }
@@ -183,6 +211,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
     loadEvents();
     loadModels();
     loadCategories();
+    loadPricing();
     loadUsers().catch((err) => toast.error(err?.message ?? String(err)));
   }, []);
 
@@ -255,9 +284,9 @@ export default function Enrollments({ language }: EnrollmentsProps) {
           </FormControl>
         </Grid>
         <Grid item xs={12} md={2}>
-          <Button variant="contained" onClick={enroll} fullWidth disabled={saving || !eventId}>
+          <ActionButton tip={t(language, "tipEnrollSubmit")} variant="contained" onClick={enroll} fullWidth disabled={saving || !eventId}>
             {saving ? "..." : t(language, "enrollmentsButton")}
-          </Button>
+          </ActionButton>
         </Grid>
       </Grid>
     </Box>
@@ -268,6 +297,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
       <EmptyState
         title={t(language, isPast ? "emptyEnrollmentsPastTitle" : "emptyEnrollmentsActiveTitle")}
         description={t(language, "emptyEnrollmentsDescription")}
+        action={isPast ? undefined : { label: t(language, "enrollmentsEmptyAction"), tip: t(language, "tipEnrollNew"), onClick: startCreate }}
       />
     ) : (
       <TableContainer component={Paper} variant="outlined">
@@ -292,7 +322,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                   {enrollment.checkedIn ? (
                     <Chip label={t(language, "enrollmentsCheckedIn")} size="small" color="success" variant="outlined" />
                   ) : (
-                    <Chip label="No" size="small" variant="outlined" />
+                    <Chip label={t(language, "enrollmentsNotCheckedIn")} size="small" variant="outlined" />
                   )}
                 </TableCell>
               </TableRow>
@@ -310,17 +340,19 @@ export default function Enrollments({ language }: EnrollmentsProps) {
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
           <Typography variant="h4">{t(language, "enrollmentsTitle")}</Typography>
           <Stack direction="row" spacing={1}>
-            <Button
+            <ActionButton
+              tip={t(language, "tipExportMine")}
+              data-tour="enr-export"
               variant="outlined"
               startIcon={<DownloadIcon />}
               onClick={exportMyEnrollments}
               disabled={exportingMine}
             >
               {exportingMine ? "..." : t(language, "enrollmentsExportMine")}
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
+            </ActionButton>
+            <ActionButton tip={t(language, "tipEnrollNew")} data-tour="enr-new" variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
               {t(language, "enrollmentsButton")}
-            </Button>
+            </ActionButton>
           </Stack>
         </Stack>
 
@@ -328,25 +360,26 @@ export default function Enrollments({ language }: EnrollmentsProps) {
           <Paper variant="outlined" sx={{ mb: 1 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
               <Typography variant="subtitle2">{t(language, "enrollmentsButton")}</Typography>
-              <IconButton size="small" onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></IconButton>
+              <TipIconButton tip={t(language, "tipPanelClose")} size="small" aria-label={t(language, "wizardClose")} onClick={() => setIsCreating(false)}><CloseIcon fontSize="small" /></TipIconButton>
             </Stack>
             {createPanel}
           </Paper>
         </Collapse>
 
         {isManager && (
-          <Paper variant="outlined" sx={{ p: 2 }}>
+          <Paper data-tour="enr-manage" variant="outlined" sx={{ p: 2 }}>
             <Stack spacing={2}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
                 <Typography variant="h6">{t(language, "enrollmentsManageTitle")}</Typography>
-                <Button
+                <ActionButton
+                  tip={t(language, "tipExportEvent")}
                   variant="outlined"
                   startIcon={<DownloadIcon />}
                   onClick={exportEnrollmentsByEvent}
                   disabled={exportingAdmin || !adminEventId}
                 >
-                  {exportingAdmin ? "..." : "Export iscrizioni evento"}
-                </Button>
+                  {exportingAdmin ? "..." : t(language, "enrollmentsExportEvent")}
+                </ActionButton>
               </Stack>
               <FormControl size="small" sx={{ maxWidth: 360 }}>
                 <InputLabel>{t(language, "enrollmentsEventSelect")}</InputLabel>
@@ -365,7 +398,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Partecipante</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsParticipantColumn")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsEventSelect")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsModelColumn")}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{t(language, "enrollmentsCategoryColumn")}</TableCell>
@@ -380,7 +413,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
                         <TableCell>{getEventName(enrollment.eventId)}</TableCell>
                         <TableCell>{getModelName(enrollment.modelId)}</TableCell>
                         <TableCell>{getCategoryName(enrollment.categoryId)}</TableCell>
-                        <TableCell>{enrollment.checkedIn ? "yes" : "no"}</TableCell>
+                        <TableCell>{t(language, enrollment.checkedIn ? "enrollmentsCheckedIn" : "enrollmentsNotCheckedIn")}</TableCell>
                         <TableCell>
                           <AbsentToggle
                             language={language}
@@ -407,7 +440,29 @@ export default function Enrollments({ language }: EnrollmentsProps) {
           </Paper>
         )}
 
-        <Typography variant="h6">{t(language, "enrollmentsListTitle")}</Typography>
+        {pricing.map((p) => (
+          <SectionCard
+            tourId="enr-fee"
+            key={p.eventId}
+            title={`${t(language, "priceSummaryTitle")}: ${p.eventName}`}
+            action={
+              <ActionButton
+                tip={t(language, "tipPrintEnrollment")}
+                variant="outlined"
+                size="small"
+                startIcon={<PrintIcon />}
+                onClick={() => printEnrollment(p.eventId)}
+                disabled={printingId !== null}
+              >
+                {t(language, "enrollmentsPrint")}
+              </ActionButton>
+            }
+          >
+            <PriceSummary language={language} pricing={p} />
+          </SectionCard>
+        ))}
+
+        <Typography data-tour="enr-list" variant="h6">{t(language, "enrollmentsListTitle")}</Typography>
         {renderTable(activeEnrollments, false)}
 
         {pastEnrollments.length > 0 && (

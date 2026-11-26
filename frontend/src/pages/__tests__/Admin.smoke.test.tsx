@@ -30,7 +30,7 @@ describe("Admin (smoke)", () => {
 
   it("renders the tabs and the events from the API", async () => {
     renderWithProviders(<MemoryRouter><Admin language="en" /></MemoryRouter>);
-    expect(await screen.findAllByRole("tab")).toHaveLength(5);
+    expect(await screen.findAllByRole("tab")).toHaveLength(6);
     expect((await screen.findAllByText("MSS 2026")).length).toBeGreaterThan(0);
   });
 

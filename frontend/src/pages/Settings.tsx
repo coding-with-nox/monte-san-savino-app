@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  Button,
+  Box,
   ButtonGroup,
   FormControl,
   InputLabel,
@@ -21,10 +21,12 @@ import {
 } from "@mui/material";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
+import { DEFAULT_THEME_PRESET, isThemePreset, ThemePreset } from "../lib/theme";
 import ActiveSwitch from "../lib/ActiveSwitch";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import useToast from "../components/useToast";
+import { ActionButton } from "../components/ActionButton";
 
 interface SettingsProps {
   language: Language;
@@ -35,14 +37,18 @@ type SettingsTab = "general" | "theme" | "export" | "team";
 export default function Settings({ language }: SettingsProps) {
   const toast = useToast();
   const [settings, setSettings] = useState<Record<string, string>>({});
-  const [tab, setTab] = useState<SettingsTab>("general");
+  // "?tab=theme" (help page) opens that tab.
+  const [tab, setTab] = useState<SettingsTab>(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    return wanted === "theme" || wanted === "export" || wanted === "team" ? wanted : "general";
+  });
 
   const [prefixDraft, setPrefixDraft] = useState("");
   const [digitsDraft, setDigitsDraft] = useState("5");
   const [sheetNameDraft, setSheetNameDraft] = useState("");
   const [filePrefixDraft, setFilePrefixDraft] = useState("");
   const [themeModeDraft, setThemeModeDraft] = useState<"light" | "dark">("light");
-  const [themePresetDraft, setThemePresetDraft] = useState<"violet" | "ocean" | "forest" | "mss">("violet");
+  const [themePresetDraft, setThemePresetDraft] = useState<ThemePreset>(DEFAULT_THEME_PRESET);
 
   const [maxModelsDraft, setMaxModelsDraft] = useState("5");
 
@@ -70,9 +76,7 @@ export default function Settings({ language }: SettingsProps) {
     setSheetNameDraft(res.excelSheetName ?? "Export");
     setFilePrefixDraft(res.excelFilePrefix ?? "contest-export");
     setThemeModeDraft(res.appTheme === "dark" ? "dark" : "light");
-    setThemePresetDraft(
-      res.themePreset === "ocean" || res.themePreset === "forest" || res.themePreset === "mss" ? res.themePreset : "violet"
-    );
+    setThemePresetDraft(isThemePreset(res.themePreset) ? res.themePreset : DEFAULT_THEME_PRESET);
   }
 
   async function toggle(key: string) {
@@ -243,7 +247,7 @@ export default function Settings({ language }: SettingsProps) {
       <Stack spacing={2}>
         <Typography variant="h4">{t(language, "settingsTitle")}</Typography>
 
-        <Paper variant="outlined">
+        <Paper data-tour="settings-tabs" variant="outlined">
           <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
             <Tab value="general" label={t(language, "settingsTabGeneral")} />
             <Tab value="theme" label={t(language, "settingsTabTheme")} />
@@ -253,7 +257,8 @@ export default function Settings({ language }: SettingsProps) {
         </Paper>
 
         {tab === "general" && (
-          <SectionCard title={t(language, "settingsTabGeneral")}>
+          <Box data-tour-scope="settings-general">
+          <SectionCard tourId="settings-general" title={t(language, "settingsTabGeneral")}>
             <TableContainer>
               <Table>
                 <TableHead>
@@ -273,9 +278,9 @@ export default function Settings({ language }: SettingsProps) {
                           onChange={(event) => setAppNameDraft(event.target.value)}
                           sx={{ minWidth: 220 }}
                         />
-                        <Button variant="contained" onClick={saveAppName} disabled={savingAppName || !appNameDraft.trim()}>
+                        <ActionButton tip={t(language, "tipSaveAppName")} variant="contained" onClick={saveAppName} disabled={savingAppName || !appNameDraft.trim()}>
                           {savingAppName ? "..." : t(language, "profileSaveButton")}
-                        </Button>
+                        </ActionButton>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -285,6 +290,7 @@ export default function Settings({ language }: SettingsProps) {
                       <ActiveSwitch
                         checked={settings.modelImages === "true"}
                         onChange={() => toggle("modelImages")}
+                        tip={t(language, "tipToggleImages")}
                         activeLabel={t(language, "adminUserActive")}
                         inactiveLabel={t(language, "adminUserInactive")}
                       />
@@ -300,9 +306,9 @@ export default function Settings({ language }: SettingsProps) {
                           onChange={(event) => setPrefixDraft(event.target.value)}
                           sx={{ minWidth: 180 }}
                         />
-                        <Button variant="contained" onClick={savePrefix} disabled={savingPrefix || !prefixDraft.trim()}>
+                        <ActionButton tip={t(language, "tipSavePrefix")} variant="contained" onClick={savePrefix} disabled={savingPrefix || !prefixDraft.trim()}>
                           {savingPrefix ? "..." : t(language, "profileSaveButton")}
-                        </Button>
+                        </ActionButton>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -318,9 +324,9 @@ export default function Settings({ language }: SettingsProps) {
                           inputProps={{ min: 1, max: 10 }}
                           sx={{ width: 120 }}
                         />
-                        <Button variant="contained" onClick={saveDigits} disabled={savingDigits || !digitsDraft.trim()}>
+                        <ActionButton tip={t(language, "tipSaveDigits")} variant="contained" onClick={saveDigits} disabled={savingDigits || !digitsDraft.trim()}>
                           {savingDigits ? "..." : t(language, "profileSaveButton")}
-                        </Button>
+                        </ActionButton>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -336,9 +342,9 @@ export default function Settings({ language }: SettingsProps) {
                           inputProps={{ min: 1 }}
                           sx={{ width: 120 }}
                         />
-                        <Button variant="contained" onClick={saveMaxModels} disabled={savingMaxModels || !maxModelsDraft.trim()}>
+                        <ActionButton tip={t(language, "tipSaveMaxModels")} variant="contained" onClick={saveMaxModels} disabled={savingMaxModels || !maxModelsDraft.trim()}>
                           {savingMaxModels ? "..." : t(language, "profileSaveButton")}
-                        </Button>
+                        </ActionButton>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -346,10 +352,12 @@ export default function Settings({ language }: SettingsProps) {
               </Table>
             </TableContainer>
           </SectionCard>
+          </Box>
         )}
 
         {tab === "theme" && (
-          <SectionCard title={t(language, "settingsTabTheme")}>
+          <Box data-tour-scope="settings-theme">
+          <SectionCard tourId="settings-theme" title={t(language, "settingsTabTheme")}>
             <Stack spacing={2}>
               <FormControl fullWidth>
                 <InputLabel>{t(language, "settingsThemeMode")}</InputLabel>
@@ -368,8 +376,9 @@ export default function Settings({ language }: SettingsProps) {
                 <Select
                   value={themePresetDraft}
                   label={t(language, "settingsThemePreset")}
-                  onChange={(event) => setThemePresetDraft(event.target.value as "violet" | "ocean" | "forest" | "mss")}
+                  onChange={(event) => setThemePresetDraft(event.target.value as ThemePreset)}
                 >
+                  <MenuItem value="savino">{t(language, "settingsThemePresetSavino")}</MenuItem>
                   <MenuItem value="violet">{t(language, "settingsThemePresetViolet")}</MenuItem>
                   <MenuItem value="ocean">{t(language, "settingsThemePresetOcean")}</MenuItem>
                   <MenuItem value="forest">{t(language, "settingsThemePresetForest")}</MenuItem>
@@ -378,16 +387,18 @@ export default function Settings({ language }: SettingsProps) {
               </FormControl>
 
               <Stack direction="row" justifyContent="flex-end">
-                <Button variant="contained" onClick={saveTheme} disabled={savingTheme}>
+                <ActionButton tip={t(language, "tipSaveTheme")} variant="contained" onClick={saveTheme} disabled={savingTheme}>
                   {savingTheme ? "..." : t(language, "profileSaveButton")}
-                </Button>
+                </ActionButton>
               </Stack>
             </Stack>
           </SectionCard>
+          </Box>
         )}
 
         {tab === "export" && (
-          <SectionCard title={t(language, "settingsTabExport")}>
+          <Box data-tour-scope="settings-export">
+          <SectionCard tourId="settings-export" title={t(language, "settingsTabExport")}>
             <TableContainer>
               <Table>
                 <TableHead>
@@ -403,6 +414,7 @@ export default function Settings({ language }: SettingsProps) {
                       <ActiveSwitch
                         checked={settings.exportIncludeModelCode !== "false"}
                         onChange={() => toggle("exportIncludeModelCode")}
+                        tip={t(language, "tipToggleExportCode")}
                         activeLabel={t(language, "adminUserActive")}
                         inactiveLabel={t(language, "adminUserInactive")}
                       />
@@ -414,6 +426,7 @@ export default function Settings({ language }: SettingsProps) {
                       <ActiveSwitch
                         checked={settings.exportIncludeModelDescription !== "false"}
                         onChange={() => toggle("exportIncludeModelDescription")}
+                        tip={t(language, "tipToggleExportDescription")}
                         activeLabel={t(language, "adminUserActive")}
                         inactiveLabel={t(language, "adminUserInactive")}
                       />
@@ -425,6 +438,7 @@ export default function Settings({ language }: SettingsProps) {
                       <ActiveSwitch
                         checked={settings.exportIncludeParticipantEmail !== "false"}
                         onChange={() => toggle("exportIncludeParticipantEmail")}
+                        tip={t(language, "tipToggleExportEmail")}
                         activeLabel={t(language, "adminUserActive")}
                         inactiveLabel={t(language, "adminUserInactive")}
                       />
@@ -451,13 +465,14 @@ export default function Settings({ language }: SettingsProps) {
                           onChange={(event) => setFilePrefixDraft(event.target.value)}
                           sx={{ minWidth: 220 }}
                         />
-                        <Button
+                        <ActionButton
+                          tip={t(language, "tipSaveExcel")}
                           variant="contained"
                           onClick={saveExcelLayout}
                           disabled={savingExcelLayout || !sheetNameDraft.trim() || !filePrefixDraft.trim()}
                         >
                           {savingExcelLayout ? "..." : t(language, "profileSaveButton")}
-                        </Button>
+                        </ActionButton>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -465,34 +480,39 @@ export default function Settings({ language }: SettingsProps) {
               </Table>
             </TableContainer>
           </SectionCard>
+          </Box>
         )}
 
         {tab === "team" && (
-          <SectionCard title={t(language, "settingsTabTeam")}>
+          <Box data-tour-scope="settings-team">
+          <SectionCard tourId="settings-team" title={t(language, "settingsTabTeam")}>
             <Table>
               <TableBody>
                 <TableRow>
                   <TableCell><Typography>{t(language, "teamsNameLabel")}</Typography></TableCell>
                   <TableCell align="right">
                     <ButtonGroup size="small" variant="outlined">
-                      <Button
+                      <ActionButton
+                        tip={t(language, "tipTeamNameManual")}
                         onClick={() => { setTeamNameMode("manual"); localStorage.setItem("teamNameMode", "manual"); }}
                         variant={teamNameMode === "manual" ? "contained" : "outlined"}
                       >
                         {t(language, "teamsNameManual")}
-                      </Button>
-                      <Button
+                      </ActionButton>
+                      <ActionButton
+                        tip={t(language, "tipTeamNameAuto")}
                         onClick={() => { setTeamNameMode("auto"); localStorage.setItem("teamNameMode", "auto"); }}
                         variant={teamNameMode === "auto" ? "contained" : "outlined"}
                       >
                         {t(language, "teamsNameAuto")}
-                      </Button>
+                      </ActionButton>
                     </ButtonGroup>
                   </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           </SectionCard>
+          </Box>
         )}
       </Stack>
     </PageContainer>

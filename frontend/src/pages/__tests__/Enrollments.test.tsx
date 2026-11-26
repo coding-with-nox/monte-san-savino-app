@@ -150,8 +150,37 @@ describe("Enrollments", () => {
     setup([]);
     renderWithProviders(<Enrollments language="en" />);
     await screen.findByText("mario@example.com");
-    const btn = screen.getByRole("button", { name: /export iscrizioni evento/i });
+    const btn = screen.getByRole("button", { name: /export event enrollments/i });
     expect(btn).toBeDisabled();
     expect(within(document.body).queryByText("Export failed")).not.toBeInTheDocument();
+  });
+
+  it("shows the fee breakdown received from the backend and prints the enrollment", async () => {
+    setup([]);
+    const base = apiMock.getMockImplementation()!;
+    apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/pricing/me")
+        return {
+          currency: "EUR",
+          totalCents: 4000,
+          events: [{
+            eventId: "e1", eventName: "MSS 2026", baseFeeCents: 2500, coauthorsTotalCents: 1500, totalCents: 4000,
+            modelCount: 1, paidModelCount: 1, freeModels: [],
+            coauthorLines: [{ modelId: "m1", modelCode: "173T1", name: "Ada", surname: "Rossi", roleName: "Painter", priceCents: 1500 }]
+          }]
+        };
+      if (path.startsWith("/exports/model-card/pdf")) return "<html></html>";
+      return base(path, init);
+    });
+    window.URL.createObjectURL = vi.fn(() => "blob:x");
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    const user = userEvent.setup();
+    renderWithProviders(<Enrollments language="en" />);
+    const summary = await screen.findByTestId("price-summary");
+    expect(summary).toHaveTextContent("Ada Rossi, Painter (173T1)");
+    expect(summary).toHaveTextContent("€40.00");
+    await user.click(screen.getByRole("button", { name: "Print enrollment" }));
+    expect(apiMock.mock.calls.some((c) => c[0] === "/exports/model-card/pdf?eventId=e1")).toBe(true);
+    open.mockRestore();
   });
 });

@@ -13,10 +13,15 @@ for pasting a JWT.
   Endpoints with min role `user` simply require any authenticated account.
 - **Tenancy**: every request resolves a tenant DB via `tenantMiddleware`
   (selected by `PG_DB`).
+- **Roles**: `user < staff < judge < jury_president < manager < admin`.
+- **Money**: amounts are integer **cents**, currency `EUR`.
 - **Errors**: failures return `{ "error": "<message>" }` with an appropriate
   status (`400` validation, `401` unauthenticated/invalid credentials, `403`
   forbidden, `404` not found, `409` conflict).
 - IDs are UUID strings unless noted. Request bodies are JSON.
+- **Permissions**: besides the role hierarchy, some actions are granted per role
+  (see [Permissions](#permissions)). Currently only `enrollOnBehalf`.
+- **Error codes**: some errors also carry `code` (see [Error codes](#error-codes)).
 
 ---
 
@@ -107,10 +112,10 @@ Min role: `user` (operations are scoped to the authenticated owner). Sources:
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | `/models?search=<q>` | — | array of `{ id, name, description, code, categoryId, levelId, imageUrl, isTeam, displayNumber }` (code is formatted string or null) |
-| POST | `/models` | `{ name, categoryId, levelId, description?, imageUrl?, isTeam?, teamMembers?: [{ name, surname, role }] }` | `{ id, code }` |
-| GET | `/models/:modelId` | — | `{ model, images, teamMembers }` or `404` |
-| PUT | `/models/:modelId` | `{ name?, categoryId?, levelId?, description?, imageUrl?, isTeam?, teamMembers? }` | `{ "updated": true }` |
+| GET | `/models?search=<q>` | — | array of `{ id, name, description, code, categoryId, levelId, imageUrl, isTeam, teamId, teamCode, displayNumber }` (code is formatted string or null) |
+| POST | `/models` | `{ name, categoryId, levelId, description?, notes?, imageUrl?, isTeam?, teamMembers?: [{ name, surname, email?, roleId }], userId? }` | `{ id, code }` |
+| GET | `/models/:modelId` | — | `{ model, images, teamMembers: [{ id, modelId, name, surname, role, roleId, email }] }` or `404` |
+| PUT | `/models/:modelId` | `{ name?, categoryId?, levelId?, description?, notes?, imageUrl?, isTeam?, teamMembers? }` | `{ "updated": true }` |
 | DELETE | `/models/:modelId` | — | `{ "deleted": true }` |
 | POST | `/models/:modelId/images` | `{ url }` | `{ id }` |
 | DELETE | `/models/:modelId/images/:imageId` | — | `{ "deleted": true }` |
@@ -129,7 +134,40 @@ Min role: `user` (operations are scoped to the authenticated owner). Sources:
 ```
 
 Model display codes are formatted from `code` + category seq + `displayNumber`
-using tenant settings (prefix/digits), see `model-code.ts`.
+using tenant settings (prefix/digits), see `model-code.ts`. Team models use
+`<participant number>T<n>` instead (e.g. `173T1`), in every view and export.
+
+`notes` may be `null` on `POST` and `PUT` (on `PUT` it clears the note).
+
+**Enrolling on behalf of another participant** (`POST /models` with `userId`):
+- `userId` (uuid) is the owner; omitted or equal to the caller = own model.
+- Needs the `enrollOnBehalf` permission. The owner gets the model, code, display
+  number, team code, model limit and fee. A legacy `teamId` must belong to the owner.
+- `403 { code: "PERMISSION_DENIED" }` · `404 { code: "USER_NOT_FOUND" }`
+  (unknown or disabled user) · `422` if `userId` is not a uuid.
+- The enrollment window depends on the **role**: only `manager`/`admin` bypass it
+  (`403 { "error": "Enrollment period is closed" }`), the permission alone does not.
+- The created model is not listed by the caller's `GET /models`, and the
+  `/models/:modelId*` routes stay owner-only. `manager`+ can use
+  `/admin/models`; lower roles holding the permission cannot edit or delete it,
+  nor upload images for it.
+
+**Inline team** (`POST` / `PUT`):
+- `roleId` comes from `GET /public/member-roles`; free-text `role` is accepted
+  only for older clients. Omit `email` when empty.
+- `teamId` is still accepted (legacy) but no longer required.
+- On `PUT`, `teamMembers` replaces the list; `isTeam: false` clears it.
+- `422 { error, code: "TEAM_MEMBERS_REQUIRED" | "INVALID_MEMBER_ROLE" }`
+- `409 { error, code: "MODEL_LIMIT", limit: 50 }` (max 50 models per
+  participant per event).
+
+```json
+// POST /models
+{ "name": "Diorama", "categoryId": "…", "levelId": "…", "isTeam": true,
+  "teamMembers": [{ "name": "Anna", "surname": "Bianchi", "roleId": "…" }] }
+// → 200
+{ "id": "…", "code": "173T1" }
+```
 
 ---
 
@@ -142,9 +180,21 @@ Sources: `enrollment.routes.ts`, `event.routes.ts`.
 | POST | `/events/:eventId/enroll` | user | `{ modelId?, categoryId? }` | `{ id, status: "accepted" }` (`400 Already enrolled` for duplicate user+event+model) |
 | GET | `/enrollments` | user | — | array of own registrations |
 | GET | `/enrollments/:enrollmentId` | user | — | registration object or `404` |
-| GET | `/admin/enrollments?eventId=<id>` | manager | — | all registrations (optionally by event) |
+| GET | `/admin/enrollments?eventId=<id>` | jury_president | — | all registrations (optionally by event); `403 SECTION_HIDDEN` if `dashboard` is hidden for jury_president |
 
 Registration shape: `{ id, userId, eventId, modelId, categoryId, status, checkedIn }`.
+
+**Enrolling another user's model**: allowed to `manager`/`admin` and to roles with
+`enrollOnBehalf`; the registration is owned by the **model owner**. Without either,
+another user's `modelId` answers `404 NOT_FOUND`. Only `manager`/`admin` bypass
+the enrollment window.
+
+| Status | `code` | Case |
+|--------|--------|------|
+| 403 | `ENROLLMENT_CLOSED` | enrollment window over |
+| 404 | `NOT_FOUND` | event or model not found / not accessible |
+| 409 | `EVENT_CLOSED`, `CATEGORY_CLOSED` | event or category closed |
+| 422 | `INVALID_CATEGORY`, `CATEGORY_EVENT_MISMATCH`, `CATEGORY_MODEL_MISMATCH` | inconsistent category |
 
 ---
 
@@ -177,6 +227,8 @@ Source: `payment.routes.ts`.
 ## Events / Categories / Levels / Sponsors / Member-roles
 
 ### Events (`/events`) — min role `manager` — `event.routes.ts`
+`jury_president` reads events via `GET /public/events?status=all`.
+
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | GET | `/events` | — | array of events |
@@ -203,11 +255,18 @@ Source: `payment.routes.ts`.
 | GET | `/public/member-roles` | `member-roles.routes.ts` |
 
 ### Levels (`/admin/levels`) — min role `manager` — `levels.routes.ts`
-GET `/`, POST `/` `{ name, sortOrder? }`, PUT `/:id` `{ name?, sortOrder? }`,
-DELETE `/:id`.
+GET `/` → `[{ id, name, sortOrder, freeToEnter }]`,
+POST `/` `{ name, sortOrder?, freeToEnter? }`,
+PUT `/:id` `{ name?, sortOrder?, freeToEnter? }`, DELETE `/:id`.
+Models of a `freeToEnter` level cost nothing.
 
 ### Member roles (`/admin/member-roles`) — min role `manager` — `member-roles.routes.ts`
-GET `/`, POST `/` `{ name }`, PUT `/:id` `{ name? }`, DELETE `/:id`.
+GET `/` → `[{ id, name, price }]` (same shape as `GET /public/member-roles`),
+POST `/` `{ name, price? }`, PUT `/:id` `{ name?, price? }`, DELETE `/:id`.
+`price` is the coauthor price in cents (0–1000000, default 1500).
+Names are unique ignoring case and surrounding spaces: `POST`/`PUT` answer
+`409 { "error": "Role name already exists" }`. At startup existing duplicates are
+merged and coauthors remapped.
 
 ### Sponsors (`/sponsors`) — min role `manager` — `sponsor.routes.ts`
 | Method | Path | Body |
@@ -230,12 +289,14 @@ Min role: `judge`. Sources: `judge.routes.ts`, `modification-request.routes.ts`.
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | GET | `/judge/events` | — | `[{ eventId, eventName }]` (assigned events) |
-| GET | `/judge/models?eventId=&search=` | — | judgeable models incl. `currentRank`, `voteCount` |
+| GET | `/judge/models?eventId=&search=` | — | judgeable models incl. `currentRank`, `voteCount`, `teamCode` |
 | GET | `/judge/models/:modelId` | — | `{ model, images }` |
 | GET | `/judge/models/:modelId/votes` | — | `[{ id, rank, createdAt }]` (this judge's history) |
 | GET | `/judge/participants/:userId` | — | `{ profile, registrations }` |
 | GET | `/judge/categories?eventId=<id>` | — | `[{ id, name }]` |
-| POST | `/judge/vote` | `{ modelId, rank: 0\|1\|2\|3 }` | `{ voteId, updated }` |
+| POST | `/judge/vote` | `{ modelId, rank: 0..4 }` | `{ voteId, updated }` |
+| GET | `/judge/displays?eventId=&categoryId=` | — | displays in the judge's scope (see below) |
+| POST | `/judge/displays/vote` | `{ eventId, displayNumber, rank: 0..4 }` | `{ eventId, displayNumber, rank, votes, skippedClosedModelIds }` |
 | GET | `/judge/modification-requests` | — | this judge's category-change requests |
 | POST | `/judge/modification-requests` | `{ modelId, reason, suggestedCategoryId? }` | `{ id }` |
 
@@ -246,15 +307,33 @@ Min role: `judge`. Sources: `judge.routes.ts`, `modification-request.routes.ts`.
 { "voteId": "…", "updated": false }
 ```
 
+### Display voting
+A *display* is the set of models of one event sharing a `displayNumber`.
+
+```
+GET /judge/displays → [{ eventId, displayNumber, votable, currentRank,
+  models: [{ id, name, code, categoryId, categoryName, categoryStatus, imageUrl, currentRank }] }]
+```
+
+- `votable` is false when every category is closed. The display `currentRank` is
+  set only when all its models share it, otherwise `null`.
+- `POST /judge/displays/vote` applies the rank to every in-scope model in one
+  transaction. `votes` is `[{ modelId, voteId, updated }]`; models of closed
+  categories are listed in `skippedClosedModelIds`.
+- `404` unknown display · `403` no model in the judge's scope ·
+  `409 CATEGORY_CLOSED` all categories closed.
+
 ---
 
 ## Awards routes
 
-Sources: `award.routes.ts`, `special-mention.routes.ts`. Min role: `manager`.
+Sources: `award.routes.ts`, `special-mention.routes.ts`. Min role: `manager`,
+except `/awards/monitoring/:eventId`.
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | GET | `/awards/events/:eventId` | — | ranking: `[{ modelId, modelName, categoryId, averageRank, votes }]` sorted desc |
+| GET | `/awards/monitoring/:eventId` | — | live judging progress per category. Min role `jury_president`; `403 SECTION_HIDDEN` if `dashboard` is hidden |
 | GET | `/awards/mentions` | — | all special mentions |
 | GET | `/awards/mentions/events/:eventId` | — | mentions for event |
 | POST | `/awards/mentions` | `{ eventId, modelId, title, description? }` | `{ id }` |
@@ -272,11 +351,24 @@ Sources: `award.routes.ts`, `special-mention.routes.ts`. Min role: `manager`.
 | GET | `/admin/users/:userId/profile` | — | full profile or `404` |
 | PUT | `/admin/users/:userId/profile` | profile fields | `{ "updated": true }` |
 | PATCH | `/admin/users/:userId` | `{ role?, isActive? }` | `{ "updated": true }` |
-| POST | `/admin/users/:userId/reset-password` | — | `{ temporaryPassword, emailSent }` |
+| POST | `/admin/users/:userId/reset-password` | — | `{ emailSent: true }` (temporary password sent by email only; `503 { error, emailSent: false }` and no change if email is unavailable) |
+
+#### `GET /admin/users/enrollable?q=<text>`
+Participants a model can be enrolled for. Min role `user` **plus** the
+`enrollOnBehalf` permission (not the manager role), else
+`403 { "error": "Forbidden", "code": "PERMISSION_DENIED" }`.
+
+- `q` (optional, max 200): matches email, "first last" or "last first"
+  (substring, case-insensitive; `%`, `_` are literal) and, when numeric, also the
+  exact participant number. Without `q` all active users are returned (not paginated).
+- `200`: `[{ id, email, firstName|null, lastName|null, participantNumber }]`,
+  active users only, ordered by last name, first name, email.
 
 ### Admin models (`/admin/models`) — min role `manager` — `admin-models.routes.ts`
-GET `/?eventId=<id>`, PUT `/:modelId` `{ name?, categoryId?, description?, code?, imageUrl? }`,
-DELETE `/:modelId`.
+GET `/?eventId=<id>`, PUT `/:modelId`
+`{ name?, categoryId?, description?, code?, imageUrl?, notes?, internalNotes? }`,
+DELETE `/:modelId` (does not remove the model's coauthors and images;
+`DELETE /models/:modelId` by the owner does).
 
 ### Judge assignments (`/admin/judges`) — min role `manager` — `judge-admin.routes.ts`
 | Method | Path | Body |
@@ -289,11 +381,67 @@ DELETE `/:modelId`.
 ### Modification requests (`/admin/modification-requests`) — min role `manager`
 GET `/?modelId=<id>`, PATCH `/:requestId/status` `{ status: pending\|resolved\|rejected }`.
 
+### Statistics (`/admin/stats`) — `stats.routes.ts`
+`GET /admin/stats/overview?eventId=<id>` — min role `jury_president`;
+`403 { code: "SECTION_HIDDEN" }` if `stats` is hidden for jury_president.
+
 ### Settings
 | Method | Path | Min role | Body | Response |
 |--------|------|----------|------|----------|
-| GET | `/settings` | user | — | settings map (defaults merged) incl. `modelImages, printCodePrefix, printCodeDigits, appTheme, themePreset, export*` |
-| PUT | `/admin/settings` | admin | `Record<string,string>` | `{ "updated": true }` |
+| GET | `/settings` | user | — | settings map (defaults merged) incl. `modelImages, printCodePrefix, printCodeDigits, appTheme, themePreset` (default `savino`), `baseFeeCents` (default `"2500"`), `export*` |
+| PUT | `/admin/settings` | admin | `Record<string,string>` | `{ "updated": true }`; `422` if `baseFeeCents` is not a non-negative integer |
+| GET | `/settings/section-visibility` | user | — | `{ role, sections: [], permissions: [] }` for the caller |
+| GET | `/admin/settings/section-visibility` | admin | — | `{ sections, roles, visibility: { <role>: [] }, permissions: { <role>: [] }, availablePermissions: [] }` |
+| PUT | `/admin/settings/section-visibility` | admin | `{ visibility: { <role>: [] }, permissions?: { <role>: [] } }` (both partial by role; `visibility` is required, may be `{}`) | `{ updated, visibility, permissions }`; `422` unknown role/section |
+| GET | `/settings/prize-order` | user | — | `{ order: [] }` (first = presented first) |
+| PUT | `/admin/settings/prize-order` | admin | `{ order: [] }` (1–20 labels, max 60 chars each) | `{ updated, order }` |
+
+**Sections:** `dashboard, stats, judge, podium, enrollments, models, labels,
+checkin, users, teams, settings, admin`. Defaults: `user` = dashboard, models,
+enrollments, teams; `staff` = + checkin; `judge` = + judge; `jury_president` =
++ stats; `manager` = all but settings; `admin` = all (cannot be restricted).
+Visibility only narrows: role minimums still apply. Server-side `SECTION_HIDDEN`
+enforcement applies to `jury_president` only.
+
+### Permissions
+| Key | Allows | Default |
+|-----|--------|---------|
+| `enrollOnBehalf` | `userId` on `POST /models`, `GET /admin/users/enrollable`, enrolling others' models | `manager`, `admin` |
+
+Stored in the `rolePermissions` setting and read at each request. `admin` always
+has every permission. Unknown roles or permissions in `permissions` are ignored
+(no `422`).
+
+**Prize order** values are award `medalLabel`s; default
+`["Highly Commended", "Bronze", "Silver", "Gold"]`. Clients present unlisted
+labels first, by `medalRank`.
+
+---
+
+## Pricing routes
+
+Source: `pricing.routes.ts`. Totals are computed at request time from current
+prices. One base fee per participant per event (only if at least one model is
+paid). Each distinct coauthor of the paid models is charged **once** per event
+across all of the participant's models (matched by email, otherwise name +
+surname, ignoring case and spaces); with different roles the highest price applies.
+
+| Method | Path | Min role | Response |
+|--------|------|----------|----------|
+| GET | `/pricing/me?eventId=<uuid?>` | user | `{ currency, totalCents, events: [] }` |
+| GET | `/admin/pricing?eventId=&userId=` | manager | `{ currency, totalCents, entries: [] }` |
+
+```
+events[] = { eventId, eventName, currency, baseFeeCents, coauthorsTotalCents,
+  totalCents, modelCount, paidModelCount,
+  coauthorLines: [{ modelId, modelName, modelCode, name, surname, email, roleId, roleName, priceCents,
+                    models: [{ modelId, modelName, modelCode }] }],  // one per distinct person
+  freeModels:    [{ modelId, modelName, modelCode }] }
+entries[] = { userId, participantNumber, name, email, …same fields as events[] }
+```
+
+`baseFeeCents` is the fee actually applied (`0` with only free models). Without
+models the arrays are empty.
 
 ---
 
@@ -313,9 +461,27 @@ Source: `export.routes.ts`. Manager endpoints need min role `manager`; the
 | GET | `/exports/labels/excel?eventId=<id>` | manager | XLSX labels |
 | GET | `/exports/labels/pdf?eventId=<id>` | manager | printable HTML labels |
 | GET | `/exports/my-enrollments` | user | XLSX of own enrollments |
-| GET | `/exports/model-card/pdf?eventId=<id>` | user | printable HTML model card |
+| GET | `/exports/model-card/pdf?eventId=<id>` | user | printable HTML model card, including the registration fee breakdown and total |
 
 XLSX content is shaped by tenant settings (`exportIncludeModelCode`,
 `exportIncludeModelDescription`, `exportIncludeParticipantEmail`,
 `excelSheetName`, `excelFilePrefix`). Endpoints requiring `eventId` return `400
 { "error": "eventId is required" }` when omitted.
+
+---
+
+## Error codes
+
+| `code` | Status | Where |
+|--------|--------|-------|
+| `PERMISSION_DENIED` | 403 | `POST /models` with another `userId`, `GET /admin/users/enrollable` |
+| `USER_NOT_FOUND` | 404 | `POST /models` with unknown/disabled `userId` |
+| `TEAM_MEMBERS_REQUIRED` | 422 | `POST`/`PUT /models` |
+| `INVALID_MEMBER_ROLE` | 422 | `POST`/`PUT /models` |
+| `MODEL_LIMIT` | 409 | `POST`/`PUT /models` beyond 50 per participant per event |
+| `ENROLLMENT_CLOSED` | 403 | `POST /events/:eventId/enroll` |
+| `NOT_FOUND` | 404 | `POST /events/:eventId/enroll` |
+| `EVENT_CLOSED` | 409 | `POST /events/:eventId/enroll` |
+| `CATEGORY_CLOSED` | 409 | `POST /events/:eventId/enroll`, `POST /judge/displays/vote` |
+| `INVALID_CATEGORY`, `CATEGORY_EVENT_MISMATCH`, `CATEGORY_MODEL_MISMATCH` | 422 | `POST /events/:eventId/enroll` |
+| `SECTION_HIDDEN` | 403 | `jury_president` on a hidden section |

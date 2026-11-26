@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Button,
   Grid,
   Stack,
   TextField,
@@ -12,6 +11,7 @@ import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import useToast from "../components/useToast";
+import { ActionButton } from "../components/ActionButton";
 
 interface StaffCheckinProps {
   language: Language;
@@ -58,7 +58,7 @@ export default function StaffCheckin({ language }: StaffCheckinProps) {
         <Typography variant="h4">{t(language, "staffCheckinTitle")}</Typography>
         <SectionCard title={t(language, "staffCheckinButton")}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} data-tour="checkin-id">
               <TextField
                 label={t(language, "staffCheckinEnrollmentPlaceholder")}
                 value={enrollmentId}
@@ -67,14 +67,14 @@ export default function StaffCheckin({ language }: StaffCheckinProps) {
               />
             </Grid>
             <Grid item xs={12} md={3}>
-              <Button variant="contained" size="large" onClick={checkIn} fullWidth>
+              <ActionButton tip={t(language, "tipCheckin")} data-tour="checkin-confirm" variant="contained" size="large" onClick={checkIn} fullWidth>
                 {t(language, "staffCheckinButton")}
-              </Button>
+              </ActionButton>
             </Grid>
             <Grid item xs={12} md={3}>
-              <Button variant="outlined" onClick={printBadge} fullWidth>
+              <ActionButton tip={t(language, "tipPrintBadge")} data-tour="checkin-print" variant="outlined" onClick={printBadge} fullWidth>
                 {t(language, "staffCheckinPrintButton")}
-              </Button>
+              </ActionButton>
             </Grid>
           </Grid>
         </SectionCard>

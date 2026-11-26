@@ -17,10 +17,10 @@ export const adminLevelsRoutes = new Elysia({ prefix: "/admin/levels" })
   })
   .post("/", async ({ tenantDb, body }) => {
     const id = crypto.randomUUID();
-    await tenantDb.insert(levelsTable).values({ id, name: body.name, sortOrder: body.sortOrder ?? null });
+    await tenantDb.insert(levelsTable).values({ id, name: body.name, sortOrder: body.sortOrder ?? null, freeToEnter: body.freeToEnter ?? false });
     return { id };
   }, {
-    body: t.Object({ name: t.String(), sortOrder: t.Optional(t.Number()) }),
+    body: t.Object({ name: t.String(), sortOrder: t.Optional(t.Number()), freeToEnter: t.Optional(t.Boolean()) }),
     detail: { summary: "Crea livello", tags: ["Admin"], security: [{ bearerAuth: [] }] }
   })
   .put("/:id", async ({ tenantDb, params, body, set }) => {
@@ -30,7 +30,7 @@ export const adminLevelsRoutes = new Elysia({ prefix: "/admin/levels" })
     return { updated: true };
   }, {
     params: t.Object({ id: t.String() }),
-    body: t.Object({ name: t.Optional(t.String()), sortOrder: t.Optional(t.Number()) }),
+    body: t.Object({ name: t.Optional(t.String()), sortOrder: t.Optional(t.Number()), freeToEnter: t.Optional(t.Boolean()) }),
     detail: { summary: "Aggiorna livello", tags: ["Admin"], security: [{ bearerAuth: [] }] }
   })
   .delete("/:id", async ({ tenantDb, params, set }) => {

@@ -43,6 +43,7 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
           levelId: modelsTable.levelId,
           displayNumber: modelsTable.displayNumber,
           isTeam: modelsTable.isTeam,
+          teamCode: modelsTable.teamCode,
           notes: modelsTable.notes,
           internalNotes: modelsTable.internalNotes,
           categorySeqId: categoriesTable.seqId
@@ -68,7 +69,7 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
     if (!Array.isArray(result)) return result;
     return result.map((row: any) => {
       const { categorySeqId, ...rest } = row;
-      return { ...rest, code: formatModelCode(row.code, categorySeqId, row.displayNumber, codeFormat) || null };
+      return { ...rest, code: formatModelCode(row.code, categorySeqId, row.displayNumber, codeFormat, row.teamCode) || null };
     });
   }, {
     detail: {

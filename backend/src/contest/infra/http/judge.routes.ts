@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { VoteRepositoryDrizzle } from "../persistence/voteRepository.drizzle";
 import { ModelReadRepositoryDrizzle } from "../persistence/modelReadRepository.drizzle";
 import { VoteModel } from "../../application/VoteModel";
@@ -11,10 +11,17 @@ import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { closeCategory, loadCompletionState } from "../persistence/categoryClosure";
 import { loadCategoryRef, loadJudgeScope } from "../persistence/judgeAccess";
 import { canAccessCategory, participantView } from "../../domain/judgeScope";
+import { groupDisplays } from "../../domain/display";
+import { VoteDisplay } from "../../application/VoteDisplay";
 import { ForbiddenError, NotFoundError } from "../../domain/errors";
 import { domainErrorHandler } from "../../../shared/infra/http/domainErrorHandler";
 
 const uuid = () => t.String({ format: "uuid" });
+const rankSchema = () => t.Union([t.Literal(0), t.Literal(1), t.Literal(2), t.Literal(3), t.Literal(4)]);
+
+/** Transaction runner binding the vote repositories to one DB transaction. */
+const voteTransaction = (db: any) => (fn: any): Promise<any> =>
+  db.transaction((tx: any) => fn({ votes: new VoteRepositoryDrizzle(tx), models: new ModelReadRepositoryDrizzle(tx) }));
 
 export const judgeRoutes = new Elysia({ prefix: "/judge" })
   .use(tenantMiddleware)
@@ -50,6 +57,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
         description: modelsTable.description,
         code: modelsTable.code,
         displayNumber: modelsTable.displayNumber,
+        teamCode: modelsTable.teamCode,
         categoryId: modelsTable.categoryId,
         categoryName: categoriesTable.name,
         imageUrl: modelsTable.imageUrl,
@@ -146,6 +154,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
         imageUrl: modelsTable.imageUrl,
         displayNumber: modelsTable.displayNumber,
         notes: modelsTable.notes,
+        teamCode: modelsTable.teamCode,
         categorySeqId: categoriesTable.seqId
       })
       .from(modelsTable)
@@ -164,7 +173,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     return {
       model: {
         ...modelRow,
-        code: formatModelCode(modelRow.code, catSeqId, modelRow.displayNumber, codeFormat) || null
+        code: formatModelCode(modelRow.code, catSeqId, modelRow.displayNumber, codeFormat, modelRow.teamCode) || null
       },
       images
     };
@@ -203,6 +212,99 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     query: t.Object({ categoryId: t.Optional(uuid()) }),
     detail: {
       summary: "Dettaglio concorrente (solo nome visualizzato e numero espositore)",
+      tags: ["Judging"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/displays", async ({ tenantDb, query, user }) => {
+    const conditions: any[] = [isNotNull(modelsTable.displayNumber)];
+    if (query.eventId) conditions.push(eq(categoriesTable.eventId, query.eventId as any));
+    if (query.categoryId) conditions.push(eq(modelsTable.categoryId, query.categoryId as any));
+    const allRows = await tenantDb
+      .select({
+        id: modelsTable.id,
+        name: modelsTable.name,
+        code: modelsTable.code,
+        teamCode: modelsTable.teamCode,
+        displayNumber: modelsTable.displayNumber,
+        categoryId: modelsTable.categoryId,
+        categoryName: categoriesTable.name,
+        categoryStatus: categoriesTable.status,
+        categorySeqId: categoriesTable.seqId,
+        imageUrl: modelsTable.imageUrl,
+        eventId: categoriesTable.eventId
+      })
+      .from(modelsTable)
+      .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+      .where(and(...conditions))
+      .orderBy(modelsTable.code);
+    const scope = await loadJudgeScope(tenantDb, user!);
+    const rows = allRows.filter((row: any) => canAccessCategory(scope, { id: row.categoryId, eventId: row.eventId }));
+    if (!rows.length) return [];
+
+    const votes = await tenantDb
+      .select({ modelId: votesTable.modelId, rank: votesTable.rank })
+      .from(votesTable)
+      .where(and(eq(votesTable.judgeId, user!.id as any), inArray(votesTable.modelId, rows.map((r: any) => r.id) as any)))
+      .orderBy(desc(votesTable.createdAt), desc(votesTable.seq));
+    const latest = new Map<string, number>();
+    for (const vote of votes) if (!latest.has(vote.modelId)) latest.set(vote.modelId, vote.rank);
+
+    const codeFormat = await loadModelCodeFormatSettings(tenantDb);
+    const models = rows.map((r: any) => ({
+      id: r.id as string,
+      name: r.name as string,
+      code: formatModelCode(r.code, r.categorySeqId, r.displayNumber, codeFormat, r.teamCode) || null,
+      categoryId: r.categoryId as string,
+      categoryName: r.categoryName as string,
+      categoryStatus: r.categoryStatus as string,
+      imageUrl: r.imageUrl as string | null,
+      eventId: r.eventId as string,
+      displayNumber: r.displayNumber as number,
+      currentRank: latest.get(r.id) ?? null
+    }));
+    return groupDisplays(models).map((display) => ({
+      ...display,
+      models: display.models.map(({ eventId: _e, displayNumber: _d, ...model }) => model)
+    }));
+  }, {
+    query: t.Object({ eventId: t.Optional(uuid()), categoryId: t.Optional(uuid()) }),
+    detail: {
+      summary: "Display votabili con i loro modelli",
+      description: "Raggruppa per (evento, displayNumber) i soli modelli nello scope del giudice.",
+      tags: ["Judging"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .post("/displays/vote", async ({ user, tenantDb, body }) => {
+    const db = tenantDb as any;
+    const rows = await db
+      .select({ id: modelsTable.id, categoryId: modelsTable.categoryId, eventId: categoriesTable.eventId })
+      .from(modelsTable)
+      .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
+      .where(and(eq(categoriesTable.eventId, body.eventId as any), eq(modelsTable.displayNumber, body.displayNumber)));
+    if (!rows.length) throw new NotFoundError("Display not found");
+    const scope = await loadJudgeScope(db, user!);
+    const modelIds = rows
+      .filter((r: any) => canAccessCategory(scope, { id: r.categoryId, eventId: r.eventId }))
+      .map((r: any) => r.id as string);
+    if (!modelIds.length) throw new ForbiddenError("Judge is not assigned to this display");
+    const result = await new VoteDisplay(voteTransaction(db)).execute({
+      judgeId: user!.id,
+      modelIds,
+      rank: body.rank,
+      // Re-checked inside the transaction: the model may have been moved meanwhile.
+      authorize: async (model) => {
+        const category = await loadCategoryRef(db, model.categoryId);
+        return Boolean(category) && canAccessCategory(scope, category!);
+      }
+    });
+    return { eventId: body.eventId, displayNumber: body.displayNumber, rank: body.rank, ...result };
+  }, {
+    body: t.Object({ eventId: uuid(), displayNumber: t.Integer({ minimum: 0 }), rank: rankSchema() }),
+    detail: {
+      summary: "Vota un intero display",
+      description: "Applica il voto a tutti i modelli del display nello scope del giudice (categorie chiuse saltate). 404 display inesistente, 403 fuori scope, 409 tutte le categorie chiuse.",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     }
@@ -267,7 +369,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     const uc = new VoteModel(
       new VoteRepositoryDrizzle(db),
       new ModelReadRepositoryDrizzle(db),
-      (fn) => db.transaction((tx: any) => fn({ votes: new VoteRepositoryDrizzle(tx) as any, models: new ModelReadRepositoryDrizzle(tx) as any }))
+      voteTransaction(db)
     );
     return await uc.execute({
       id: crypto.randomUUID(),
@@ -281,7 +383,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       }
     });
   }, {
-    body: t.Object({ modelId: uuid(), rank: t.Union([t.Literal(0), t.Literal(1), t.Literal(2), t.Literal(3), t.Literal(4)]) }),
+    body: t.Object({ modelId: uuid(), rank: rankSchema() }),
     detail: {
       summary: "Vota un modello",
       description: "Aggiunge un voto (append-only) del giudice per un modello; vale l'ultimo. 404 modello inesistente, 403 giudice non assegnato, 409 categoria chiusa.",

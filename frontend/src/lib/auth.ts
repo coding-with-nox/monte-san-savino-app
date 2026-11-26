@@ -1,4 +1,4 @@
-export type Role = "user" | "staff" | "judge" | "manager" | "admin";
+export type Role = "user" | "staff" | "judge" | "jury_president" | "manager" | "admin";
 
 const ACCESS_TOKEN_KEY = "token";
 const REFRESH_TOKEN_KEY = "refreshToken";
@@ -44,7 +44,7 @@ export function getUserId(): string | null {
   const sub = decodeJwt(t).sub;
   return typeof sub === "string" ? sub : null;
 }
-const order: Role[] = ["user","staff","judge","manager","admin"];
+const order: Role[] = ["user","staff","judge","jury_president","manager","admin"];
 export function roleAtLeast(actual: Role, minimum: Role) { return order.indexOf(actual) >= order.indexOf(minimum); }
 
 function base64UrlEncode(bytes: Uint8Array) {

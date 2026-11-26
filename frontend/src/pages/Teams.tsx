@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from "react";
 import {
   Box,
-  Button,
   Chip,
   Collapse,
   Divider,
   FormControl,
-  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -32,6 +30,7 @@ import SectionCard from "../components/SectionCard";
 import EmptyState from "../components/EmptyState";
 import PageSkeleton from "../components/PageSkeleton";
 import useToast from "../components/useToast";
+import { ActionButton, TipIconButton } from "../components/ActionButton";
 
 type TeamMate = { id?: string; name: string; surname: string; role: string; email?: string };
 type Team = {
@@ -278,9 +277,9 @@ export default function Teams({ language }: TeamsProps) {
               <Typography variant="body2" sx={{ flexGrow: 1 }}>
                 {m.name} {m.surname} — {m.role}{m.email ? ` (${m.email})` : ""}
               </Typography>
-              <IconButton size="small" color="error" onClick={() => removeMate(idx)}>
+              <TipIconButton tip={t(language, "tipMateRemove")} aria-label={`${t(language, "actionDelete")} ${m.name} ${m.surname}`} size="small" color="error" onClick={() => removeMate(idx)}>
                 <DeleteIcon fontSize="small" />
-              </IconButton>
+              </TipIconButton>
             </Stack>
           ))}
           <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
@@ -320,25 +319,27 @@ export default function Teams({ language }: TeamsProps) {
                 ))}
               </Select>
             </FormControl>
-            <Button
+            <ActionButton
+              tip={t(language, "tipMateAdd")}
               variant="outlined"
               size="small"
               onClick={addMate}
               disabled={!newMateName.trim() || !newMateSurname.trim() || !newMateRole}
             >
               {t(language, "teamsAddMemberButton")}
-            </Button>
+            </ActionButton>
           </Stack>
         </Box>
 
-        <Button
+        <ActionButton
+          tip={t(language, "tipTeamSave")}
           variant="contained"
           onClick={isCreating ? createTeam : saveTeam}
           disabled={saving || !editName.trim() || !editCategoryId}
           fullWidth
         >
           {saving ? "..." : t(language, "teamsSaveButton")}
-        </Button>
+        </ActionButton>
       </Stack>
     </Box>
   );
@@ -349,24 +350,24 @@ export default function Teams({ language }: TeamsProps) {
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h4">{t(language, "teamsTitle")}</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
+          <ActionButton tip={t(language, "tipTeamNew")} data-tour="teams-new" variant="contained" startIcon={<AddIcon />} onClick={startCreate}>
             {t(language, "teamsCreateButton")}
-          </Button>
+          </ActionButton>
         </Stack>
 
         <Collapse in={isCreating}>
             <Paper variant="outlined" sx={{ mb: 1 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5 }}>
                 <Typography variant="subtitle2">{t(language, "teamsCreateButton")}</Typography>
-                <IconButton size="small" onClick={() => setIsCreating(false)}>
+                <TipIconButton tip={t(language, "tipPanelClose")} aria-label={t(language, "wizardClose")} size="small" onClick={() => setIsCreating(false)}>
                   <CloseIcon fontSize="small" />
-                </IconButton>
+                </TipIconButton>
               </Stack>
               {editPanel}
             </Paper>
           </Collapse>
 
-          <SectionCard title={t(language, "teamsTitle")}>
+          <SectionCard tourId="teams-list" title={t(language, "teamsTitle")}>
           {loading && <PageSkeleton variant="table" rows={4} />}
           {!loading && teams.length === 0 && (
             <EmptyState title={t(language, "teamsNoTeams")} description="" />
@@ -414,20 +415,24 @@ export default function Teams({ language }: TeamsProps) {
                         </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            <IconButton
+                            <TipIconButton
+                              tip={t(language, "tipTeamEdit")}
+                              aria-label={`${t(language, "actionEdit")} ${team.name}`}
                               size="small"
                               onClick={e => { e.stopPropagation(); openTeam(team.id); }}
                               color="primary"
                             >
                               <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
+                            </TipIconButton>
+                            <TipIconButton
+                              tip={t(language, "tipTeamDelete")}
+                              aria-label={`${t(language, "actionDelete")} ${team.name}`}
                               size="small"
                               onClick={e => { e.stopPropagation(); deleteTeam(team.id); }}
                               color="error"
                             >
                               <DeleteIcon fontSize="small" />
-                            </IconButton>
+                            </TipIconButton>
                           </Stack>
                         </TableCell>
                       </TableRow>

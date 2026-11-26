@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, Box, Button, Paper, Stack, Tab, Tabs, Typography } from "@mui/material";
+import { Alert, Box, Paper, Stack, Tab, Tabs, Typography } from "@mui/material";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import PageSkeleton from "../components/PageSkeleton";
@@ -9,8 +9,11 @@ import JudgesTab from "./admin/JudgesTab";
 import AwardsTab from "./admin/AwardsTab";
 import SponsorsTab from "./admin/SponsorsTab";
 import CatalogTab from "./admin/CatalogTab";
+import RulesTab from "./admin/RulesTab";
+import { getRole } from "../lib/auth";
+import { ActionButton } from "../components/ActionButton";
 
-type TabKey = "events" | "judges" | "awards" | "sponsors" | "catalog";
+type TabKey = "events" | "judges" | "awards" | "sponsors" | "catalog" | "rules";
 
 interface AdminProps {
   language: Language;
@@ -23,8 +26,13 @@ interface AdminProps {
  */
 export default function Admin({ language }: AdminProps) {
   const data = useAdminData(language);
-  const [tab, setTab] = useState<TabKey>("events");
-  const [visited, setVisited] = useState<Set<TabKey>>(() => new Set<TabKey>(["events"]));
+  // "?tab=awards" (help page) opens that tab.
+  const [tab, setTab] = useState<TabKey>(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab") as TabKey | null;
+    const allowed: TabKey[] = ["events", "judges", "awards", "sponsors", "catalog", ...(getRole() === "admin" ? ["rules" as const] : [])];
+    return wanted && allowed.includes(wanted) ? wanted : "events";
+  });
+  const [visited, setVisited] = useState<Set<TabKey>>(() => new Set<TabKey>([tab]));
 
   const changeTab = (next: TabKey) => {
     setTab(next);
@@ -32,7 +40,7 @@ export default function Admin({ language }: AdminProps) {
   };
 
   const panel = (key: TabKey, content: () => React.ReactNode) =>
-    visited.has(key) ? <Box key={key} hidden={tab !== key}>{content()}</Box> : null;
+    visited.has(key) ? <Box key={key} hidden={tab !== key} data-tour-scope={`admin-${key}`}>{content()}</Box> : null;
 
   return (
     <PageContainer maxWidth="lg">
@@ -43,7 +51,7 @@ export default function Admin({ language }: AdminProps) {
           <Alert
             key={section}
             severity="error"
-            action={<Button color="inherit" size="small" onClick={() => void data.refresh()}>{t(language, "retryButton")}</Button>}
+            action={<ActionButton tip={t(language, "tipRetry")} color="inherit" size="small" onClick={() => void data.refresh()}>{t(language, "retryButton")}</ActionButton>}
           >
             {t(language, "adminLoadSectionError")}: {section}
           </Alert>
@@ -52,13 +60,14 @@ export default function Admin({ language }: AdminProps) {
         {data.loading && <PageSkeleton variant="table" />}
 
         {!data.loading && (
-          <Paper variant="outlined">
+          <Paper data-tour="admin-tabs" variant="outlined">
             <Tabs value={tab} onChange={(_, v) => changeTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
               <Tab value="events" label={t(language, "adminTabEvents")} />
               <Tab value="judges" label={t(language, "adminTabJudges")} />
               <Tab value="awards" label={t(language, "adminTabAwards")} />
               <Tab value="sponsors" label={t(language, "adminTabSponsors")} />
               <Tab value="catalog" label={t(language, "adminTabCatalog")} />
+              {getRole() === "admin" && <Tab value="rules" label={t(language, "adminTabRules")} />}
             </Tabs>
           </Paper>
         )}
@@ -70,6 +79,7 @@ export default function Admin({ language }: AdminProps) {
             {panel("awards", () => <AwardsTab language={language} data={data} />)}
             {panel("sponsors", () => <SponsorsTab language={language} data={data} />)}
             {panel("catalog", () => <CatalogTab language={language} data={data} />)}
+            {panel("rules", () => <RulesTab language={language} />)}
           </>
         )}
       </Stack>

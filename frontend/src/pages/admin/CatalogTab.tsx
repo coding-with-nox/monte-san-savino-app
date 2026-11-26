@@ -1,6 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Button, IconButton, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField
+  Box,
+  Checkbox,
+  Tooltip,
+  InputAdornment,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { api } from "../../lib/api";
@@ -9,10 +20,12 @@ import SectionCard from "../../components/SectionCard";
 import CsvImportCard from "../../components/CsvImportCard";
 import ModelMoveCard from "../../components/ModelMoveCard";
 import { useConfirm } from "../../components/ConfirmDialog";
+import useToast from "../../components/useToast";
+import { MemberRole, parseEuros } from "../../lib/pricing";
 import type { AdminData } from "./useAdminData";
+import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
-type Level = { id: string; name: string; sortOrder?: number | null };
-type MemberRole = { id: string; name: string };
+type Level = { id: string; name: string; sortOrder?: number | null; freeToEnter?: boolean };
 
 export default function CatalogTab({ language, data }: { language: Language; data: AdminData }) {
   const { events, categories, models, eventName, ensureModels, refreshModels, refresh } = data;
@@ -22,6 +35,8 @@ export default function CatalogTab({ language, data }: { language: Language; dat
   const [newLevelSortOrder, setNewLevelSortOrder] = useState("");
   const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
   const [newMemberRoleName, setNewMemberRoleName] = useState("");
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+  const toast = useToast();
 
   // Lookup tables load only when the catalog tab is first opened. Failures degrade to an empty list.
   async function loadLevels() {
@@ -56,6 +71,33 @@ export default function CatalogTab({ language, data }: { language: Language; dat
     await api(`/admin/levels/${id}`, { method: "DELETE" });
     await loadLevels();
   }
+  async function toggleFreeLevel(level: Level) {
+    try {
+      await api(`/admin/levels/${level.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ name: level.name, freeToEnter: !level.freeToEnter })
+      });
+      await loadLevels();
+      toast.success(t(language, "adminSaved"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
+  }
+  async function savePrice(role: MemberRole) {
+    const price = parseEuros(priceDrafts[role.id] ?? "");
+    if (price === null) {
+      toast.error(t(language, "adminPriceInvalid"));
+      return;
+    }
+    try {
+      await api(`/admin/member-roles/${role.id}`, { method: "PUT", body: JSON.stringify({ price }) });
+      setPriceDrafts(({ [role.id]: _saved, ...rest }) => rest);
+      await loadMemberRoles();
+      toast.success(t(language, "adminSaved"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
+  }
   async function createMemberRole() {
     if (!newMemberRoleName.trim()) return;
     await api("/admin/member-roles", { method: "POST", body: JSON.stringify({ name: newMemberRoleName.trim() }) });
@@ -70,12 +112,15 @@ export default function CatalogTab({ language, data }: { language: Language; dat
 
   return (
     <Stack spacing={2}>
+      <Box data-tour="admin-move">
       <ModelMoveCard
         language={language}
         models={models}
         categories={moveTargets}
         onMoved={() => { void refreshModels(); }}
       />
+      </Box>
+      <Box data-tour="admin-import" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <CsvImportCard
         language={language}
         title={`${t(language, "importTitle")}: ${t(language, "importLevels")}`}
@@ -91,13 +136,14 @@ export default function CatalogTab({ language, data }: { language: Language; dat
         events={events}
         onImported={() => { void refresh(); }}
       />
-      <SectionCard title={t(language, "adminLevelsTitle")}>
+      </Box>
+      <SectionCard tourId="admin-levels" title={t(language, "adminLevelsTitle")}>
         <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
           <TextField size="small" label={t(language, "adminLevelName")} value={newLevelName} onChange={(e) => setNewLevelName(e.target.value)} />
           <TextField size="small" label={t(language, "adminLevelSortOrder")} type="number" value={newLevelSortOrder} onChange={(e) => setNewLevelSortOrder(e.target.value)} sx={{ width: 120 }} />
-          <Button variant="contained" size="small" onClick={createLevel} disabled={!newLevelName.trim()}>
+          <ActionButton tip={t(language, "tipLevelAdd")} variant="contained" size="small" onClick={createLevel} disabled={!newLevelName.trim()}>
             {t(language, "adminLevelsAddButton")}
-          </Button>
+          </ActionButton>
         </Stack>
         <TableContainer>
           <Table size="small">
@@ -105,6 +151,7 @@ export default function CatalogTab({ language, data }: { language: Language; dat
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelName")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelSortOrder")}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelFree")}</TableCell>
                 <TableCell />
               </TableRow>
             </TableHead>
@@ -113,10 +160,20 @@ export default function CatalogTab({ language, data }: { language: Language; dat
                 <TableRow key={lvl.id}>
                   <TableCell>{lvl.name}</TableCell>
                   <TableCell>{lvl.sortOrder ?? "-"}</TableCell>
+                  <TableCell>
+                    <Tooltip title={t(language, "tipLevelFree")} describeChild>
+                      <Checkbox
+                      size="small"
+                      checked={!!lvl.freeToEnter}
+                      onChange={() => toggleFreeLevel(lvl)}
+                      inputProps={{ "aria-label": `${t(language, "adminLevelFree")}: ${lvl.name}` }}
+                      />
+                    </Tooltip>
+                  </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" color="error" onClick={() => deleteLevel(lvl.id)}>
+                    <TipIconButton tip={t(language, "tipLevelDelete")} aria-label={`${t(language, "actionDelete")} ${lvl.name}`} size="small" color="error" onClick={() => deleteLevel(lvl.id)}>
                       <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    </TipIconButton>
                   </TableCell>
                 </TableRow>
               ))}
@@ -125,18 +182,19 @@ export default function CatalogTab({ language, data }: { language: Language; dat
         </TableContainer>
       </SectionCard>
 
-      <SectionCard title={t(language, "adminMemberRolesTitle")}>
+      <SectionCard tourId="admin-roles" title={t(language, "adminMemberRolesTitle")}>
         <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
           <TextField size="small" label={t(language, "adminMemberRoleName")} value={newMemberRoleName} onChange={(e) => setNewMemberRoleName(e.target.value)} />
-          <Button variant="contained" size="small" onClick={createMemberRole} disabled={!newMemberRoleName.trim()}>
+          <ActionButton tip={t(language, "tipMemberRoleAdd")} variant="contained" size="small" onClick={createMemberRole} disabled={!newMemberRoleName.trim()}>
             {t(language, "adminMemberRolesAddButton")}
-          </Button>
+          </ActionButton>
         </Stack>
         <TableContainer>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminMemberRoleName")}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminMemberRolePrice")}</TableCell>
                 <TableCell />
               </TableRow>
             </TableHead>
@@ -144,10 +202,25 @@ export default function CatalogTab({ language, data }: { language: Language; dat
               {memberRoles.map((role) => (
                 <TableRow key={role.id}>
                   <TableCell>{role.name}</TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <TextField
+                        size="small"
+                        sx={{ width: 110 }}
+                        value={priceDrafts[role.id] ?? (role.price != null ? String(role.price / 100) : "")}
+                        onChange={(e) => setPriceDrafts((d) => ({ ...d, [role.id]: e.target.value }))}
+                        inputProps={{ inputMode: "decimal", "aria-label": `${t(language, "adminMemberRolePrice")}: ${role.name}` }}
+                        InputProps={{ startAdornment: <InputAdornment position="start">€</InputAdornment> }}
+                      />
+                      <ActionButton tip={t(language, "tipMemberRolePrice")} size="small" onClick={() => savePrice(role)} disabled={priceDrafts[role.id] === undefined}>
+                        {t(language, "adminSave")}
+                      </ActionButton>
+                    </Stack>
+                  </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" color="error" onClick={() => deleteMemberRole(role.id)}>
+                    <TipIconButton tip={t(language, "tipMemberRoleDelete")} aria-label={`${t(language, "actionDelete")} ${role.name}`} size="small" color="error" onClick={() => deleteMemberRole(role.id)}>
                       <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    </TipIconButton>
                   </TableCell>
                 </TableRow>
               ))}
@@ -156,6 +229,7 @@ export default function CatalogTab({ language, data }: { language: Language; dat
         </TableContainer>
       </SectionCard>
       {confirmNode}
+      {toast.node}
     </Stack>
   );
 }

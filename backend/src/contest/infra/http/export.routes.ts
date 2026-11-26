@@ -8,6 +8,8 @@ import { categoriesTable, eventsTable, modelsTable, registrationsTable, settings
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
 import { classPrintRoutes } from "./class-print.routes";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
+import { loadPricingEntries } from "../persistence/pricingRepository";
+import { formatEuro, type PricingSummary } from "../../domain/pricing";
 import { exportLimitError, exportMaxRows, mapInChunks, QR_CHUNK_SIZE } from "./exportLimits";
 
 type ExportSettings = {
@@ -304,10 +306,10 @@ function buildSheetName(settings: ExportSettings, suffix: string) {
   return sanitizeSheetName(`${settings.excelSheetName}-${suffix}`);
 }
 
-function formatModelCodeForExport(settings: ExportSettings, code: number | null | undefined, categorySeqId?: number | null, displayNumber?: number | null) {
+function formatModelCodeForExport(settings: ExportSettings, code: number | null | undefined, categorySeqId?: number | null, displayNumber?: number | null, teamCode?: string | null) {
   return formatModelCode(code, categorySeqId ?? null, displayNumber ?? null, {
     displayNumberPadding: settings.displayNumberPadding
-  });
+  }, teamCode);
 }
 
 const SOCIAL_BASE_URL: Record<string, string> = {
@@ -347,6 +349,28 @@ export function renderSocialHtml(u: {
   if (u.pinterest) parts.push(`Pinterest: ${renderLink(socialHref("pinterest", u.pinterest), u.pinterest)}`);
   if (u.tiktok) parts.push(`TikTok: ${renderLink(socialHref("tiktok", u.tiktok), u.tiktok)}`);
   return parts.join("<br/>");
+}
+
+/** Enrollment totals block of the printed registration sheet. */
+export function renderPricingHtml(entries: (PricingSummary & { eventName: string })[]) {
+  if (!entries.length) return "";
+  const row = (label: string, cents: number) => `<tr><td>${escapeHtml(label)}</td><td class="amount">${formatEuro(cents)}</td></tr>`;
+  const blocks = entries.map((e) => `
+    <h3>${escapeHtml(e.eventName)}</h3>
+    <table>
+      <tbody>
+        ${row("Base fee", e.baseFeeCents)}
+        ${e.coauthorLines.map((l) => row(`Co-author ${l.name} ${l.surname} (${l.roleName}) - ${l.models.map((m) => m.modelCode || m.modelName).join(", ")}`, l.priceCents)).join("")}
+        ${e.freeModels.map((m) => row(`Free entry - ${m.modelName}`, 0)).join("")}
+        <tr><th>Total</th><th class="amount">${formatEuro(e.totalCents)}</th></tr>
+      </tbody>
+    </table>`);
+  const grandTotal = entries.length > 1
+    ? `<p><strong>Grand total:</strong> ${formatEuro(entries.reduce((sum, e) => sum + e.totalCents, 0))}</p>`
+    : "";
+  return `<div class="section">
+    <h2>Registration fee</h2>${blocks.join("")}${grandTotal}
+  </div>`;
 }
 
 export function modelQrPayload(modelId: string) {
@@ -418,7 +442,7 @@ async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSetting
       categorySeqId: categoriesTable.seqId,
       modelName: modelsTable.name,
       modelCode: modelsTable.code,
-      displayNumber: modelsTable.displayNumber,
+      displayNumber: modelsTable.displayNumber, teamCode: modelsTable.teamCode,
       notes: modelsTable.notes
     })
     .from(modelsTable)
@@ -435,7 +459,7 @@ async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSetting
     utente: fullName(row.firstName, row.lastName, row.userEmail) || row.userEmail || "",
     categoria: row.categoryName ?? "",
     nomeModello: row.modelName ?? "",
-    codice: formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber),
+    codice: formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber, row.teamCode),
     note: row.notes ?? "",
     qrPayload: modelQrPayload(row.modelId),
     qr: await modelQrDataUrl(row.modelId)
@@ -461,7 +485,7 @@ const managerExportRoutes = new Elysia()
         modelDescription: modelsTable.description,
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
-        displayNumber: modelsTable.displayNumber,
+        displayNumber: modelsTable.displayNumber, teamCode: modelsTable.teamCode,
         checkedIn: registrationsTable.checkedIn,
         absent: registrationsTable.absent,
         patreon: userProfilesTable.patreon,
@@ -499,7 +523,7 @@ const managerExportRoutes = new Elysia()
         base.email = row.email ?? "";
       }
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber);
+        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber, row.teamCode);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.modelDescription ?? "";
@@ -530,7 +554,7 @@ const managerExportRoutes = new Elysia()
         code: modelsTable.code,
         imageUrl: modelsTable.imageUrl,
         categorySeqId: categoriesTable.seqId,
-        displayNumber: modelsTable.displayNumber
+        displayNumber: modelsTable.displayNumber, teamCode: modelsTable.teamCode
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId));
@@ -548,7 +572,7 @@ const managerExportRoutes = new Elysia()
         nome: row.name
       };
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber);
+        base.codice = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber, row.teamCode);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.description ?? "";
@@ -610,7 +634,7 @@ const managerExportRoutes = new Elysia()
         modelDescription: modelsTable.description,
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
-        displayNumber: modelsTable.displayNumber
+        displayNumber: modelsTable.displayNumber, teamCode: modelsTable.teamCode
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
@@ -623,7 +647,7 @@ const managerExportRoutes = new Elysia()
     for (const model of models as any[]) {
       const list = modelsByUser.get(model.userId) ?? [];
       const parts = [model.modelName];
-      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.categorySeqId, model.displayNumber);
+      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.categorySeqId, model.displayNumber, model.teamCode);
       if (exportSettings.includeModelCode && formattedCode) {
         parts.push(`(${formattedCode})`);
       }
@@ -711,7 +735,7 @@ const managerExportRoutes = new Elysia()
         modelCode: modelsTable.code,
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
-        displayNumber: modelsTable.displayNumber
+        displayNumber: modelsTable.displayNumber, teamCode: modelsTable.teamCode
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
@@ -723,7 +747,7 @@ const managerExportRoutes = new Elysia()
     const modelsByUser = new Map<string, string[]>();
     for (const model of models as any[]) {
       const list = modelsByUser.get(model.userId) ?? [];
-      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.categorySeqId, model.displayNumber);
+      const formattedCode = formatModelCodeForExport(exportSettings, model.modelCode, model.categorySeqId, model.displayNumber, model.teamCode);
       list.push(`${model.modelName}${formattedCode ? ` (${formattedCode})` : ""} - ${model.categoryName}`);
       modelsByUser.set(model.userId, list);
     }
@@ -800,7 +824,7 @@ const managerExportRoutes = new Elysia()
         description: modelsTable.description,
         notes: modelsTable.notes,
         code: modelsTable.code,
-        displayNumber: modelsTable.displayNumber,
+        displayNumber: modelsTable.displayNumber, teamCode: modelsTable.teamCode,
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
         userEmail: usersTable.email,
@@ -818,7 +842,7 @@ const managerExportRoutes = new Elysia()
     if (tooLarge) { set.status = 413; return tooLarge; }
 
     const cards = await mapInChunks(rows, QR_CHUNK_SIZE, async (row) => {
-      const code = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber);
+      const code = formatModelCodeForExport(exportSettings, row.code, row.categorySeqId, row.displayNumber, row.teamCode);
       const qr = await modelQrDataUrl(row.id);
       return `<section class="card">
         <img class="qr" alt="${escapeHtml(modelQrPayload(row.id))}" src="${escapeHtml(qr)}" width="120" height="120"/>
@@ -991,7 +1015,7 @@ const userExportRoutes = new Elysia()
         modelDescription: modelsTable.description,
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
-        displayNumber: modelsTable.displayNumber,
+        displayNumber: modelsTable.displayNumber, teamCode: modelsTable.teamCode,
         checkedIn: registrationsTable.checkedIn,
         absent: registrationsTable.absent,
         patreon: userProfilesTable.patreon,
@@ -1017,7 +1041,7 @@ const userExportRoutes = new Elysia()
         tiktok: row.tiktok ?? ""
       };
       if (exportSettings.includeModelCode) {
-        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber);
+        base.codice = formatModelCodeForExport(exportSettings, row.modelCode, row.categorySeqId, row.displayNumber, row.teamCode);
       }
       if (exportSettings.includeModelDescription) {
         base.descrizione = row.modelDescription ?? "";
@@ -1066,7 +1090,7 @@ const userExportRoutes = new Elysia()
         categoryId: modelsTable.categoryId,
         categoryName: categoriesTable.name,
         categorySeqId: categoriesTable.seqId,
-        displayNumber: modelsTable.displayNumber,
+        displayNumber: modelsTable.displayNumber, teamCode: modelsTable.teamCode,
         eventId: categoriesTable.eventId
       })
       .from(modelsTable)
@@ -1076,12 +1100,14 @@ const userExportRoutes = new Elysia()
       ? (await modelsQuery).filter((m: any) => m.eventId === eventId)
       : await modelsQuery;
 
+    const pricing = await loadPricingEntries(tenantDb, { userId: user!.id, eventId: eventId ?? undefined });
+
     const userSeqId = profile.seqId;
     const paddedUserId = String(userSeqId).padStart(4, "0");
 
     // Build model rows HTML
     const modelRowsHtml = (allModels as any[]).map((model) => {
-      const code = formatModelCodeForExport(exportSettings, model.code, model.categorySeqId, model.displayNumber);
+      const code = formatModelCodeForExport(exportSettings, model.code, model.categorySeqId, model.displayNumber, model.teamCode);
       return `<tr>
         <td>${escapeHtml(code || model.id.slice(0, 8))}</td>
         <td>${escapeHtml(model.name)}</td>
@@ -1107,6 +1133,7 @@ const userExportRoutes = new Elysia()
     table { width: 100%; border-collapse: collapse; margin-top: 8px; }
     th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; font-size: 10pt; }
     th { background: #f2f2f2; font-weight: bold; }
+    .amount { text-align: right; white-space: nowrap; width: 25%; }
     @media print { @page { size: A4 portrait; margin: 12mm; } }
   </style>
 </head>
@@ -1135,6 +1162,7 @@ const userExportRoutes = new Elysia()
       </tbody>
     </table>
   </div>
+  ${renderPricingHtml(pricing)}
   <script>window.onload = () => window.print();</script>
 </body>
 </html>`;

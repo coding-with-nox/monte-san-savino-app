@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { Button, FormControl, InputLabel, MenuItem, Select, Stack } from "@mui/material";
+import { FormControl, InputLabel, MenuItem, Select, Stack } from "@mui/material";
 import DriveFileMoveIcon from "@mui/icons-material/DriveFileMove";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import SectionCard from "./SectionCard";
 import ConfirmDialog from "./ConfirmDialog";
 import useToast from "./useToast";
+import { ActionButton } from "./ActionButton";
 
 export type MovableModel = { id: string; name: string; categoryId?: string };
 export type MoveTarget = { id: string; name: string };
@@ -61,11 +62,12 @@ export default function ModelMoveCard({ language, models, categories, onMoved }:
             {categories.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
           </Select>
         </FormControl>
-        <Button variant="contained" disabled={!canMove || busy} onClick={() => setConfirmOpen(true)} sx={{ minWidth: 120 }}>
+        <ActionButton tip={t(language, "tipMoveModel")} variant="contained" disabled={!canMove || busy} onClick={() => setConfirmOpen(true)} sx={{ minWidth: 120 }}>
           {t(language, "moveModelButton")}
-        </Button>
+        </ActionButton>
       </Stack>
       <ConfirmDialog
+        language={language}
         open={confirmOpen}
         destructive={false}
         title={t(language, "moveModelTitle")}

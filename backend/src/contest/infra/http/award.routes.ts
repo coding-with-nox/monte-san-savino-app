@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
+import { requireVisibleSection } from "../../../identity/infra/http/section.middleware";
 import {
   awardsTable,
   categoriesTable,
@@ -39,7 +40,7 @@ export function buildMonitoringRows(
   });
 }
 
-export const awardRoutes = new Elysia({ prefix: "/awards" })
+const managerAwardRoutes = new Elysia({ prefix: "/awards" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
   .get("/events/:eventId", async ({ tenantDb, params }) => {
@@ -218,7 +219,11 @@ export const awardRoutes = new Elysia({ prefix: "/awards" })
       tags: ["Awards"],
       security: [{ bearerAuth: [] }]
     }
-  })
+  });
+
+const monitoringRoutes = new Elysia({ prefix: "/awards" })
+  .use(tenantMiddleware)
+  .use(requireRole("jury_president"))
   .get("/monitoring/:eventId", async ({ tenantDb, params }) => {
     const cats = await tenantDb
       .select()
@@ -272,9 +277,14 @@ export const awardRoutes = new Elysia({ prefix: "/awards" })
     return buildMonitoringRows(cats as any, { models: modelRows, judges: judgeRows, scored: scoredRows, completions: completionRows });
   }, {
     params: t.Object({ eventId: t.String() }),
+    beforeHandle: requireVisibleSection("dashboard"),
     detail: {
       summary: "Monitoraggio live giudici per categoria",
       tags: ["Awards"],
       security: [{ bearerAuth: [] }]
     }
   });
+
+export const awardRoutes = new Elysia()
+  .use(managerAwardRoutes)
+  .use(monitoringRoutes);

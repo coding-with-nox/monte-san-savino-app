@@ -1,7 +1,19 @@
 import React, { useState } from "react";
 import {
-  Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, IconButton,
-  InputLabel, List, ListItem, ListItemText, MenuItem, Select, TextField
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  Grid,
+  InputLabel,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
+  Select,
+  TextField
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -14,6 +26,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import useToast from "../../components/useToast";
 import type { AdminCategory } from "./types";
 import type { AdminData } from "./useAdminData";
+import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
 export default function CategoriesCard({ language, data }: { language: Language; data: AdminData }) {
   const { events, categories, refresh, eventName } = data;
@@ -71,7 +84,7 @@ export default function CategoriesCard({ language, data }: { language: Language;
   return (
     <>
       {toast.node}
-      <SectionCard title={t(language, "adminCategoriesTitle")}>
+      <SectionCard tourId="admin-categories" title={t(language, "adminCategoriesTitle")}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={4}>
             <FormControl fullWidth>
@@ -96,9 +109,9 @@ export default function CategoriesCard({ language, data }: { language: Language;
             />
           </Grid>
           <Grid item xs={12} md={4}>
-            <Button variant="contained" onClick={createCategory} fullWidth disabled={!categoryForm.eventId || !categoryForm.name}>
+            <ActionButton tip={t(language, "tipCategoryCreate")} variant="contained" onClick={createCategory} fullWidth disabled={!categoryForm.eventId || !categoryForm.name}>
               {t(language, "adminCategoryCreateButton")}
-            </Button>
+            </ActionButton>
           </Grid>
         </Grid>
         <List dense sx={{ mt: 2 }}>
@@ -111,17 +124,17 @@ export default function CategoriesCard({ language, data }: { language: Language;
                 size="small"
                 sx={{ mr: 1 }}
               />
-              <Button variant="outlined" size="small" onClick={() => toggleStatus(category)} sx={{ mr: 1 }}>
+              <ActionButton tip={t(language, category.status === "open" ? "tipCategoryClose" : "tipCategoryReopen")} variant="outlined" size="small" onClick={() => toggleStatus(category)} sx={{ mr: 1 }}>
                 {category.status === "open" ? t(language, "adminCategoryClose") : t(language, "adminCategoryReopen")}
-              </Button>
+              </ActionButton>
               <ClassPrintActions language={language} categoryId={category.id} />
               <PrintActions language={language} params={{ eventId: category.eventId, categoryId: category.id }} />
-              <IconButton size="small" onClick={() => openEdit(category)}>
+              <TipIconButton tip={t(language, "tipCategoryEdit")} aria-label={`${t(language, "actionEdit")} ${category.name}`} size="small" onClick={() => openEdit(category)}>
                 <EditIcon fontSize="small" />
-              </IconButton>
-              <IconButton size="small" color="error" onClick={() => deleteCategory(category.id)}>
+              </TipIconButton>
+              <TipIconButton tip={t(language, "tipCategoryDelete")} aria-label={`${t(language, "actionDelete")} ${category.name}`} size="small" color="error" onClick={() => deleteCategory(category.id)}>
                 <DeleteIcon fontSize="small" />
-              </IconButton>
+              </TipIconButton>
             </ListItem>
           ))}
         </List>
@@ -140,8 +153,8 @@ export default function CategoriesCard({ language, data }: { language: Language;
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={saveEdit} variant="contained">{t(language, "profileSaveButton")}</Button>
-          <Button onClick={() => setEditOpen(false)}>{t(language, "profileCancelButton")}</Button>
+          <ActionButton tip={t(language, "tipCategorySave")} onClick={saveEdit} variant="contained">{t(language, "profileSaveButton")}</ActionButton>
+          <ActionButton tip={t(language, "tipDialogCancel")} onClick={() => setEditOpen(false)}>{t(language, "profileCancelButton")}</ActionButton>
         </DialogActions>
       </Dialog>
     </>

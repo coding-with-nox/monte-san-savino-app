@@ -1,5 +1,5 @@
 import React from "react";
-import { Stack, Switch, Typography } from "@mui/material";
+import { Stack, Switch, Tooltip, Typography } from "@mui/material";
 
 interface ActiveSwitchProps {
   checked: boolean;
@@ -7,10 +7,13 @@ interface ActiveSwitchProps {
   activeLabel: string;
   inactiveLabel: string;
   disabled?: boolean;
+  /** What toggling does, shown as tooltip. */
+  tip?: string;
 }
 
-export default function ActiveSwitch({ checked, onChange, activeLabel, inactiveLabel, disabled }: ActiveSwitchProps) {
+export default function ActiveSwitch({ checked, onChange, activeLabel, inactiveLabel, disabled, tip }: ActiveSwitchProps) {
   return (
+    <Tooltip title={tip ?? ""} describeChild>
     <Stack direction="row" spacing={1} alignItems="center">
       <Typography
         variant="caption"
@@ -35,5 +38,6 @@ export default function ActiveSwitch({ checked, onChange, activeLabel, inactiveL
         }}
       />
     </Stack>
+    </Tooltip>
   );
 }

@@ -1,8 +1,9 @@
 import { Elysia, t } from "elysia";
-import { eq, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
 import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import crypto from "node:crypto";
 import { requireRole } from "./role.middleware";
+import { requirePermission } from "./permission.middleware";
 import { normalizeSocialPatch } from "../../../shared/domain/socialLinks";
 import { usersTable, userProfilesTable } from "../persistence/schema";
 import { BcryptHasher } from "../crypto/bcryptHasher";
@@ -14,6 +15,49 @@ import { authorizeCreateUser, authorizeUpdateUser, authorizeResetPassword } from
 import { generateTemporaryPassword } from "../../domain/temporaryPassword";
 
 const roleSchema = t.Union(ROLES.map((r) => t.Literal(r)) as any);
+
+/** Separate instance: gated by the permission, not by the manager role of the routes below. */
+export const enrollableUserRoutes = new Elysia({ prefix: "/admin/users" })
+  .use(tenantMiddleware)
+  .use(requireRole("user"))
+  .get("/enrollable", async ({ tenantDb, query }) => {
+    const q = query.q?.trim();
+    // % _ \ are literal characters in the search term, not LIKE wildcards.
+    const pattern = q ? `%${q.replace(/[\\%_]/g, "\\$&")}%` : null;
+    const fullName = sql`concat_ws(' ', ${userProfilesTable.firstName}, ${userProfilesTable.lastName})`;
+    const reverseName = sql`concat_ws(' ', ${userProfilesTable.lastName}, ${userProfilesTable.firstName})`;
+    return await tenantDb
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        firstName: userProfilesTable.firstName,
+        lastName: userProfilesTable.lastName,
+        participantNumber: usersTable.seqId
+      })
+      .from(usersTable)
+      .leftJoin(userProfilesTable, eq(usersTable.id, userProfilesTable.userId))
+      .where(and(
+        eq(usersTable.isActive, true),
+        pattern
+          ? or(
+              ilike(usersTable.email, pattern),
+              ilike(fullName, pattern),
+              ilike(reverseName, pattern),
+              // Participant number: exact match when the term is numeric (e.g. "173").
+              /^\d{1,9}$/.test(q!) ? eq(usersTable.seqId, Number(q)) : undefined
+            )
+          : undefined
+      ))
+      .orderBy(asc(userProfilesTable.lastName), asc(userProfilesTable.firstName), asc(usersTable.email));
+  }, {
+    beforeHandle: requirePermission("enrollOnBehalf"),
+    query: t.Object({ q: t.Optional(t.String({ maxLength: 200 })) }),
+    detail: {
+      summary: "Utenti per cui si può iscrivere un modello (permesso enrollOnBehalf)",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }]
+    }
+  });
 
 export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
   .use(tenantMiddleware)

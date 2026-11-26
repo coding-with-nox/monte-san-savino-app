@@ -2,7 +2,6 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
-  Button,
   Stack,
   TextField,
   Typography
@@ -13,6 +12,7 @@ import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import useToast from "../components/useToast";
+import { ActionButton } from "../components/ActionButton";
 
 interface LoginProps {
   language: Language;
@@ -132,7 +132,7 @@ export default function Login({ language }: LoginProps) {
             </Typography>
           </Box>
 
-          <Stack component="form" spacing={2} onSubmit={onLogin}>
+          <Stack data-tour="login-form" component="form" spacing={2} onSubmit={onLogin}>
             <TextField
               label={labels.emailLabel}
               placeholder={labels.emailPlaceholder}
@@ -155,12 +155,12 @@ export default function Login({ language }: LoginProps) {
               fullWidth
             />
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <Button type="submit" variant="contained" color="primary" fullWidth>
+              <ActionButton tip={t(language, "tipLogin")} data-tour="login-submit" type="submit" variant="contained" color="primary" fullWidth>
                 {labels.loginButton}
-              </Button>
-              <Button type="button" variant="outlined" onClick={onRegister} fullWidth>
+              </ActionButton>
+              <ActionButton tip={t(language, "tipSignup")} data-tour="login-signup" type="button" variant="outlined" onClick={onRegister} fullWidth>
                 {labels.signupButton}
-              </Button>
+              </ActionButton>
             </Stack>
           </Stack>
         </Stack>

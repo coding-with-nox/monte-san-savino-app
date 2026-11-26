@@ -1,15 +1,13 @@
-﻿import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   AppBar,
   Avatar,
   Box,
-  Button,
   CssBaseline,
   Divider,
   Drawer,
   FormControl,
-  IconButton,
   InputLabel,
   List,
   ListItemButton,
@@ -21,10 +19,10 @@ import {
   Stack,
   ThemeProvider,
   Toolbar,
+  Tooltip,
   Typography,
   useMediaQuery
 } from "@mui/material";
-import SvgIcon from "@mui/material/SvgIcon";
 import BottomNavigation from "@mui/material/BottomNavigation";
 import BottomNavigationAction from "@mui/material/BottomNavigationAction";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -35,24 +33,18 @@ import PersonIcon from "@mui/icons-material/Person";
 import HomeIcon from "@mui/icons-material/Home";
 import EventIcon from "@mui/icons-material/Event";
 import GavelIcon from "@mui/icons-material/Gavel";
-import GroupsIcon from "@mui/icons-material/Groups";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import BarChartIcon from "@mui/icons-material/BarChart";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import PeopleIcon from "@mui/icons-material/People";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
-
-function FigurineIcon(props: React.ComponentProps<typeof SvgIcon>) {
-  return (
-    <SvgIcon {...props} viewBox="0 0 24 24">
-      <circle cx="12" cy="4" r="2" />
-      <path d="M9 8h6l1 5H8z" />
-      <rect x="8" y="19" width="8" height="2" rx="1" />
-      <line x1="10" y1="13" x2="9" y2="19" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="14" y1="13" x2="15" y2="19" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="9" y1="9" x2="7" y2="12" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="15" y1="9" x2="17" y2="12" stroke="currentColor" strokeWidth="1.5" />
-    </SvgIcon>
-  );
-}
+import ViewInArIcon from "@mui/icons-material/ViewInAr";
+import LocalOfferIcon from "@mui/icons-material/LocalOffer";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import SettingsIcon from "@mui/icons-material/Settings";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import ReplayIcon from "@mui/icons-material/Replay";
 import Login from "./pages/Login";
 const Judge = lazy(() => import("./pages/Judge"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -68,11 +60,16 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Labels = lazy(() => import("./pages/Labels"));
 const Stats = lazy(() => import("./pages/Stats"));
 const Podium = lazy(() => import("./pages/Podium"));
+const Help = lazy(() => import("./pages/Help"));
 import PageSkeleton from "./components/PageSkeleton";
+import SideNav from "./components/SideNav";
+import { ActionButton, TipIconButton, TipMenuItem } from "./components/ActionButton";
+import usePageTour from "./components/usePageTour";
+import { Access, AccessContext, NO_ACCESS } from "./lib/access";
 import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
-import { buildTheme } from "./lib/theme";
+import { buildTheme, DEFAULT_THEME_PRESET, isThemePreset, ThemePreset } from "./lib/theme";
 
 function Protected({ children }: { children: React.ReactNode }) {
   return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
@@ -88,11 +85,10 @@ export default function App() {
     if (typeof window === "undefined") return "light";
     return (window.localStorage.getItem("theme") as "light" | "dark") || "light";
   });
-  const [themePreset, setThemePreset] = useState<"violet" | "ocean" | "forest" | "mss">(() => {
-    if (typeof window === "undefined") return "violet";
+  const [themePreset, setThemePreset] = useState<ThemePreset>(() => {
+    if (typeof window === "undefined") return DEFAULT_THEME_PRESET;
     const stored = window.localStorage.getItem("themePreset");
-    if (stored === "ocean" || stored === "forest" || stored === "mss") return stored;
-    return "violet";
+    return isThemePreset(stored) ? stored : DEFAULT_THEME_PRESET;
   });
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === "undefined") return "it";
@@ -142,7 +138,7 @@ export default function App() {
       const storedMode = window.localStorage.getItem("theme");
       const storedPreset = window.localStorage.getItem("themePreset");
       if (storedMode === "light" || storedMode === "dark") setThemeMode(storedMode);
-      if (storedPreset === "violet" || storedPreset === "ocean" || storedPreset === "forest" || storedPreset === "mss") {
+      if (isThemePreset(storedPreset)) {
         setThemePreset(storedPreset);
       }
     };
@@ -155,7 +151,7 @@ export default function App() {
           setThemeMode(settings.appTheme);
           window.localStorage.setItem("theme", settings.appTheme);
         }
-        if (settings.themePreset === "violet" || settings.themePreset === "ocean" || settings.themePreset === "forest" || settings.themePreset === "mss") {
+        if (isThemePreset(settings.themePreset)) {
           setThemePreset(settings.themePreset);
           window.localStorage.setItem("themePreset", settings.themePreset);
         }
@@ -184,6 +180,31 @@ export default function App() {
 
   const role = getRole();
 
+  // null = unknown (loading or endpoint unavailable): fall back to the role-based behaviour.
+  const [access, setAccess] = useState<Access>(NO_ACCESS);
+  useEffect(() => {
+    setAccess(NO_ACCESS);
+    if (!role) return;
+    let cancelled = false;
+    api<{ sections?: string[]; permissions?: string[] }>("/settings/section-visibility")
+      .then((res) => {
+        if (cancelled) return;
+        setAccess({
+          sections: Array.isArray(res?.sections) ? res.sections : null,
+          permissions: Array.isArray(res?.permissions) ? res.permissions : []
+        });
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [role]);
+  const { sections } = access;
+  const tourContext = useMemo(() => ({ role, ...access }), [role, access]);
+  const tour = usePageTour(language, tourContext);
+  const sectionVisible = (section: string | null) =>
+    !section || sections === null || role === "admin" || sections.includes(section);
+  const guard = (section: string, element: React.ReactNode) =>
+    sectionVisible(section) ? element : <Navigate to="/" replace />;
+
   const userInitial = (() => {
     const token = getToken();
     if (!token) return "?";
@@ -196,45 +217,37 @@ export default function App() {
 
   const handleLogout = endSession;
 
+  // `section` is matched against the backend visibility matrix; role minimums always apply too.
   const allNavItems = [
-    { label: t(language, "navHome"), path: "/", minRole: "user" as Role },
-    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role },
-    { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role },
-    { label: t(language, "navTeams"), path: "/teams", minRole: "user" as Role },
-    { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null },
-    { label: t(language, "navCheckin"), path: "/staff-checkin", minRole: "staff" as Role },
-    { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role },
-    { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role },
-    { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role },
-    { label: t(language, "navLabels"), path: "/labels", minRole: "manager" as Role },
-    { label: t(language, "navStats"), path: "/stats", minRole: "manager" as Role },
-    { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role },
-    { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role }
+    { label: t(language, "navHome"), path: "/", minRole: "user" as Role, section: null, icon: <HomeIcon /> },
+    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role, section: "models", icon: <ViewInArIcon /> },
+    { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role, section: "enrollments", icon: <AssignmentIcon /> },
+    { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null, section: null, icon: <EventIcon /> },
+    { label: t(language, "navCheckin"), path: "/staff-checkin", minRole: "staff" as Role, section: "checkin", icon: <HowToRegIcon /> },
+    { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role, section: "judge", icon: <GavelIcon /> },
+    { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role, section: "users", icon: <PeopleIcon /> },
+    { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role, section: "admin", icon: <AdminPanelSettingsIcon /> },
+    { label: t(language, "navLabels"), path: "/labels", minRole: "manager" as Role, section: "labels", icon: <LocalOfferIcon /> },
+    { label: t(language, "navStats"), path: "/stats", minRole: "jury_president" as Role, section: "stats", icon: <BarChartIcon /> },
+    { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role, section: "podium", icon: <EmojiEventsIcon /> },
+    { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role, section: "settings", icon: <SettingsIcon /> },
+    { label: t(language, "navHelp"), path: "/help", minRole: null, section: null, icon: <MenuBookIcon /> }
   ];
 
   const navItems = allNavItems.filter((item) => {
     if (!item.minRole) return true; // public pages always visible
     if (!role) return false; // no role = not logged in, hide protected
-    return roleAtLeast(role, item.minRole);
+    return roleAtLeast(role, item.minRole) && sectionVisible(item.section);
   });
 
-  const isManagerRole = !!role && roleAtLeast(role, "manager");
-  const bottomNavItems = isManagerRole
-    ? [
-        { label: t(language, "navHome"),   path: "/",        icon: <HomeIcon /> },
-        { label: t(language, "navModels"), path: "/models",  icon: <FigurineIcon /> },
-        { label: t(language, "navJudge"),  path: "/judge",   icon: <GavelIcon /> },
-        { label: t(language, "navUsers"),  path: "/users",   icon: <PeopleIcon /> },
-        { label: t(language, "navAdmin"),  path: "/admin",   icon: <AdminPanelSettingsIcon /> },
-      ]
-    : [
-        { label: t(language, "navHome"),         path: "/",              icon: <HomeIcon /> },
-        { label: t(language, "navModels"),       path: "/models",        icon: <FigurineIcon /> },
-        { label: t(language, "navTeams"),        path: "/teams",         icon: <GroupsIcon /> },
-        { label: t(language, "navPublicEvents"), path: "/public-events", icon: <EventIcon /> },
-        ...(role && roleAtLeast(role, "judge") ? [{ label: t(language, "navJudge"), path: "/judge", icon: <GavelIcon /> }] : []),
-        ...(role === "staff" ? [{ label: t(language, "navCheckin"), path: "/staff-checkin", icon: <HowToRegIcon /> }] : []),
-      ];
+  // Mobile bar: at most five destinations, by role.
+  const bottomNavPaths =
+    role && roleAtLeast(role, "manager")
+      ? ["/", "/models", "/judge", "/users", "/admin"]
+      : role === "jury_president"
+        ? ["/", "/judge", "/stats", "/models", "/enrollments"]
+        : ["/", "/models", "/enrollments", role === "staff" ? "/staff-checkin" : "/judge", "/public-events"];
+  const bottomNavItems = bottomNavPaths.flatMap((path) => navItems.filter((item) => item.path === path));
 
   const bottomNavValue = bottomNavItems.findIndex((item) =>
     item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path)
@@ -258,17 +271,21 @@ export default function App() {
             component={RouterLink}
             to={item.path}
             selected={isActive(item.path)}
+            aria-current={isActive(item.path) ? "page" : undefined}
           >
+            <ListItemIcon>{item.icon}</ListItemIcon>
             <ListItemText primary={item.label} />
           </ListItemButton>
         ))}
         {role && (
           <>
             <Divider />
-            <ListItemButton onClick={handleLogout}>
-              <ListItemIcon><LogoutIcon /></ListItemIcon>
-              <ListItemText primary={t(language, "logoutButton")} />
-            </ListItemButton>
+            <Tooltip title={t(language, "tipLogout")} describeChild>
+              <ListItemButton onClick={handleLogout}>
+                <ListItemIcon><LogoutIcon /></ListItemIcon>
+                <ListItemText primary={t(language, "logoutButton")} />
+              </ListItemButton>
+            </Tooltip>
           </>
         )}
       </List>
@@ -282,7 +299,7 @@ export default function App() {
         <Box sx={{ minHeight: "100vh", bgcolor: "background.default", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 2, p: 4 }}>
           <Typography variant="h4" sx={{ color: "error.main" }}>⚠ {t(language, "maintenanceTitle")}</Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center">{t(language, "maintenanceSubtitle")}</Typography>
-          <Button variant="outlined" onClick={() => { setBackendDown(false); window.location.reload(); }}>{t(language, "retryButton")}</Button>
+          <ActionButton tip={t(language, "tipMaintenanceRetry")} variant="outlined" onClick={() => { setBackendDown(false); window.location.reload(); }}>{t(language, "retryButton")}</ActionButton>
         </Box>
       </ThemeProvider>
     );
@@ -291,35 +308,21 @@ export default function App() {
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
-      <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <AccessContext.Provider value={access}>
+      <Box sx={{ minHeight: "100vh", bgcolor: "background.default", display: "flex", flexDirection: "column" }}>
         <AppBar position="static" elevation={0} sx={{ bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" }}>
           <Toolbar sx={{ gap: 2 }}>
             {isMobile && (
-              <IconButton color="default" edge="start" onClick={() => setDrawerOpen(true)}>
+              <TipIconButton tip={t(language, "tipMenuOpen")} data-tour="topbar-nav" color="default" edge="start" aria-label={t(language, "navOpenMenu")} onClick={() => setDrawerOpen(true)}>
                 <MenuIcon />
-              </IconButton>
+              </TipIconButton>
             )}
-            <Typography variant="h6" sx={{ flexGrow: isMobile ? 1 : 0, color: "text.primary" }}>
+            <Typography variant="h6" sx={{ flexGrow: 1, color: "text.primary" }}>
               {appName}
             </Typography>
-            {!isMobile && (
-              <Stack direction="row" spacing={0.5} sx={{ flexGrow: 1, ml: 2, flexWrap: "wrap" }}>
-                {navItems.map((item) => (
-                  <Button
-                    key={item.path}
-                    component={RouterLink}
-                    to={item.path}
-                    variant={isActive(item.path) ? "contained" : "text"}
-                    color={isActive(item.path) ? "secondary" : "inherit"}
-                    sx={{ color: isActive(item.path) ? undefined : "text.primary" }}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </Stack>
-            )}
             <Stack direction="row" spacing={1} alignItems="center">
               <Select
+                data-tour="topbar-lang"
                 size="small"
                 value={language}
                 onChange={(event) => setLanguage(event.target.value as Language)}
@@ -329,21 +332,31 @@ export default function App() {
                 <MenuItem value="it">🇮🇹 Italiano</MenuItem>
                 <MenuItem value="en">🇬🇧 English</MenuItem>
               </Select>
-              <IconButton
+              <TipIconButton
+                tip={t(language, "tipHelpPage")}
+                color="default"
+                data-tour="topbar-help"
+                aria-label={t(language, "helpButtonLabel")}
+                onClick={tour.start}
+              >
+                <HelpOutlineIcon />
+              </TipIconButton>
+              <TipIconButton
+                tip={t(language, themeMode === "light" ? "tipThemeToDark" : "tipThemeToLight")}
+                data-tour="topbar-theme"
                 color="default"
                 onClick={() => setThemeMode(themeMode === "light" ? "dark" : "light")}
                 aria-label={`${labels.themeToggle}: ${themeMode === "light" ? labels.themeDark : labels.themeLight}`}
-                title={`${labels.themeToggle}: ${themeMode === "light" ? labels.themeDark : labels.themeLight}`}
               >
                 {themeMode === "light" ? <Brightness4Icon /> : <Brightness7Icon />}
-              </IconButton>
+              </TipIconButton>
               {role && (
                 <>
-                  <IconButton onClick={(e) => setAvatarMenuAnchor(e.currentTarget)} sx={{ p: 0 }}>
+                  <TipIconButton tip={t(language, "tipAccountMenu")} data-tour="topbar-account" aria-label={t(language, "navProfile")} onClick={(e) => setAvatarMenuAnchor(e.currentTarget)} sx={{ p: 0 }}>
                     <Avatar sx={{ width: 36, height: 36, bgcolor: "secondary.main", fontSize: 16 }}>
                       {userInitial}
                     </Avatar>
-                  </IconButton>
+                  </TipIconButton>
                   <Menu
                     anchorEl={avatarMenuAnchor}
                     open={Boolean(avatarMenuAnchor)}
@@ -351,25 +364,31 @@ export default function App() {
                     anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                     transformOrigin={{ vertical: "top", horizontal: "right" }}
                   >
-                    <MenuItem component={RouterLink} to="/profile" onClick={() => setAvatarMenuAnchor(null)}>
+                    <TipMenuItem tip={t(language, "tipMenuProfile")} component={RouterLink} to="/profile" onClick={() => setAvatarMenuAnchor(null)}>
                       <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
                       {t(language, "navProfile")}
-                    </MenuItem>
+                    </TipMenuItem>
+                    <TipMenuItem tip={t(language, "tipMenuReplayTours")} onClick={() => { setAvatarMenuAnchor(null); tour.replayAll(); }}>
+                      <ListItemIcon><ReplayIcon fontSize="small" /></ListItemIcon>
+                      {t(language, "tourReplay")}
+                    </TipMenuItem>
                     <Divider />
-                    <MenuItem onClick={handleLogout}>
+                    <TipMenuItem tip={t(language, "tipLogout")} onClick={handleLogout}>
                       <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
                       {t(language, "logoutButton")}
-                    </MenuItem>
+                    </TipMenuItem>
                   </Menu>
                 </>
               )}
             </Stack>
           </Toolbar>
         </AppBar>
-        <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+        <Drawer anchor="left" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
           {drawerContent}
         </Drawer>
-        <Box sx={{ pb: isMobile && role ? "56px" : 0 }}>
+        <Box sx={{ display: "flex", flexGrow: 1 }}>
+        {!isMobile && <SideNav items={navItems} isActive={isActive} language={language} />}
+        <Box sx={{ flexGrow: 1, minWidth: 0, pb: isMobile && role ? "56px" : 0 }}>
           <Suspense fallback={<PageSkeleton variant="table" />}>
           <Routes>
             <Route
@@ -382,21 +401,23 @@ export default function App() {
             />
             <Route path="/" element={<Protected><Dashboard language={language} /></Protected>} />
             <Route path="/profile" element={<Protected><Profile language={language} /></Protected>} />
-            <Route path="/models" element={<Protected><Models language={language} /></Protected>} />
-            <Route path="/enrollments" element={<Protected><Enrollments language={language} /></Protected>} />
-            <Route path="/staff-checkin" element={<Protected><RequireRole min="staff"><StaffCheckin language={language} /></RequireRole></Protected>} />
+            <Route path="/models" element={<Protected>{guard("models", <Models language={language} />)}</Protected>} />
+            <Route path="/enrollments" element={<Protected>{guard("enrollments", <Enrollments language={language} />)}</Protected>} />
+            <Route path="/staff-checkin" element={<Protected><RequireRole min="staff">{guard("checkin", <StaffCheckin language={language} />)}</RequireRole></Protected>} />
             <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
             <Route path="/public-events" element={<PublicEvents language={language} />} />
-            <Route path="/judge" element={<Protected><RequireRole min="judge"><Judge language={language} /></RequireRole></Protected>} />
-            <Route path="/users" element={<Protected><RequireRole min="manager"><Users language={language} /></RequireRole></Protected>} />
-            <Route path="/admin" element={<Protected><RequireRole min="manager"><Admin language={language} /></RequireRole></Protected>} />
-            <Route path="/labels" element={<Protected><RequireRole min="manager"><Labels language={language} /></RequireRole></Protected>} />
-            <Route path="/stats" element={<Protected><RequireRole min="manager"><Stats language={language} /></RequireRole></Protected>} />
-            <Route path="/podium" element={<Protected><RequireRole min="manager"><Podium language={language} /></RequireRole></Protected>} />
-            <Route path="/settings" element={<Protected><RequireRole min="admin"><Settings language={language} /></RequireRole></Protected>} />
+            <Route path="/judge" element={<Protected><RequireRole min="judge">{guard("judge", <Judge language={language} />)}</RequireRole></Protected>} />
+            <Route path="/users" element={<Protected><RequireRole min="manager">{guard("users", <Users language={language} />)}</RequireRole></Protected>} />
+            <Route path="/admin" element={<Protected><RequireRole min="manager">{guard("admin", <Admin language={language} />)}</RequireRole></Protected>} />
+            <Route path="/labels" element={<Protected><RequireRole min="manager">{guard("labels", <Labels language={language} />)}</RequireRole></Protected>} />
+            <Route path="/stats" element={<Protected><RequireRole min="jury_president">{guard("stats", <Stats language={language} />)}</RequireRole></Protected>} />
+            <Route path="/podium" element={<Protected><RequireRole min="manager">{guard("podium", <Podium language={language} />)}</RequireRole></Protected>} />
+            <Route path="/settings" element={<Protected><RequireRole min="admin">{guard("settings", <Settings language={language} />)}</RequireRole></Protected>} />
+            <Route path="/help" element={<Help language={language} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>
+        </Box>
         </Box>
         {isMobile && role && (
           <BottomNavigation
@@ -424,6 +445,8 @@ export default function App() {
           </BottomNavigation>
         )}
       </Box>
+      {tour.node}
+      </AccessContext.Provider>
     </ThemeProvider>
   );
 }

@@ -1,15 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Chip, FormControl, Grid, InputLabel, Link, MenuItem, Select, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
+import { Alert, Box, Card, CardContent, Chip, FormControl, Grid, InputLabel, Link, MenuItem, Select, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography } from "@mui/material";
 import SlideshowIcon from "@mui/icons-material/Slideshow";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import { Link as RouterLink } from "react-router-dom";
 import { api } from "../lib/api";
+import { getRole } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
 import { countryName } from "../lib/countries";
 import PageContainer from "../components/PageContainer";
 import PageSkeleton from "../components/PageSkeleton";
 import SectionCard from "../components/SectionCard";
 import BarList, { BarItem } from "../components/BarList";
+import { ActionButton } from "../components/ActionButton";
 
 export type StatsOverview = {
   usersTotal: number;
@@ -46,7 +48,8 @@ export default function Stats({ language }: StatsProps) {
   }, [language, eventId]);
 
   useEffect(() => {
-    api<{ id: string; name: string }[]>("/events").then(setEvents).catch(() => undefined);
+    const path = getRole() === "jury_president" ? "/public/events?status=all" : "/events";
+    api<{ id: string; name: string }[]>(path).then(setEvents).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -108,7 +111,7 @@ export default function Stats({ language }: StatsProps) {
             </Typography>
           )}
           {!projection && events.length > 0 && (
-            <FormControl size="small" sx={{ minWidth: 180 }}>
+            <FormControl data-tour="stats-filter" size="small" sx={{ minWidth: 180 }}>
               <InputLabel id="stats-event">{t(language, "statsEvent")}</InputLabel>
               <Select labelId="stats-event" value={eventId} label={t(language, "statsEvent")} onChange={(e) => setEventId(e.target.value)}>
                 <MenuItem value="">{t(language, "statsAllEvents")}</MenuItem>
@@ -117,20 +120,20 @@ export default function Stats({ language }: StatsProps) {
             </FormControl>
           )}
           {projection ? (
-            <Button variant="outlined" startIcon={<FullscreenExitIcon />} onClick={exitProjection}>
+            <ActionButton tip={t(language, "tipStatsExit")} variant="outlined" startIcon={<FullscreenExitIcon />} onClick={exitProjection}>
               {t(language, "statsExitProjection")}
-            </Button>
+            </ActionButton>
           ) : (
-            <Button variant="contained" startIcon={<SlideshowIcon />} onClick={enterProjection}>
+            <ActionButton tip={t(language, "tipStatsProjection")} data-tour="stats-projection" variant="contained" startIcon={<SlideshowIcon />} onClick={enterProjection}>
               {t(language, "statsProjection")}
-            </Button>
+            </ActionButton>
           )}
         </Stack>
       </Stack>
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      <Grid container spacing={2}>
+      <Grid data-tour="stats-kpis" container spacing={2}>
         {kpis.map((k) => (
           <Grid item xs={6} md={3} key={k.key}>
             <Card>
@@ -145,7 +148,7 @@ export default function Stats({ language }: StatsProps) {
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>
-          <SectionCard title={t(language, "statsByCountry")}>
+          <SectionCard tourId="stats-charts" title={t(language, "statsByCountry")}>
             <BarList items={countryItems} emptyLabel={t(language, "statsNoData")} large={projection} />
           </SectionCard>
         </Grid>
@@ -175,7 +178,7 @@ export default function Stats({ language }: StatsProps) {
       </Grid>
 
       {!projection && (
-        <SectionCard title={`${t(language, "statsZeroUsers")} (${zeroUsers.length})`}>
+        <SectionCard tourId="stats-zero" title={`${t(language, "statsZeroUsers")} (${zeroUsers.length})`}>
           {zeroUsers.length === 0 ? (
             <Typography color="text.secondary">{t(language, "statsNoData")}</Typography>
           ) : (
@@ -194,9 +197,11 @@ export default function Stats({ language }: StatsProps) {
                       <TableCell>{u.name || "-"}</TableCell>
                       <TableCell>{u.email}</TableCell>
                       <TableCell align="right">
-                        <Link component={RouterLink} to={`/users?open=${encodeURIComponent(u.userId)}`}>
-                          {t(language, "statsOpenProfile")}
-                        </Link>
+                        <Tooltip title={t(language, "tipStatsProfile")} describeChild>
+                          <Link component={RouterLink} to={`/users?open=${encodeURIComponent(u.userId)}`}>
+                            {t(language, "statsOpenProfile")}
+                          </Link>
+                        </Tooltip>
                       </TableCell>
                     </TableRow>
                   ))}

@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Box, Button, FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Typography } from "@mui/material";
+import { Alert, Box, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
-import { AwardRow, buildPodiums, locateStep, totalSteps } from "../lib/podium";
+import { AwardRow, buildPodiums, DEFAULT_PRIZE_ORDER, locateStep, totalSteps } from "../lib/podium";
+import { ActionButton, TipIconButton } from "../components/ActionButton";
 
 type Event = { id: string; name: string };
 type Category = { id: string; name: string };
@@ -17,7 +18,7 @@ interface PodiumProps {
 
 const reduceMotion = { "@media (prefers-reduced-motion: reduce)": { transition: "none", transform: "none" } };
 
-/** Full-screen awards ceremony: winners of each class revealed one at a time (lowest medal first). */
+/** Full-screen awards ceremony: winners of each class revealed one at a time, in the configured order. */
 export default function Podium({ language }: PodiumProps) {
   const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
@@ -27,10 +28,14 @@ export default function Podium({ language }: PodiumProps) {
   const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [prizeOrder, setPrizeOrder] = useState<string[]>(DEFAULT_PRIZE_ORDER);
 
   useEffect(() => {
     api<Event[]>("/events").then(setEvents).catch((e) => setError(e?.message ?? t(language, "awardsLoadError")));
     api<Category[]>("/categories").then(setCategories).catch(() => undefined);
+    api<{ order?: string[] }>("/settings/prize-order")
+      .then((res) => { if (res?.order?.length) setPrizeOrder(res.order); })
+      .catch(() => undefined);
   }, [language]);
 
   async function start() {
@@ -45,7 +50,7 @@ export default function Podium({ language }: PodiumProps) {
     }
   }
 
-  const podiums = useMemo(() => buildPodiums(rows), [rows]);
+  const podiums = useMemo(() => buildPodiums(rows, prizeOrder), [rows, prizeOrder]);
   const total = totalSteps(podiums);
   const { classIndex, revealed } = locateStep(podiums, step);
   const current = podiums[classIndex];
@@ -90,27 +95,29 @@ export default function Podium({ language }: PodiumProps) {
         overflow: "auto"
       }}
     >
-      <IconButton
+      <TipIconButton
+        tip={t(language, "tipPodiumExit")}
+        data-tour="podium-exit"
         aria-label={t(language, "awardsExit")}
         onClick={(e) => { e.stopPropagation(); exit(); }}
         sx={{ position: "absolute", top: 16, right: 16 }}
       >
         <CloseIcon />
-      </IconButton>
+      </TipIconButton>
 
       {!started && (
         <Stack spacing={3} alignItems="center" onClick={(e) => e.stopPropagation()} sx={{ width: "100%", maxWidth: 420 }}>
           <Typography variant="h3">{t(language, "awardsTitle")}</Typography>
           {error && <Alert severity="error">{error}</Alert>}
-          <FormControl fullWidth>
+          <FormControl data-tour="podium-event" fullWidth>
             <InputLabel id="podium-event">{t(language, "awardsSelectEvent")}</InputLabel>
             <Select labelId="podium-event" value={eventId} label={t(language, "awardsSelectEvent")} onChange={(e) => setEventId(e.target.value)}>
               {events.map((ev) => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
             </Select>
           </FormControl>
-          <Button variant="contained" size="large" disabled={!eventId} onClick={start}>
+          <ActionButton tip={t(language, "tipPodiumStart")} data-tour="podium-start" variant="contained" size="large" disabled={!eventId} onClick={start}>
             {t(language, "awardsStart")}
-          </Button>
+          </ActionButton>
         </Stack>
       )}
 
@@ -168,9 +175,9 @@ export default function Podium({ language }: PodiumProps) {
           onClick={(e) => e.stopPropagation()}
           sx={{ position: "absolute", bottom: 16, left: 0, right: 0, justifyContent: "center" }}
         >
-          <Button startIcon={<NavigateBeforeIcon />} onClick={prev} disabled={step === 0}>{t(language, "awardsPrev")}</Button>
+          <ActionButton tip={t(language, "tipPodiumPrev")} startIcon={<NavigateBeforeIcon />} onClick={prev} disabled={step === 0}>{t(language, "awardsPrev")}</ActionButton>
           <Typography variant="body2" color="text.secondary">{t(language, "awardsStep")} {step} / {total}</Typography>
-          <Button endIcon={<NavigateNextIcon />} onClick={next} disabled={step >= total} variant="contained">{t(language, "awardsNext")}</Button>
+          <ActionButton tip={t(language, "tipPodiumNext")} endIcon={<NavigateNextIcon />} onClick={next} disabled={step >= total} variant="contained">{t(language, "awardsNext")}</ActionButton>
           <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", md: "block" } }}>
             {t(language, "awardsHint")}
           </Typography>

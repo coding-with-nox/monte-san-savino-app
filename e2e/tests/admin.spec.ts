@@ -25,14 +25,16 @@ test.describe("Admin page", () => {
   });
 
   test("levels section visible", async ({ page }) => {
-    // Levels section title is "Livelli" (IT) / "Levels" (EN)
+    // Levels section title is "Livelli" (IT) / "Levels" (EN), in the catalog tab
+    await page.goto("/admin?tab=catalog");
     const levelsSection = page.getByText(/^Livelli$|^Levels$/i).first();
     await levelsSection.scrollIntoViewIfNeeded();
     await expect(levelsSection).toBeVisible({ timeout: 8000 });
   });
 
   test("member roles section visible", async ({ page }) => {
-    // Member roles section title is "Ruoli Membri" (IT) / "Member Roles" (EN)
+    // Member roles section title is "Ruoli Membri" (IT) / "Member Roles" (EN), in the catalog tab
+    await page.goto("/admin?tab=catalog");
     const memberRolesSection = page.getByText(/ruoli membri|member roles/i).first();
     await memberRolesSection.scrollIntoViewIfNeeded();
     await expect(memberRolesSection).toBeVisible({ timeout: 8000 });

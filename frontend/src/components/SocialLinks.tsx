@@ -1,5 +1,5 @@
 import React from "react";
-import { IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import { Stack, Typography } from "@mui/material";
 import InstagramIcon from "@mui/icons-material/Instagram";
 import FacebookIcon from "@mui/icons-material/Facebook";
 import LanguageIcon from "@mui/icons-material/Language";
@@ -8,6 +8,7 @@ import MusicNoteIcon from "@mui/icons-material/MusicNote";
 import VolunteerActivismIcon from "@mui/icons-material/VolunteerActivism";
 import { Language, t } from "../lib/i18n";
 import { SocialFields, safeHttpUrl } from "../lib/social";
+import { TipIconButton } from "./ActionButton";
 
 interface SocialLinksProps extends SocialFields {
   language: Language;
@@ -33,9 +34,10 @@ export default function SocialLinks({ language, instagram, facebook, website, pa
   return (
     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
       {items.map((i) => (
-        <Tooltip key={i.key} title={`${i.label}: ${i.value}`}>
-          <IconButton
-            component="a"
+        <TipIconButton
+          key={i.key}
+          tip={t(language, "tipSocialOpen").replace("{name}", i.label).replace("{value}", String(i.value ?? ""))}
+          component="a"
             href={i.href as string}
             target="_blank"
             rel="noopener noreferrer"
@@ -43,8 +45,7 @@ export default function SocialLinks({ language, instagram, facebook, website, pa
             color="primary"
           >
             {i.icon}
-          </IconButton>
-        </Tooltip>
+          </TipIconButton>
       ))}
     </Stack>
   );

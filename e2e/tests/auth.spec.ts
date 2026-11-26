@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ADMIN, INACTIVE, loginAs, waitForApp } from "./helpers";
+import { ADMIN, INACTIVE, disableTours, loginAs, waitForApp } from "./helpers";
 
 test.describe("Authentication", () => {
   test("login page renders", async ({ page }) => {
@@ -22,6 +22,7 @@ test.describe("Authentication", () => {
 
   test("login with wrong password shows error", async ({ page }) => {
     await page.goto("/login");
+    await disableTours(page);
     await page.getByLabel("Email").fill(ADMIN.email);
     await page.getByLabel("Password").fill("WrongPassword123!");
     await page.getByRole("button", { name: "Login" }).click();
@@ -31,6 +32,7 @@ test.describe("Authentication", () => {
 
   test("login with inactive user shows error", async ({ page }) => {
     await page.goto("/login");
+    await disableTours(page);
     await page.getByLabel("Email").fill(INACTIVE.email);
     await page.getByLabel("Password").fill(INACTIVE.password);
     await page.getByRole("button", { name: "Login" }).click();

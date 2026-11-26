@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
   Alert,
-  Button,
   Chip,
   FormControl,
   Grid,
@@ -19,6 +18,7 @@ import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import SectionCard from "../components/SectionCard";
 import PageSkeleton from "../components/PageSkeleton";
+import { ActionButton } from "../components/ActionButton";
 
 interface DashboardProps {
   language: Language;
@@ -49,7 +49,8 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 /* ---------------- Manager / admin ---------------- */
-function ManagerDashboard({ language }: DashboardProps) {
+// Also used by the jury president (read-only: statistics instead of the management shortcuts).
+function ManagerDashboard({ language, juryPresident }: DashboardProps & { juryPresident?: boolean }) {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [eventId, setEventId] = useState("");
   const [enrollments, setEnrollments] = useState<AdminEnrollment[]>([]);
@@ -58,7 +59,7 @@ function ManagerDashboard({ language }: DashboardProps) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    api<EventRow[]>("/public/events")
+    api<EventRow[]>(juryPresident ? "/public/events?status=all" : "/public/events")
       .then((rows) => {
         setEvents(rows ?? []);
         if (rows?.length) setEventId(rows[0].id);
@@ -97,7 +98,7 @@ function ManagerDashboard({ language }: DashboardProps) {
       {events.length === 0 ? (
         <Typography color="text.secondary">{t(language, "dashNoActiveEvent")}</Typography>
       ) : (
-        <SectionCard title={t(language, "dashEventLabel")}>
+        <SectionCard tourId="dash-event" title={t(language, "dashEventLabel")}>
           <Stack spacing={2}>
             <FormControl size="small" sx={{ maxWidth: 320 }}>
               <InputLabel>{t(language, "dashEventLabel")}</InputLabel>
@@ -120,11 +121,18 @@ function ManagerDashboard({ language }: DashboardProps) {
           </Stack>
         </SectionCard>
       )}
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <Button component={RouterLink} to="/admin" variant="contained">{t(language, "dashOpenAdmin")}</Button>
-        <Button component={RouterLink} to="/enrollments" variant="outlined">{t(language, "dashManageEnrollments")}</Button>
-        <Button component={RouterLink} to="/staff-checkin" variant="outlined">{t(language, "dashOpenCheckin")}</Button>
-      </Stack>
+      {juryPresident ? (
+        <Stack data-tour="dash-actions" direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <ActionButton tip={t(language, "tipDashStats")} component={RouterLink} to="/stats" variant="contained">{t(language, "dashOpenStats")}</ActionButton>
+          <ActionButton tip={t(language, "tipDashJudge")} component={RouterLink} to="/judge" variant="outlined">{t(language, "dashGoToJudge")}</ActionButton>
+        </Stack>
+      ) : (
+        <Stack data-tour="dash-actions" direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <ActionButton tip={t(language, "tipDashAdmin")} component={RouterLink} to="/admin" variant="contained">{t(language, "dashOpenAdmin")}</ActionButton>
+          <ActionButton tip={t(language, "tipDashEnrollments")} component={RouterLink} to="/enrollments" variant="outlined">{t(language, "dashManageEnrollments")}</ActionButton>
+          <ActionButton tip={t(language, "tipDashCheckin")} component={RouterLink} to="/staff-checkin" variant="outlined">{t(language, "dashOpenCheckin")}</ActionButton>
+        </Stack>
+      )}
     </Stack>
   );
 }
@@ -166,7 +174,7 @@ function JudgeDashboard({ language }: DashboardProps) {
   return (
     <Stack spacing={2}>
       {failed && <Alert severity="warning">{t(language, "dashLoadError")}</Alert>}
-      <SectionCard title={`${t(language, "dashCategoriesToVote")}${eventName ? ` - ${eventName}` : ""}`}>
+      <SectionCard tourId="dash-judge-categories" title={`${t(language, "dashCategoriesToVote")}${eventName ? ` - ${eventName}` : ""}`}>
         {byCategory.size === 0 ? (
           <Typography color="text.secondary">{t(language, "dashNoActiveEvent")}</Typography>
         ) : pending.length === 0 ? (
@@ -182,9 +190,9 @@ function JudgeDashboard({ language }: DashboardProps) {
           </Stack>
         )}
       </SectionCard>
-      <Button component={RouterLink} to="/judge" variant="contained" sx={{ alignSelf: "flex-start" }}>
+      <ActionButton tip={t(language, "tipDashJudge")} data-tour="dash-judge-go" component={RouterLink} to="/judge" variant="contained" sx={{ alignSelf: "flex-start" }}>
         {t(language, "dashGoToJudge")}
-      </Button>
+      </ActionButton>
     </Stack>
   );
 }
@@ -220,7 +228,7 @@ function UserDashboard({ language, isStaff }: DashboardProps & { isStaff: boolea
       {failed && <Alert severity="warning">{t(language, "dashLoadError")}</Alert>}
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>
-          <SectionCard title={t(language, "dashMyModels")}>
+          <SectionCard tourId="dash-models" title={t(language, "dashMyModels")}>
             {models.length === 0 ? (
               <Typography color="text.secondary">{t(language, "dashNoModelsYet")}</Typography>
             ) : (
@@ -237,7 +245,7 @@ function UserDashboard({ language, isStaff }: DashboardProps & { isStaff: boolea
           </SectionCard>
         </Grid>
         <Grid item xs={12} md={6}>
-          <SectionCard title={t(language, "dashMyEnrollments")}>
+          <SectionCard tourId="dash-enrollments" title={t(language, "dashMyEnrollments")}>
             {enrollments.length === 0 ? (
               <Typography color="text.secondary">{t(language, "dashNoEnrollmentsYet")}</Typography>
             ) : (
@@ -258,11 +266,11 @@ function UserDashboard({ language, isStaff }: DashboardProps & { isStaff: boolea
           </SectionCard>
         </Grid>
       </Grid>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <Button component={RouterLink} to="/models" variant="contained">{t(language, "dashManageModels")}</Button>
-        <Button component={RouterLink} to="/enrollments" variant="outlined">{t(language, "dashManageEnrollments")}</Button>
+      <Stack data-tour="dash-actions" direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <ActionButton tip={t(language, "tipDashModels")} component={RouterLink} to="/models" variant="contained">{t(language, "dashManageModels")}</ActionButton>
+        <ActionButton tip={t(language, "tipDashEnrollments")} component={RouterLink} to="/enrollments" variant="outlined">{t(language, "dashManageEnrollments")}</ActionButton>
         {isStaff && (
-          <Button component={RouterLink} to="/staff-checkin" variant="outlined">{t(language, "dashOpenCheckin")}</Button>
+          <ActionButton tip={t(language, "tipDashCheckin")} component={RouterLink} to="/staff-checkin" variant="outlined">{t(language, "dashOpenCheckin")}</ActionButton>
         )}
       </Stack>
     </Stack>
@@ -279,8 +287,8 @@ export default function Dashboard({ language }: DashboardProps) {
     <PageContainer maxWidth="lg">
       <Stack spacing={2}>
         <Typography variant="h4">{t(language, "dashboardTitle")}</Typography>
-        {isManager ? (
-          <ManagerDashboard language={language} />
+        {isManager || role === "jury_president" ? (
+          <ManagerDashboard language={language} juryPresident={!isManager} />
         ) : isJudge ? (
           <JudgeDashboard language={language} />
         ) : (

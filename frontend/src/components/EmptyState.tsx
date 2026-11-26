@@ -1,12 +1,13 @@
 import React from "react";
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import InboxIcon from "@mui/icons-material/Inbox";
+import { ActionButton } from "./ActionButton";
 
 interface EmptyStateProps {
   title: string;
   description?: string;
   icon?: React.ReactNode;
-  action?: { label: string; onClick: () => void };
+  action?: { label: string; tip: string; onClick: () => void };
 }
 
 export default function EmptyState({ title, description, icon, action }: EmptyStateProps) {
@@ -29,14 +30,14 @@ export default function EmptyState({ title, description, icon, action }: EmptySt
         {title}
       </Typography>
       {description && (
-        <Typography variant="body2" color="text.disabled" textAlign="center">
+        <Typography variant="body2" color="text.secondary" textAlign="center">
           {description}
         </Typography>
       )}
       {action && (
-        <Button variant="contained" color="secondary" onClick={action.onClick} sx={{ mt: 1 }}>
+        <ActionButton tip={action.tip} variant="contained" color="secondary" onClick={action.onClick} sx={{ mt: 1 }}>
           {action.label}
-        </Button>
+        </ActionButton>
       )}
     </Box>
   );

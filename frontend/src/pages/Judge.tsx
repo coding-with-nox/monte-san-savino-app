@@ -1,12 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Box,
-  Button,
   Checkbox,
   Chip,
   Divider,
   FormControl,
-  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -14,14 +12,17 @@ import {
   Stack,
   Switch,
   TextField,
-  Typography,
+  Tooltip,
+  Typography
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
 import PageSkeleton from "../components/PageSkeleton";
+import EmptyState from "../components/EmptyState";
 import useToast from "../components/useToast";
+import { ActionButton, TipIconButton } from "../components/ActionButton";
 
 // ---- Types ----
 type JudgeEvent = { eventId: string; eventName: string };
@@ -42,8 +43,9 @@ type JudgeModel = {
   notes?: string | null;
 };
 
+/** A display case (vetrina): the models of one participant sharing a displayNumber. */
 type Exhibitor = {
-  userId: string;
+  key: string;
   displayNum: string;
   models: JudgeModel[];
 };
@@ -79,17 +81,17 @@ function exhibitorDisplayNum(models: JudgeModel[]): string {
   return String(Math.min(...nums));
 }
 
-function groupByExhibitor(models: JudgeModel[]): Exhibitor[] {
+// A displayNumber is unique within an event. Without a selected event (or number) group per participant too.
+function groupByDisplay(models: JudgeModel[], eventId: string): Exhibitor[] {
   const map = new Map<string, JudgeModel[]>();
   for (const m of models) {
-    if (!map.has(m.userId)) map.set(m.userId, []);
-    map.get(m.userId)!.push(m);
+    const key = m.displayNumber !== null && eventId ? `d:${m.displayNumber}` : `${m.userId}:${m.displayNumber ?? ""}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(m);
   }
-  return Array.from(map.entries()).map(([userId, ms]) => ({
-    userId,
-    displayNum: exhibitorDisplayNum(ms),
-    models: ms,
-  }));
+  return Array.from(map.entries())
+    .map(([key, ms]) => ({ key, displayNum: exhibitorDisplayNum(ms), models: ms }))
+    .sort((a, b) => a.displayNum.localeCompare(b.displayNum, undefined, { numeric: true }));
 }
 
 function errorMessage(err: any, language: Language, categoryScoped = false): string {
@@ -249,7 +251,7 @@ export default function Judge({ language }: JudgeProps) {
   // ---- Derived state ----
   // Defensive: keep only the selected category even if the backend ignores the filter.
   const visibleModels = categoryId ? models.filter((m) => m.categoryId === categoryId) : models;
-  const allExhibitors = groupByExhibitor(visibleModels);
+  const allExhibitors = groupByDisplay(visibleModels, eventId);
 
   const displayedExhibitors = allExhibitors.filter((ex) => {
     if (!showAll && exhibitorFullyJudged(ex)) return false;
@@ -323,15 +325,33 @@ export default function Judge({ language }: JudgeProps) {
 
     setSubmitting(true);
     try {
-      await Promise.all(
-        targets.map((modelId) =>
-          api("/judge/vote", {
-            method: "POST",
-            body: JSON.stringify({ modelId, rank: selectedScore }),
-          })
-        )
-      );
-      toast.success(t(language, "judgeVoteSuccess"));
+      const displayNumber = activeExhibitor.models[0]?.displayNumber ?? null;
+      let notRecorded = 0;
+      if (displayMode && eventId && displayNumber !== null) {
+        const res = await api<{ skippedClosedModelIds?: string[] }>("/judge/displays/vote", {
+          method: "POST",
+          body: JSON.stringify({ eventId, displayNumber, rank: selectedScore }),
+        });
+        notRecorded = res?.skippedClosedModelIds?.length ?? 0;
+      } else {
+        const results = await Promise.allSettled(
+          targets.map((modelId) =>
+            api("/judge/vote", {
+              method: "POST",
+              body: JSON.stringify({ modelId, rank: selectedScore }),
+            })
+          )
+        );
+        const failed = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+        // Every vote failed: surface the backend message and keep the selection for a retry.
+        if (failed.length === targets.length) throw failed[0].reason;
+        notRecorded = failed.length;
+      }
+      if (notRecorded > 0) {
+        toast.error(t(language, "judgeVotePartial").replace("{n}", String(notRecorded)));
+      } else {
+        toast.success(t(language, "judgeVoteSuccess"));
+      }
       // Reload models and refresh active exhibitor in place (don't navigate home)
       const query = new URLSearchParams();
       if (eventId) query.set("eventId", eventId);
@@ -339,8 +359,8 @@ export default function Judge({ language }: JudgeProps) {
       const freshAll = await api<JudgeModel[]>(`/judge/models?${query.toString()}`);
       const fresh = categoryId ? freshAll.filter((m) => m.categoryId === categoryId) : freshAll;
       setModels(freshAll);
-      const grouped = groupByExhibitor(fresh);
-      const updated = grouped.find((ex) => ex.userId === activeExhibitor.userId);
+      const grouped = groupByDisplay(fresh, eventId);
+      const updated = grouped.find((ex) => ex.key === activeExhibitor.key);
       if (updated) {
         setActiveExhibitor(updated);
       }
@@ -371,7 +391,7 @@ export default function Judge({ language }: JudgeProps) {
       {screen === "home" && ready && (
         <Stack spacing={2}>
           {/* Top controls row */}
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+          <Stack data-tour="judge-filters" direction="row" spacing={2} alignItems="center" flexWrap="wrap">
             {/* Event selector */}
             <FormControl size="small" sx={{ minWidth: 200 }}>
               <InputLabel>{t(language, "judgeSelectEvent")}</InputLabel>
@@ -414,7 +434,7 @@ export default function Judge({ language }: JudgeProps) {
           </Stack>
 
           {/* Filter row */}
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack data-tour="judge-search" direction="row" spacing={1} alignItems="center">
             <TextField
               size="small"
               label={t(language, "judgeFilterExhibit")}
@@ -423,9 +443,9 @@ export default function Judge({ language }: JudgeProps) {
               sx={{ maxWidth: 220 }}
             />
             {filterText && (
-              <Button size="small" variant="outlined" onClick={() => setFilterText("")}>
-                Clear
-              </Button>
+              <ActionButton tip={t(language, "tipJudgeClearFilter")} size="small" variant="outlined" onClick={() => setFilterText("")}>
+                {t(language, "judgeClearFilter")}
+              </ActionButton>
             )}
           </Stack>
 
@@ -455,9 +475,13 @@ export default function Judge({ language }: JudgeProps) {
               {t(language, "judgeAllJudged")}
             </Typography>
           )}
+          {allExhibitors.length === 0 && (
+            <EmptyState title={t(language, "judgeNoModelsTitle")} description={t(language, "judgeNoModelsDescription")} />
+          )}
 
           {/* Exhibitor tile grid */}
           <Box
+            data-tour="judge-grid"
             sx={{
               display: "flex",
               flexWrap: "wrap",
@@ -471,8 +495,17 @@ export default function Judge({ language }: JudgeProps) {
               const textColor = fullyJudged && maxRank !== null ? "#fff" : undefined;
 
               return (
+                <Tooltip key={ex.key} title={t(language, "tipJudgeExhibitor")} describeChild>
                 <Paper
-                  key={ex.userId}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${t(language, "judgeExhibitor")} ${ex.displayNum} (${ex.models.length})`}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openScoreScreen(ex);
+                    }
+                  }}
                   variant={bgColor ? "elevation" : "outlined"}
                   elevation={bgColor ? 2 : 0}
                   onClick={() => openScoreScreen(ex)}
@@ -495,6 +528,7 @@ export default function Judge({ language }: JudgeProps) {
                     {ex.displayNum}
                   </Typography>
                 </Paper>
+                </Tooltip>
               );
             })}
           </Box>
@@ -502,7 +536,9 @@ export default function Judge({ language }: JudgeProps) {
           {/* JUDGING COMPLETE button */}
           {allFullyJudged && categoryId && (
             <Box>
-              <Button
+              <ActionButton
+                tip={t(language, "tipJudgeComplete")}
+                data-tour="judge-complete"
                 variant="contained"
                 color="success"
                 disabled={completing}
@@ -510,7 +546,7 @@ export default function Judge({ language }: JudgeProps) {
                 sx={{ mt: 1 }}
               >
                 {completing ? "..." : t(language, "judgeCompleteButton")}
-              </Button>
+              </ActionButton>
             </Box>
           )}
         </Stack>
@@ -520,15 +556,15 @@ export default function Judge({ language }: JudgeProps) {
           SCREEN 2: Score screen
          ============================================================ */}
       {screen === "score" && activeExhibitor && (
-        <Stack spacing={2}>
+        <Stack spacing={2} data-tour-scope="judge-score">
           {/* Header */}
           <Stack direction="row" alignItems="center" justifyContent="space-between">
-            <IconButton onClick={goHome} size="small">
+            <TipIconButton tip={t(language, "tipJudgeBack")} data-tour="score-back" onClick={goHome} size="small" aria-label={t(language, "judgeBack")}>
               <ArrowBackIcon />
-            </IconButton>
+            </TipIconButton>
 
             {/* Display toggle */}
-            <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Stack data-tour="score-mode" direction="row" alignItems="center" spacing={0.5}>
               <Typography variant="body2">{t(language, "judgeDisplayToggle")}</Typography>
               <Switch
                 checked={displayMode}
@@ -547,7 +583,7 @@ export default function Judge({ language }: JudgeProps) {
           </Typography>
 
           {/* Score buttons */}
-          <Stack spacing={0.5}>
+          <Stack data-tour="score-values" spacing={0.5}>
             <Typography variant="body2" color="text.secondary">
               {t(language, "judgeCurrentVoteColumn")}
             </Typography>
@@ -557,8 +593,9 @@ export default function Judge({ language }: JudgeProps) {
                 const color = RANK_COLOR[score];
                 const name = t(language, RANK_KEY[score] as any);
                 return (
-                  <Button
+                  <ActionButton
                     key={score}
+                    tip={t(language, "tipJudgeScore").replace("{score}", String(score)).replace("{name}", name)}
                     variant={isSelected ? "contained" : "outlined"}
                     size="small"
                     onClick={() => setSelectedScore(score)}
@@ -587,7 +624,7 @@ export default function Judge({ language }: JudgeProps) {
                     >
                       {name}
                     </Box>
-                  </Button>
+                  </ActionButton>
                 );
               })}
             </Stack>
@@ -598,7 +635,7 @@ export default function Judge({ language }: JudgeProps) {
           {/* Select All / Deselect All */}
           {!displayMode && (
             <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 0.5 }}>
-              <Button size="small" variant="text" onClick={() => {
+              <ActionButton tip={t(language, selectedModels.size === activeExhibitor!.models.length ? "tipJudgeDeselectAll" : "tipJudgeSelectAll")} size="small" variant="text" onClick={() => {
                 if (selectedModels.size === activeExhibitor!.models.length) {
                   setSelectedModels(new Set());
                 } else {
@@ -606,16 +643,16 @@ export default function Judge({ language }: JudgeProps) {
                 }
               }}>
                 {selectedModels.size === activeExhibitor!.models.length ? t(language, "judgeDeselectAll") : t(language, "judgeSelectAll")}
-              </Button>
+              </ActionButton>
             </Box>
           )}
 
           {/* Model list */}
-          <Stack spacing={1}>
+          <Stack data-tour="score-models" spacing={1}>
             {activeExhibitor.models.map((model) => {
               const isSelected = selectedModels.has(model.id);
               const label = [
-                model.displayNumber ?? model.code ?? "-",
+                model.code ?? model.displayNumber ?? "-",
                 model.name ?? model.description ?? "",
               ]
                 .filter(Boolean)
@@ -700,15 +737,19 @@ export default function Judge({ language }: JudgeProps) {
           )}
 
           {/* Submit button */}
-          <Button
+          <ActionButton
+            tip={t(language, displayMode ? "tipJudgeVoteDisplay" : "tipJudgeSubmit")}
+            data-tour="score-submit"
             variant="contained"
             color="primary"
             disabled={submitDisabled}
             onClick={handleSubmitScore}
             fullWidth
           >
-            {t(language, "judgeSubmitScore")}
-          </Button>
+            {displayMode
+              ? t(language, "judgeVoteDisplay").replace("{n}", String(activeExhibitor.models.length))
+              : t(language, "judgeSubmitScore")}
+          </ActionButton>
         </Stack>
       )}
     </PageContainer>

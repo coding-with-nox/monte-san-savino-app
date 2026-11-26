@@ -18,6 +18,10 @@ describe("formatModelCode", () => {
   it("formats M<cat>-<padded>-<code>", () => {
     expect(formatModelCode(12, 3, 7, f)).toBe("M3-0007-12");
   });
+  it("uses the team code when present", () => {
+    expect(formatModelCode(12, 3, 7, f, "173T1")).toBe("173T1");
+    expect(formatModelCode(12, 3, 7, f, null)).toBe("M3-0007-12");
+  });
   it("returns empty string when any part is null/undefined", () => {
     expect(formatModelCode(null, 1, 1, f)).toBe("");
     expect(formatModelCode(1, undefined, 1, f)).toBe("");
