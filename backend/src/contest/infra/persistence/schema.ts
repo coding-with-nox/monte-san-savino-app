@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, index, serial, bigserial } from "drizzle-orm/pg-core";
 
 export const levelsTable = pgTable("levels", {
@@ -11,7 +12,10 @@ export const memberRolesTable = pgTable("member_roles", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
   price: integer("price").default(1500).notNull() // cents, per coauthor
-});
+}, (t) => ({
+  // Mirrors ensureTenantSchema (dedupeMemberRoles): one role per name, case/space-insensitive.
+  uniqName: uniqueIndex("ux_member_roles_name").on(sql`lower(btrim(${t.name}))`)
+}));
 
 export const eventsTable = pgTable("events", {
   id: uuid("id").primaryKey(),

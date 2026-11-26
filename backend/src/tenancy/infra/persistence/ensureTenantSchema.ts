@@ -77,6 +77,45 @@ export function buildPerformanceIndexStatements(): string[] {
   );
 }
 
+/**
+ * Member roles were inserted both by the schema bootstrap and by the seed, producing duplicates.
+ * Keeps one row per name (case/space-insensitive; highest price, then lowest id), remaps
+ * model_team_members.role_id to it, deletes the rest and enforces uniqueness. Idempotent, atomic.
+ */
+export const DEDUPE_MEMBER_ROLES_STATEMENTS: string[] = [
+  `CREATE TEMP TABLE IF NOT EXISTS _member_role_map ON COMMIT DROP AS
+     SELECT r.id AS old_id, k.id AS keep_id
+     FROM member_roles r
+     JOIN (
+       SELECT DISTINCT ON (lower(btrim(name))) lower(btrim(name)) AS key, id
+       FROM member_roles
+       ORDER BY lower(btrim(name)), price DESC, id
+     ) k ON k.key = lower(btrim(r.name))
+     WHERE r.id <> k.id`,
+  `UPDATE model_team_members m SET role_id = map.keep_id
+     FROM _member_role_map map WHERE m.role_id = map.old_id`,
+  `DELETE FROM member_roles WHERE id IN (SELECT old_id FROM _member_role_map)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS ux_member_roles_name ON member_roles (lower(btrim(name)))`
+];
+
+async function dedupeMemberRoles(pool: Pool) {
+  const exists = await pool.query(
+    `SELECT to_regclass('public.member_roles') IS NOT NULL AND to_regclass('public.model_team_members') IS NOT NULL AS ok`
+  );
+  if (!exists.rows[0]?.ok) return;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const stmt of DEDUPE_MEMBER_ROLES_STATEMENTS) await client.query(stmt);
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function ensureTenantSchema() {
   const cfg = getTenantDbConfigFromEnv();
   // Single dedicated connection: advisory locks are per-session, so lock/maintenance/unlock must share one client.
@@ -310,7 +349,7 @@ export async function ensureTenantSchema() {
         INSERT INTO member_roles (id, name)
         SELECT gen_random_uuid(), name
         FROM (VALUES ('Scultore'), ('Pittore'), ('Concept Artist'), ('Art Director')) AS t(name)
-        WHERE NOT EXISTS (SELECT 1 FROM member_roles WHERE member_roles.name = t.name);
+        WHERE NOT EXISTS (SELECT 1 FROM member_roles WHERE lower(btrim(member_roles.name)) = lower(t.name));
       `);
       await pool.query('COMMIT');
     } catch (err) {
@@ -434,6 +473,7 @@ export async function ensureTenantSchema() {
     `);
     await pool.query(`ALTER TABLE IF EXISTS model_team_members ADD COLUMN IF NOT EXISTS role_id uuid`);
     await pool.query(`ALTER TABLE IF EXISTS member_roles ADD COLUMN IF NOT EXISTS price integer NOT NULL DEFAULT 1500`);
+    await dedupeMemberRoles(pool);
 
     await ensureRegistrationsUniqueIndex(pool);
 

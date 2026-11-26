@@ -67,13 +67,14 @@ export async function seedDatabase() {
     { id: crypto.randomUUID(), name: "Master", sortOrder: 4 }
   ]);
 
-  // --- Member Roles ---
-  await db.insert(memberRolesTable).values([
-    { id: crypto.randomUUID(), name: "Scultore" },
-    { id: crypto.randomUUID(), name: "Pittore" },
-    { id: crypto.randomUUID(), name: "Concept Artist" },
-    { id: crypto.randomUUID(), name: "Art Director" }
-  ]);
+  // --- Member Roles --- (ensureTenantSchema already inserts the defaults: add only missing names)
+  const existingRoles = new Set(
+    (await db.select({ name: memberRolesTable.name }).from(memberRolesTable)).map((r) => r.name.trim().toLowerCase())
+  );
+  const missingRoles = ["Scultore", "Pittore", "Concept Artist", "Art Director"]
+    .filter((name) => !existingRoles.has(name.toLowerCase()))
+    .map((name) => ({ id: crypto.randomUUID(), name }));
+  if (missingRoles.length) await db.insert(memberRolesTable).values(missingRoles);
 
   console.log("[seed] Demo data inserted successfully.");
   console.log("[seed] Admin login: admin@contest.it / Admin123!");
