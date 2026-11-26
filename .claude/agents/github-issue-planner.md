@@ -1,7 +1,7 @@
 ---
 name: github-issue-planner
 description: Fetches open GitHub issues assigned to coding-with-nox, lets user pick one, then hands off to planner agent. Use when user says "pick a GitHub issue", "plan issue", "start from issue", "what issues are assigned to us".
-model: sonnet
+model: claude-haiku-5-5
 tools: Bash, Read
 ---
 

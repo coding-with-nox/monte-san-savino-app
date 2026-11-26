@@ -1,7 +1,7 @@
 ---
 name: runner
-description: Esegue test, build e comandi (Haiku). Restituisce solo l'esito.
-model: haiku
+description: Esegue test, build e comandi (Haiku 5.5). Restituisce solo l'esito.
+model: claude-haiku-5-5
 tools: Bash, PowerShell, Read
 maxTurns: 10
 omitClaudeMd: true

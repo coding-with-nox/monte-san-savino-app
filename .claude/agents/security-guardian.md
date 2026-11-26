@@ -1,7 +1,7 @@
 ---
 name: security-guardian
 description: Verifica vulnerabilità e segreti esposti prima di ogni deploy in stage/prod (solo lettura). Rileva da solo lo stack.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Grep, Glob, Bash, PowerShell
 maxTurns: 25
 omitClaudeMd: true

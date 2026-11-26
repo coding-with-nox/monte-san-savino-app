@@ -1,7 +1,7 @@
 ---
 name: scout
-description: Ricerca nel codice a basso costo (Haiku). Restituisce solo riferimenti.
-model: haiku
+description: Ricerca nel codice a basso costo (Haiku 5.5). Restituisce solo riferimenti.
+model: claude-haiku-5-5
 tools: Read, Grep, Glob
 maxTurns: 15
 omitClaudeMd: true

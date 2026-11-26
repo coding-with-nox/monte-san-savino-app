@@ -1,7 +1,7 @@
 ---
 name: backend-dev
 description: Sviluppa il backend Bun/TypeScript + Drizzle/Postgres (backend/). Lanciare sempre con name esplicito.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, Agent, SendMessage, Skill
 maxTurns: 60
 omitClaudeMd: true
