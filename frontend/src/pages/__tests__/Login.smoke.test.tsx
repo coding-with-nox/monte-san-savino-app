@@ -59,7 +59,7 @@ describe("Login smoke tests", () => {
 
   it("renders login submit button", () => {
     renderLogin();
-    expect(screen.getByRole("button", { name: /login/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
   });
 
   it("shows error toast when API throws an error", async () => {
@@ -73,7 +73,7 @@ describe("Login smoke tests", () => {
     renderLogin();
     await user.type(screen.getByLabelText(/email/i), "bad@example.com");
     await user.type(screen.getByLabelText(/password/i), "wrongpass");
-    await user.click(screen.getByRole("button", { name: /login/i }));
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Invalid credentials")).toBeInTheDocument();

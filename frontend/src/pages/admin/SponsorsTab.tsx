@@ -27,6 +27,8 @@ export default function SponsorsTab({ language, data }: { language: Language; da
   const { events, eventName } = data;
   const { confirm, node: confirmNode } = useConfirm(language);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
+  const tierLabel = (tier: string) =>
+    ["bronze", "silver", "gold", "platinum"].includes(tier) ? t(language, `sponsorTier_${tier}` as any) : tier;
   const [form, setForm] = useState({ eventId: "", name: "", tier: "bronze" });
   const { loading, errors, reload } = useSections(language, () => [
     { titleKey: "adminSponsorsTitle", run: async () => setSponsors(await api<Sponsor[]>("/sponsors")) }
@@ -80,10 +82,10 @@ export default function SponsorsTab({ language, data }: { language: Language; da
                 fullWidth
                 size="small"
               >
-                <MenuItem value="bronze">Bronze</MenuItem>
-                <MenuItem value="silver">Silver</MenuItem>
-                <MenuItem value="gold">Gold</MenuItem>
-                <MenuItem value="platinum">Platinum</MenuItem>
+                <MenuItem value="bronze">{t(language, "sponsorTier_bronze")}</MenuItem>
+                <MenuItem value="silver">{t(language, "sponsorTier_silver")}</MenuItem>
+                <MenuItem value="gold">{t(language, "sponsorTier_gold")}</MenuItem>
+                <MenuItem value="platinum">{t(language, "sponsorTier_platinum")}</MenuItem>
               </Select>
             </Grid>
             <Grid item xs={12} md={3}>
@@ -95,7 +97,7 @@ export default function SponsorsTab({ language, data }: { language: Language; da
           <List dense sx={{ mt: 2 }}>
             {sponsors.map((s) => (
               <ListItem key={s.id} disableGutters>
-                <ListItemText primary={s.name} secondary={`${s.tier} - ${eventName(s.eventId)}`} />
+                <ListItemText primary={s.name} secondary={`${tierLabel(s.tier)} - ${eventName(s.eventId)}`} />
                 <TipIconButton tip={t(language, "tipSponsorDelete")} aria-label={`${t(language, "actionDelete")} ${s.name}`} size="small" color="error" onClick={() => deleteSponsor(s.id)}>
                   <DeleteIcon fontSize="small" />
                 </TipIconButton>

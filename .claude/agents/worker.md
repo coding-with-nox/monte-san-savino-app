@@ -1,7 +1,7 @@
 ---
 name: worker
-description: Implementatore generico (Sonnet) per file fuori da backend/ frontend/ e2e/ (docker/, helm/, .github/, script). Lanciato dall'orchestratore con un name; possiede un insieme di file.
-model: sonnet
+description: Implementatore generico (Haiku 5.5) per file fuori da backend/ frontend/ e2e/ (docker/, helm/, .github/, script). Lanciato dall'orchestratore con un name; possiede un insieme di file.
+model: claude-haiku-5-5
 tools: Read, Edit, Write, Grep, Glob, Bash, PowerShell, Agent, SendMessage, Skill
 maxTurns: 60
 omitClaudeMd: true

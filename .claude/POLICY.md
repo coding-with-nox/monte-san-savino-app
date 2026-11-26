@@ -4,9 +4,9 @@
 
 | Livello | Chi | Modello | Come si lancia |
 |---|---|---|---|
-| Orchestratore | La sessione principale (tu che parli col product owner) | Opus | È già la sessione: non lanciarlo mai come subagent |
-| Membri del team | backend-dev/frontend-dev/test-engineer/documenter/software-architect | Sonnet | Sempre con `name` esplicito passato al tool Agent |
-| Subagent di supporto (ricerca, esecuzione comandi) | `scout`/`runner`, lanciati DAI membri del team | Haiku | Solo se il membro del team ne ha bisogno per isolare output verboso |
+| Orchestratore | La sessione principale (tu che parli col product owner) | Il modello scelto per la sessione (unico a comandare) | È già la sessione: non lanciarlo mai come subagent |
+| Membri del team | backend-dev/frontend-dev/test-engineer/documenter/software-architect | Haiku 5.5 (`claude-haiku-5-5`) | Sempre con `name` esplicito passato al tool Agent |
+| Subagent di supporto (ricerca, esecuzione comandi) | `scout`/`runner`, lanciati DAI membri del team | Haiku 5.5 (`claude-haiku-5-5`) | Solo se il membro del team ne ha bisogno per isolare output verboso |
 
 **Niente `agents/planner.md`.** Il coordinamento (sequenza, dipendenze,
 escalation al product owner) è scritto in `CLAUDE.md` ed è la sessione
@@ -60,8 +60,8 @@ struttura STATO/FATTO/PROBLEMA resta fissa.
 ## Delega interna standard
 
 Un worker, prima di leggere un file intero o lanciare un comando lungo lui
-stesso, valuta se delegare: ricerche nel codice → `scout` (Haiku, solo
-`path:riga`); build/test/lint lunghi → `runner` (Haiku, solo esito). Se questi
+stesso, valuta se delegare: ricerche nel codice → `scout` (Haiku 5.5, solo
+`path:riga`); build/test/lint lunghi → `runner` (Haiku 5.5, solo esito). Se questi
 tipi non sono disponibili, procede da solo con i propri tool.
 
 ## Preferenze personali: mai in questo repository

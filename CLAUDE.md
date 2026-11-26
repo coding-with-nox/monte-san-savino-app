@@ -14,14 +14,14 @@ direttamente. Non lanciare un subagent planner.
 
 | nome | modello | cartella posseduta | dipende da |
 |---|---|---|---|
-| backend-dev | sonnet | `backend/` (escluso `backend/src/__integration__/`) | — |
-| frontend-dev | sonnet | `frontend/` | contratto API di backend-dev |
-| test-engineer | sonnet | `e2e/`, `backend/src/__integration__/` | backend-dev, frontend-dev ok |
-| software-architect | sonnet | nessuna (solo lettura) → `docs/analysis/` | — |
-| documenter | sonnet | `docs/` | tutti ok |
-| security-guardian | sonnet | nessuna (solo lettura) | — |
-| worker | sonnet | file assegnati (docker/, helm/, .github/, script) | — |
-| scout / runner | haiku | nessuna (lanciati dai worker) | — |
+| backend-dev | claude-haiku-5-5 | `backend/` (escluso `backend/src/__integration__/`) | — |
+| frontend-dev | claude-haiku-5-5 | `frontend/` | contratto API di backend-dev |
+| test-engineer | claude-haiku-5-5 | `e2e/`, `backend/src/__integration__/` | backend-dev, frontend-dev ok |
+| software-architect | claude-haiku-5-5 | nessuna (solo lettura) → `docs/analysis/` | — |
+| documenter | claude-haiku-5-5 | `docs/` | tutti ok |
+| security-guardian | claude-haiku-5-5 | nessuna (solo lettura) | — |
+| worker | claude-haiku-5-5 | file assegnati (docker/, helm/, .github/, script) | — |
+| scout / runner | claude-haiku-5-5 | nessuna (lanciati dai worker) | — |
 
 Lanciali sempre con `name` esplicito. Nessuno di loro carica questo file
 (`omitClaudeMd: true`).

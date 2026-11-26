@@ -28,6 +28,7 @@ che l'amministratore ha nascosto e i **permessi**, che si concedono a parte.
 | Accesso | `/login` | tutti |
 | Eventi pubblici | `/public-events` | tutti, anche senza accesso |
 | Guida | `/help` | tutti, anche senza accesso |
+| Privacy | `/privacy` | tutti, anche senza accesso |
 | Home, Profilo, Team | `/`, `/profile`, `/teams` | Utente |
 | Modelli, Iscrizioni | `/models`, `/enrollments` | Utente |
 | Check-in | `/staff-checkin` | Staff |
@@ -94,20 +95,43 @@ suggerimento compare anche sui pulsanti disattivati.
 
 ## 3. Pagine aperte a tutti
 
-### 3.1 Accesso
+### 3.1 Accesso e iscrizione
 **A cosa serve:** entrare o creare un account. **Chi la vede:** tutti.
 
-1. Scrivi email e password.
-2. Premi **Login**, oppure **Crea account** se è il primo accesso (password di almeno 8 caratteri): entri subito.
-3. Arrivi alla Home.
+In alto ci sono due schede, **Accedi** e **Iscriviti**: quella attiva è piena
+del colore principale, l'altra ha solo il bordo.
+
+**Accedi**
+1. Scrivi email e password (l'icona a forma di occhio mostra i caratteri).
+2. Premi **Login**: arrivi alla Home.
+
+**Iscriviti** (tre passi; i campi con * sono obbligatori)
+1. **Account**: email, password di almeno 8 caratteri e conferma password.
+2. **Dati personali**: nome, cognome, telefono, nazione, città; indirizzo facoltativo.
+3. **Conferma**: contatto di emergenza facoltativo (nome e telefono), riepilogo dei
+   dati e conferma di aver letto l'informativa privacy (il link la apre in una nuova scheda). Premi **Crea account**: entri subito e
+   i dati anagrafici vanno nel tuo profilo.
 
 | Pulsante | Cosa fa |
 |---|---|
 | **Login** | Accede con le credenziali inserite |
-| **Crea account** | Registra un account con ruolo Utente e accede |
+| **Avanti** | Controlla i campi del passo e passa al successivo |
+| **Indietro** | Torna al passo precedente senza perdere i dati |
+| **Crea account** | Registra un account con ruolo Utente, accede e salva l'anagrafica |
 
 **Errori comuni:** formato email non valido; credenziali errate; email già
-registrata; password troppo corta; account disattivato.
+registrata; password troppo corta o diversa dalla conferma; telefono non valido;
+informativa privacy non confermata; account disattivato. Se l'account viene creato ma l'anagrafica
+non si salva, si apre il Profilo per completarla.
+
+### 3.1b Privacy e lingua
+- La pagina **Privacy** (menu laterale) contiene l'informativa privacy. All'iscrizione
+  vengono salvate data e versione dell'informativa letta.
+- Il sito non usa cookie di profilazione o di statistica e non carica font da servizi
+  esterni: per questo non mostra il banner dei cookie.
+- Alla prima visita la lingua segue quella del browser (italiano se il browser è in
+  italiano, altrimenti inglese); si cambia dal selettore in alto. Anche le stampe e gli
+  export escono nella lingua scelta.
 
 ### 3.2 Eventi pubblici
 **A cosa serve:** consultare gli eventi in programma con date e stato. **Chi la vede:** tutti.

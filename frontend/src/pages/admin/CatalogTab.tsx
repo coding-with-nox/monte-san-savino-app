@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
-  Checkbox,
-  Tooltip,
   InputAdornment,
   Stack,
   Table,
@@ -25,7 +23,7 @@ import { MemberRole, parseEuros } from "../../lib/pricing";
 import type { AdminData } from "./useAdminData";
 import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
-type Level = { id: string; name: string; sortOrder?: number | null; freeToEnter?: boolean };
+type Level = { id: string; name: string; sortOrder?: number | null };
 
 export default function CatalogTab({ language, data }: { language: Language; data: AdminData }) {
   const { events, categories, models, eventName, ensureModels, refreshModels, refresh } = data;
@@ -70,18 +68,6 @@ export default function CatalogTab({ language, data }: { language: Language; dat
     if (!(await confirm(t(language, "confirmDelete")))) return;
     await api(`/admin/levels/${id}`, { method: "DELETE" });
     await loadLevels();
-  }
-  async function toggleFreeLevel(level: Level) {
-    try {
-      await api(`/admin/levels/${level.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ name: level.name, freeToEnter: !level.freeToEnter })
-      });
-      await loadLevels();
-      toast.success(t(language, "adminSaved"));
-    } catch (err: any) {
-      toast.error(err?.message ?? String(err));
-    }
   }
   async function savePrice(role: MemberRole) {
     const price = parseEuros(priceDrafts[role.id] ?? "");
@@ -151,7 +137,6 @@ export default function CatalogTab({ language, data }: { language: Language; dat
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelName")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelSortOrder")}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminLevelFree")}</TableCell>
                 <TableCell />
               </TableRow>
             </TableHead>
@@ -160,16 +145,6 @@ export default function CatalogTab({ language, data }: { language: Language; dat
                 <TableRow key={lvl.id}>
                   <TableCell>{lvl.name}</TableCell>
                   <TableCell>{lvl.sortOrder ?? "-"}</TableCell>
-                  <TableCell>
-                    <Tooltip title={t(language, "tipLevelFree")} describeChild>
-                      <Checkbox
-                      size="small"
-                      checked={!!lvl.freeToEnter}
-                      onChange={() => toggleFreeLevel(lvl)}
-                      inputProps={{ "aria-label": `${t(language, "adminLevelFree")}: ${lvl.name}` }}
-                      />
-                    </Tooltip>
-                  </TableCell>
                   <TableCell align="right">
                     <TipIconButton tip={t(language, "tipLevelDelete")} aria-label={`${t(language, "actionDelete")} ${lvl.name}`} size="small" color="error" onClick={() => deleteLevel(lvl.id)}>
                       <DeleteIcon fontSize="small" />

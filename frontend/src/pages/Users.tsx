@@ -386,7 +386,7 @@ export default function Users({ language }: UsersProps) {
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t(language, "usersRolePlaceholder")}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t(language, "usersStatus")}</TableCell>
                 <TableCell align="right" sx={{ width: 80 }} />
               </TableRow>
             </TableHead>

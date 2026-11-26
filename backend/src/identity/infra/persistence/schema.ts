@@ -1,11 +1,14 @@
-import { pgTable, uuid, text, boolean, serial } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, boolean, serial, timestamp } from "drizzle-orm/pg-core";
 export const usersTable = pgTable("users", {
   id: uuid("id").primaryKey(),
   email: text("email").notNull().unique(),
   role: text("role").notNull(),
   passwordHash: text("password_hash").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
-  seqId: serial("seq_id")
+  seqId: serial("seq_id"),
+  /** GDPR accountability: when the user acknowledged the privacy notice, and which version. */
+  privacyAcceptedAt: timestamp("privacy_accepted_at", { withTimezone: true }),
+  privacyPolicyVersion: text("privacy_policy_version")
 });
 
 export const userProfilesTable = pgTable("user_profiles", {

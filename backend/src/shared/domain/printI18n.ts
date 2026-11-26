@@ -1,0 +1,157 @@
+/**
+ * Localization of the server-side print/export pages and spreadsheets.
+ * Contract: optional `lang` query param, "it" | "en". Missing or unknown => "it".
+ */
+export type PrintLang = "it" | "en";
+
+const IT = {
+  "common.noData": "Nessun dato",
+  "common.noModels": "Nessun modello",
+  "common.noJudge": "Nessun giudice assegnato",
+  "label.event": "Evento",
+  "label.class": "Classe",
+  "label.code": "Codice",
+  "label.category": "Categoria",
+  "label.user": "Utente",
+  "label.description": "Descrizione",
+  "label.notes": "Note",
+  "label.userId": "ID utente",
+  "label.firstName": "Nome",
+  "label.lastName": "Cognome",
+  "label.country": "Paese",
+  "label.email": "Indirizzo email",
+  "label.modelTotal": "Modelli totali",
+  "modelCard.userDetails": "Dettagli utente",
+  "users.title": "Export utenti",
+  "users.heading": "Utenti per evento",
+  "models.title": "Stampa modelli",
+  "models.heading": "Modelli",
+  "labels.title": "Etichette",
+  "labels.heading": "Stampa etichette",
+  "exhibitors.title": "Espositori",
+  "exhibitors.heading": "Espositori e modelli",
+  "jury.title": "Giuria",
+  "jury.heading": "Giuria",
+  "juryQr.title": "QR giuria",
+  "juryQr.heading": "QR giuria",
+  "col.info": "Info",
+  "col.exhibitor": "Espositore",
+  "col.judge": "Giudice",
+  "col.model": "Modello",
+  "col.modelName": "Nome modello",
+  "col.modelId": "ID modello",
+  "col.modelTitle": "Titolo modello",
+  "col.classTitle": "Titolo classe",
+  "col.code": "Codice",
+  "col.email": "Email",
+  "col.participant": "Partecipante",
+  "col.social": "Social",
+  "col.models": "Modelli",
+  "col.qr": "QR",
+  "col.qrPayload": "Payload QR",
+  "col.event": "Evento",
+  "col.checkIn": "Check-in",
+  "col.absent": "Assente",
+  "col.category": "Categoria",
+  "col.description": "Descrizione",
+  "col.name": "Nome",
+  "col.notes": "Note",
+  "col.user": "Utente",
+  "sheet.export": "Export",
+  "sheet.enrollments": "Iscrizioni",
+  "sheet.models": "Modelli",
+  "sheet.users": "Utenti",
+  "sheet.labels": "Etichette",
+  "sheet.myEnrollments": "MieIscrizioni",
+  "pricing.heading": "Quota di iscrizione",
+  "pricing.baseFee": "Quota base",
+  "pricing.coauthor": "Coautore {name} {surname} ({role}) - {models}",
+  "pricing.freeEntry": "Ingresso gratuito - {model}",
+  "pricing.total": "Totale",
+  "pricing.grandTotal": "Totale complessivo"
+};
+
+export type PrintKey = keyof typeof IT;
+
+// Typed against PrintKey: a missing or extra key in English is a compile error.
+const EN: Record<PrintKey, string> = {
+  "common.noData": "No data",
+  "common.noModels": "No models",
+  "common.noJudge": "No judge assigned",
+  "label.event": "Event",
+  "label.class": "Class",
+  "label.code": "Code",
+  "label.category": "Category",
+  "label.user": "User",
+  "label.description": "Description",
+  "label.notes": "Notes",
+  "label.userId": "User ID",
+  "label.firstName": "First name",
+  "label.lastName": "Last name",
+  "label.country": "Country",
+  "label.email": "E-mail address",
+  "label.modelTotal": "Model Total",
+  "modelCard.userDetails": "User Details",
+  "users.title": "Users export",
+  "users.heading": "Users by event",
+  "models.title": "Print models",
+  "models.heading": "Models",
+  "labels.title": "Labels",
+  "labels.heading": "Print labels",
+  "exhibitors.title": "Exhibitors",
+  "exhibitors.heading": "Exhibitors and models",
+  "jury.title": "Jury",
+  "jury.heading": "Jury",
+  "juryQr.title": "Jury QR",
+  "juryQr.heading": "Jury QR",
+  "col.info": "Info",
+  "col.exhibitor": "Exhibitor",
+  "col.judge": "Judge",
+  "col.model": "Model",
+  "col.modelName": "Model name",
+  "col.modelId": "Model ID",
+  "col.modelTitle": "Model Title",
+  "col.classTitle": "Class Title",
+  "col.code": "Code",
+  "col.email": "Email",
+  "col.participant": "Participant",
+  "col.social": "Social",
+  "col.models": "Models",
+  "col.qr": "QR",
+  "col.qrPayload": "QR payload",
+  "col.event": "Event",
+  "col.checkIn": "Check-in",
+  "col.absent": "Absent",
+  "col.category": "Category",
+  "col.description": "Description",
+  "col.name": "Name",
+  "col.notes": "Notes",
+  "col.user": "User",
+  "sheet.export": "Export",
+  "sheet.enrollments": "Enrollments",
+  "sheet.models": "Models",
+  "sheet.users": "Users",
+  "sheet.labels": "Labels",
+  "sheet.myEnrollments": "MyEnrollments",
+  "pricing.heading": "Registration fee",
+  "pricing.baseFee": "Base fee",
+  "pricing.coauthor": "Co-author {name} {surname} ({role}) - {models}",
+  "pricing.freeEntry": "Free entry - {model}",
+  "pricing.total": "Total",
+  "pricing.grandTotal": "Grand total"
+};
+
+export const PRINT_MESSAGES: Record<PrintLang, Record<PrintKey, string>> = { it: IT, en: EN };
+
+export function parsePrintLang(v: unknown): PrintLang {
+  return typeof v === "string" && v.trim().toLowerCase() === "en" ? "en" : "it";
+}
+
+/** Localized text by key. `{name}` placeholders are replaced in a single pass, so values are never re-expanded. */
+export function pt(lang: PrintLang, key: PrintKey, vars?: Record<string, string | number>): string {
+  const template = PRINT_MESSAGES[lang][key];
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
+    Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : placeholder
+  );
+}

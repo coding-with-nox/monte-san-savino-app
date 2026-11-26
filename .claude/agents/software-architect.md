@@ -1,7 +1,7 @@
 ---
 name: software-architect
 description: Analizza struttura, qualità e architettura del progetto (solo lettura). Applica la skill project-analysis quando il task è un'analisi completa del progetto.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Grep, Glob, Bash
 skills:
   - project-analysis

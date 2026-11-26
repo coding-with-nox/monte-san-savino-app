@@ -1,7 +1,7 @@
 ---
 name: frontend-dev
 description: Sviluppa il frontend React + Vite + TypeScript (frontend/). Lanciare sempre con name esplicito.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, Agent, SendMessage, Skill
 maxTurns: 60
 omitClaudeMd: true

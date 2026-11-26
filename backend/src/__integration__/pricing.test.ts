@@ -8,7 +8,7 @@ describe("integration enrollment pricing", () => {
   let eventId: string;
   let categoryId: string;
   let paidLevel: string;
-  let freeLevel: string;
+  let freeCategory: string;
 
   const createModel = (extra: Record<string, unknown> = {}) =>
     request("POST", "/models", user.token, { name: "Modello", categoryId, levelId: paidLevel, ...extra });
@@ -19,7 +19,7 @@ describe("integration enrollment pricing", () => {
     eventId = await createEvent("Evento prezzi");
     categoryId = await createCategory(eventId);
     paidLevel = await createLevel("Master");
-    freeLevel = await createLevel("Juniores", true);
+    freeCategory = await createCategory(eventId, "Juniors", "open", true);
   });
   afterAll(resetDb);
 
@@ -48,17 +48,24 @@ describe("integration enrollment pricing", () => {
     expect(event.coauthorLines.map((l: any) => l.priceCents).sort()).toEqual([1500, 2000]);
   });
 
-  it("free level: only free models cost nothing, coauthors included", async () => {
+  it("free category: only free models cost nothing, coauthors included", async () => {
     const painter = await createMemberRole();
-    await createModel({ levelId: freeLevel, isTeam: true, teamMembers: [member(painter)] });
+    await createModel({ categoryId: freeCategory, isTeam: true, teamMembers: [member(painter)] });
     const res = await request("GET", "/pricing/me", user.token);
     expect(res.json.totalCents).toBe(0);
     expect(res.json.events[0]).toMatchObject({ baseFeeCents: 0, modelCount: 1, paidModelCount: 0, coauthorLines: [] });
     expect(res.json.events[0].freeModels).toHaveLength(1);
   });
 
+  it("the category decides: a free-entry level in a paid category still pays", async () => {
+    await createModel({ levelId: await createLevel("Juniors", true) });
+    const res = await request("GET", "/pricing/me", user.token);
+    expect(res.json.totalCents).toBe(2500);
+    expect(res.json.events[0]).toMatchObject({ paidModelCount: 1 });
+  });
+
   it("free and paid models together: base fee once", async () => {
-    await createModel({ levelId: freeLevel });
+    await createModel({ categoryId: freeCategory });
     await createModel();
     const res = await request("GET", "/pricing/me", user.token);
     expect(res.json.totalCents).toBe(2500);
@@ -131,8 +138,11 @@ describe("integration enrollment pricing", () => {
     await createModel({ name: "Drago", isTeam: true, teamMembers: [member(painter)] });
     const res = await request("GET", `/exports/model-card/pdf?eventId=${eventId}`, user.token);
     expect(res.status).toBe(200);
-    expect(res.text).toContain("Registration fee");
-    expect(res.text).toMatch(/<th>Total<\/th><th class="amount">€ 40,00<\/th>/);
+    expect(res.text).toContain("Quota di iscrizione");
+    expect(res.text).toMatch(/<th>Totale<\/th><th class="amount">€ 40,00<\/th>/);
     expect(res.text).toContain(`${user.seqId}T1`);
+    const en = await request("GET", `/exports/model-card/pdf?eventId=${eventId}&lang=en`, user.token);
+    expect(en.text).toContain("Registration fee");
+    expect(en.text).toMatch(/<th>Total<\/th><th class="amount">€40\.00<\/th>/);
   });
 });

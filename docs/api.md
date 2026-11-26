@@ -39,14 +39,17 @@ No auth required (these issue/refresh tokens). Source: `identity.routes.ts`.
 ### `POST /auth/register`
 Create a new account with default role `user`.
 
-- Body: `{ "email": string, "password": string }` (password min length 8).
+- Body: `{ "email": string, "password": string, "privacyAccepted": boolean, "privacyVersion": string }`
+  (password min length 8; `privacyAccepted` must be `true`; `privacyVersion` 1–32 chars, the version of the
+  privacy notice shown to the user). The server stores `users.privacy_accepted_at` and
+  `users.privacy_policy_version` (GDPR accountability).
 - `200`: `{ "id": string, "email": string, "role": "user" }`
-- `400`: `{ "error": "Password must be at least 8 characters long" }` or
+- `400`: `{ "error": "The privacy notice must be accepted" }`, `{ "error": "Password must be at least 8 characters long" }` or
   `{ "error": "Email already registered" }` or `{ "error": "Invalid email" }`
 
 ```json
 // POST /auth/register
-{ "email": "mario@example.com", "password": "password123" }
+{ "email": "mario@example.com", "password": "password123", "privacyAccepted": true, "privacyVersion": "2026-11-26" }
 // → 200
 { "id": "8f3c…", "email": "mario@example.com", "role": "user" }
 ```
@@ -446,6 +449,10 @@ models the arrays are empty.
 ---
 
 ## Labels & Exports routes (`/exports`)
+
+Every print/export endpoint (here and in class prints) accepts `?lang=it|en` (default `it`):
+page titles, headings, column headers, empty states, sheet names and the fee block follow it.
+The frontend sends the current UI language automatically.
 
 Source: `export.routes.ts`. Manager endpoints need min role `manager`; the
 `my-*` and `model-card` endpoints need min role `user`. Outputs are XLSX

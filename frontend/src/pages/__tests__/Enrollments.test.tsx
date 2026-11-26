@@ -180,7 +180,7 @@ describe("Enrollments", () => {
     expect(summary).toHaveTextContent("Ada Rossi, Painter (173T1)");
     expect(summary).toHaveTextContent("€40.00");
     await user.click(screen.getByRole("button", { name: "Print enrollment" }));
-    expect(apiMock.mock.calls.some((c) => c[0] === "/exports/model-card/pdf?eventId=e1")).toBe(true);
+    expect(apiMock.mock.calls.some((c) => c[0] === "/exports/model-card/pdf?eventId=e1&lang=it")).toBe(true);
     open.mockRestore();
   });
 });

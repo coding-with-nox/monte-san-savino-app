@@ -1,7 +1,7 @@
 ---
 name: test-engineer
 description: Scrive test di integrazione backend (backend/src/__integration__) ed end-to-end Playwright (e2e/). Lanciare SOLO dopo che backend-dev e frontend-dev hanno riportato STATO ok.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, Agent, SendMessage
 maxTurns: 60
 omitClaudeMd: true

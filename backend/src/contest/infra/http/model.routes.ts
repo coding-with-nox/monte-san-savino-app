@@ -13,10 +13,6 @@ import { MAX_MODELS_PER_PARTICIPANT } from "../../domain/pricing";
 import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable, votesTable, judgeCompletionsTable } from "../persistence/schema";
 import { applyCategoryChange } from "./model-category-change";
 import { cleanupUnreferencedImages } from "./model-image-cleanup";
-import { checkEnrollmentOpen } from "./enrollment-guard";
-import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
-import { isAllowedImageUrl, allowedImageBase } from "../../../shared/domain/imageUrl";
-import { modelsTable, modelImagesTable, modelTeamMembersTable, categoriesTable, eventCampaignsTable, teamsTable } from "../persistence/schema";
 
 /** True when a client-supplied image URL is absent or allowed (evaluated per request so env changes apply). */
 export function isImageUrlAcceptable(url: unknown): boolean {

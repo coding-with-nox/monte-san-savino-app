@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { and, eq, isNull, or } from "drizzle-orm";
 import QRCode from "qrcode";
 import { escapeHtml } from "../../../shared/domain/escapeHtml";
+import { parsePrintLang, pt, type PrintLang } from "../../../shared/domain/printI18n";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, judgeAssignmentsTable, modelsTable } from "../persistence/schema";
@@ -37,9 +38,9 @@ const PRINT_CSS = `
         body { margin: 0; }
       }`;
 
-function page(title: string, body: string) {
+function page(lang: PrintLang, title: string, body: string) {
   return `<!DOCTYPE html>
-<html>
+<html lang="${lang}">
   <head>
     <meta charset="utf-8" />
     <title>${escapeHtml(title)}</title>
@@ -58,27 +59,27 @@ export type ExhibitorRow = { exhibitor: string; modelName: string; code: string 
 export type JudgeRow = { judgeUserId: string; name: string; email?: string | null };
 export type JuryQrRow = JudgeRow & { qrDataUrl: string };
 
-export function renderExhibitorsHtml(cls: ClassInfo, rows: ExhibitorRow[]) {
+export function renderExhibitorsHtml(cls: ClassInfo, rows: ExhibitorRow[], lang: PrintLang = "it") {
   const tr = rows
     .map((r) => `<tr><td>${escapeHtml(r.exhibitor)}</td><td>${escapeHtml(r.modelName)}</td><td>${escapeHtml(r.code)}</td></tr>`)
     .join("");
-  return page(`Espositori ${cls.name}`, `<h1>Espositori e modelli</h1>
-    <p class="sub"><strong>Classe:</strong> ${escapeHtml(cls.name)}</p>
-    <table><thead><tr><th>Espositore</th><th>Modello</th><th>Codice</th></tr></thead>
-    <tbody>${tr || '<tr><td colspan="3">Nessun modello</td></tr>'}</tbody></table>`);
+  return page(lang, `${pt(lang, "exhibitors.title")} ${cls.name}`, `<h1>${pt(lang, "exhibitors.heading")}</h1>
+    <p class="sub"><strong>${pt(lang, "label.class")}:</strong> ${escapeHtml(cls.name)}</p>
+    <table><thead><tr><th>${pt(lang, "col.exhibitor")}</th><th>${pt(lang, "col.model")}</th><th>${pt(lang, "col.code")}</th></tr></thead>
+    <tbody>${tr || `<tr><td colspan="3">${pt(lang, "common.noModels")}</td></tr>`}</tbody></table>`);
 }
 
-export function renderJuryListHtml(cls: ClassInfo, judges: JudgeRow[]) {
+export function renderJuryListHtml(cls: ClassInfo, judges: JudgeRow[], lang: PrintLang = "it") {
   const tr = judges
     .map((j) => `<tr><td>${escapeHtml(j.name)}</td><td>${escapeHtml(j.email ?? "")}</td></tr>`)
     .join("");
-  return page(`Giuria ${cls.name}`, `<h1>Giuria</h1>
-    <p class="sub"><strong>Classe:</strong> ${escapeHtml(cls.name)}</p>
-    <table><thead><tr><th>Giudice</th><th>Email</th></tr></thead>
-    <tbody>${tr || '<tr><td colspan="2">Nessun giudice assegnato</td></tr>'}</tbody></table>`);
+  return page(lang, `${pt(lang, "jury.title")} ${cls.name}`, `<h1>${pt(lang, "jury.heading")}</h1>
+    <p class="sub"><strong>${pt(lang, "label.class")}:</strong> ${escapeHtml(cls.name)}</p>
+    <table><thead><tr><th>${pt(lang, "col.judge")}</th><th>${pt(lang, "col.email")}</th></tr></thead>
+    <tbody>${tr || `<tr><td colspan="2">${pt(lang, "common.noJudge")}</td></tr>`}</tbody></table>`);
 }
 
-export function renderJuryQrHtml(cls: ClassInfo, categoryId: string, judges: JuryQrRow[]) {
+export function renderJuryQrHtml(cls: ClassInfo, categoryId: string, judges: JuryQrRow[], lang: PrintLang = "it") {
   const cards = judges
     .map((j) => `<div class="qr">
       <img alt="${escapeHtml(juryQrPayload(j.judgeUserId, categoryId))}" src="${escapeHtml(j.qrDataUrl)}" width="200" height="200"/>
@@ -86,9 +87,9 @@ export function renderJuryQrHtml(cls: ClassInfo, categoryId: string, judges: Jur
       <p>${escapeHtml(cls.name)}</p>
     </div>`)
     .join("");
-  return page(`QR giuria ${cls.name}`, `<h1>QR giuria</h1>
-    <p class="sub"><strong>Classe:</strong> ${escapeHtml(cls.name)}</p>
-    ${cards || "<p>Nessun giudice assegnato</p>"}`);
+  return page(lang, `${pt(lang, "juryQr.title")} ${cls.name}`, `<h1>${pt(lang, "juryQr.heading")}</h1>
+    <p class="sub"><strong>${pt(lang, "label.class")}:</strong> ${escapeHtml(cls.name)}</p>
+    ${cards || `<p>${pt(lang, "common.noJudge")}</p>`}`);
 }
 
 async function loadClass(tenantDb: any, categoryId: string) {
@@ -127,7 +128,7 @@ const params = t.Object({ categoryId: t.String() });
 export const classPrintRoutes = new Elysia()
   .use(tenantMiddleware)
   .use(requireRole("manager"))
-  .get("/classes/:categoryId/exhibitors", async ({ tenantDb, params, set }) => {
+  .get("/classes/:categoryId/exhibitors", async ({ tenantDb, params, query, set }) => {
     if (!isUuid(params.categoryId)) {
       set.status = 422;
       return { error: "categoryId must be a valid uuid" };
@@ -137,6 +138,7 @@ export const classPrintRoutes = new Elysia()
       set.status = 404;
       return { error: "Class not found" };
     }
+    const lang = parsePrintLang(query?.lang);
     const fmt = await loadModelCodeFormatSettings(tenantDb);
     const rows = await tenantDb
       .select({
@@ -161,12 +163,12 @@ export const classPrintRoutes = new Elysia()
       .sort((a, b) => a.exhibitor.localeCompare(b.exhibitor) || a.modelName.localeCompare(b.modelName));
     set.headers["content-type"] = "text/html; charset=utf-8";
     set.headers["content-disposition"] = `inline; filename="class-exhibitors.html"`;
-    return renderExhibitorsHtml(cls, list);
+    return renderExhibitorsHtml(cls, list, lang);
   }, {
     params,
     detail: { summary: "Stampa espositori e modelli della classe", tags: ["Exports"], security: [{ bearerAuth: [] }] }
   })
-  .get("/classes/:categoryId/jury-list", async ({ tenantDb, params, set }) => {
+  .get("/classes/:categoryId/jury-list", async ({ tenantDb, params, query, set }) => {
     if (!isUuid(params.categoryId)) {
       set.status = 422;
       return { error: "categoryId must be a valid uuid" };
@@ -176,15 +178,16 @@ export const classPrintRoutes = new Elysia()
       set.status = 404;
       return { error: "Class not found" };
     }
+    const lang = parsePrintLang(query?.lang);
     const judges = await loadClassJudges(tenantDb, cls);
     set.headers["content-type"] = "text/html; charset=utf-8";
     set.headers["content-disposition"] = `inline; filename="class-jury-list.html"`;
-    return renderJuryListHtml(cls, judges);
+    return renderJuryListHtml(cls, judges, lang);
   }, {
     params,
     detail: { summary: "Stampa elenco giudici della classe", tags: ["Exports"], security: [{ bearerAuth: [] }] }
   })
-  .get("/classes/:categoryId/jury-qr", async ({ tenantDb, params, set }) => {
+  .get("/classes/:categoryId/jury-qr", async ({ tenantDb, params, query, set }) => {
     if (!isUuid(params.categoryId)) {
       set.status = 422;
       return { error: "categoryId must be a valid uuid" };
@@ -194,6 +197,7 @@ export const classPrintRoutes = new Elysia()
       set.status = 404;
       return { error: "Class not found" };
     }
+    const lang = parsePrintLang(query?.lang);
     const judges = await loadClassJudges(tenantDb, cls);
     const withQr: JuryQrRow[] = await Promise.all(judges.map(async (j) => ({
       ...j,
@@ -201,7 +205,7 @@ export const classPrintRoutes = new Elysia()
     })));
     set.headers["content-type"] = "text/html; charset=utf-8";
     set.headers["content-disposition"] = `inline; filename="class-jury-qr.html"`;
-    return renderJuryQrHtml(cls, cls.id, withQr);
+    return renderJuryQrHtml(cls, cls.id, withQr, lang);
   }, {
     params,
     detail: { summary: "Stampa QR giudici della classe", tags: ["Exports"], security: [{ bearerAuth: [] }] }

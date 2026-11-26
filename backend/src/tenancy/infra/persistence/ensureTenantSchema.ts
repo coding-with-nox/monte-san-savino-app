@@ -329,6 +329,22 @@ export async function ensureTenantSchema() {
         ADD COLUMN IF NOT EXISTS presentation_order integer,
         ADD COLUMN IF NOT EXISTS out_of_competition boolean NOT NULL DEFAULT false;
     `);
+    // Free entry belongs to the category. First time only: inherit the flag from the class level.
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('categories') IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = 'categories' AND column_name = 'free_to_enter'
+        ) THEN
+          ALTER TABLE categories ADD COLUMN free_to_enter boolean NOT NULL DEFAULT false;
+          IF to_regclass('levels') IS NOT NULL THEN
+            UPDATE categories c SET free_to_enter = true
+              FROM levels l WHERE l.id = c.level_id AND l.free_to_enter;
+          END IF;
+        END IF;
+      END $$;
+    `);
     // Backfill display_number from code for models that have code but no display_number
     await pool.query(`
       UPDATE models SET display_number = code
@@ -463,6 +479,11 @@ export async function ensureTenantSchema() {
       END $$;
     `);
     await pool.query(`ALTER TABLE IF EXISTS models ADD COLUMN IF NOT EXISTS team_code text`);
+    await pool.query(`
+      ALTER TABLE IF EXISTS users
+        ADD COLUMN IF NOT EXISTS privacy_accepted_at timestamptz,
+        ADD COLUMN IF NOT EXISTS privacy_policy_version text;
+    `);
     await pool.query(`
       DO $$
       BEGIN

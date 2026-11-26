@@ -44,7 +44,7 @@ lasciare com'è. Non aggiungere nulla al bundle senza la risposta.
 ## Limiti da dichiarare sempre
 - È uno snapshot dei team (2026-10-06): non segue gli aggiornamenti della
   libreria condivisa.
-- Il comportamento da orchestratore (Opus in sessione, controllo automatico,
+- Il comportamento da orchestratore (modello della sessione, controllo automatico,
   automiglioramento) viene dal blocco ORCHESTRA in `~/.claude/CLAUDE.md`, che
   questo bundle non include.
 - Se il progetto ha già un `CLAUDE.md`, l'output si chiama `CLAUDE.orchestra.md`
@@ -79,9 +79,9 @@ deve rispettarla; nessuno strumento la applica da solo, quindi va scritta dentro
 
 | Livello | Chi | Modello | Come si lancia |
 |---|---|---|---|
-| Orchestratore | La sessione principale, quella che parla con l'utente | Opus | È già la sessione: mai come subagent |
-| Membri del team | backend, frontend, test, documentazione, architetto... | Sonnet | Sempre con `name` esplicito passato al tool Agent |
-| Supporto (ricerca, esecuzione comandi) | `scout` e `runner`, lanciati DAI membri del team | Haiku | Solo per isolare output verboso |
+| Orchestratore | La sessione principale, quella che parla con l'utente | Il modello scelto per la sessione (unico a comandare) | È già la sessione: mai come subagent |
+| Membri del team | backend, frontend, test, documentazione, architetto... | Haiku 5.5 (`claude-haiku-5-5`) | Sempre con `name` esplicito passato al tool Agent |
+| Supporto (ricerca, esecuzione comandi) | `scout` e `runner`, lanciati DAI membri del team | Haiku 5.5 (`claude-haiku-5-5`) | Solo per isolare output verboso |
 
 Non esiste un agente "planner" separato: il coordinamento (sequenza, dipendenze, quando
 chiedere all'utente) è scritto nel `CLAUDE.md` di progetto ed è la sessione principale a
@@ -130,8 +130,8 @@ Un agente che non scrive test sostituisce `TEST` con un campo pertinente (per es
 ## Delega interna standard
 
 Prima di leggere un file intero o lanciare un comando lungo, un membro del team valuta se
-delegare: ricerche nel codice a `scout` (Haiku, restituisce solo `path:riga`), build/test/lint
-lunghi a `runner` (Haiku, restituisce solo l'esito). Se quei tipi non esistono nella sessione,
+delegare: ricerche nel codice a `scout` (Haiku 5.5, restituisce solo `path:riga`), build/test/lint
+lunghi a `runner` (Haiku 5.5, restituisce solo l'esito). Se quei tipi non esistono nella sessione,
 procede da solo.
 
 ## Sicurezza: un solo agente per tutti gli stack
@@ -167,7 +167,7 @@ permessi e hook di sicurezza non si cambiano da soli; ogni modifica è registrat
     'agents/security-guardian.md': r'''---
 name: security-guardian
 description: Verifica vulnerabilità e segreti esposti prima di ogni deploy in stage/prod (solo lettura). Vale per qualunque stack, rileva da solo cosa scansionare.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Grep, Glob, Bash, PowerShell
 maxTurns: 25
 omitClaudeMd: true
@@ -386,8 +386,8 @@ i rischi, cosa non so". Sola lettura sul codice: scrivi solo `docs/survey.md`.
 ''',
     'teams/_generic/agents/Explore.md': r'''---
 name: Explore
-description: Esplorazione rapida read-only del codice (Haiku).
-model: haiku
+description: Esplorazione rapida read-only del codice (Haiku 5.5).
+model: claude-haiku-5-5
 tools: Read, Grep, Glob
 omitClaudeMd: true
 ---
@@ -396,8 +396,8 @@ righe "path:riga — <max 12 parole>", massimo 25 righe, più 1-3 righe di sinte
 ''',
     'teams/_generic/agents/runner.md': r'''---
 name: runner
-description: Esegue test, build e comandi (Haiku). Restituisce solo l'esito.
-model: haiku
+description: Esegue test, build e comandi (Haiku 5.5). Restituisce solo l'esito.
+model: claude-haiku-5-5
 tools: Bash, PowerShell, Read
 maxTurns: 10
 omitClaudeMd: true
@@ -409,8 +409,8 @@ Non proporre correzioni e non modificare file.
 ''',
     'teams/_generic/agents/scout.md': r'''---
 name: scout
-description: Ricerca nel codice a basso costo (Haiku). Restituisce solo riferimenti.
-model: haiku
+description: Ricerca nel codice a basso costo (Haiku 5.5). Restituisce solo riferimenti.
+model: claude-haiku-5-5
 tools: Read, Grep, Glob
 maxTurns: 15
 omitClaudeMd: true
@@ -422,8 +422,8 @@ Se non trovi nulla, rispondi: NESSUN RISULTATO
 ''',
     'teams/_generic/agents/worker.md': r'''---
 name: worker
-description: Implementatore (Sonnet). Lanciato dall'orchestratore con un name; possiede un insieme di file.
-model: sonnet
+description: Implementatore (Haiku 5.5). Lanciato dall'orchestratore con un name; possiede un insieme di file.
+model: claude-haiku-5-5
 tools: Read, Edit, Write, Grep, Glob, Bash, PowerShell, Agent, SendMessage, Skill
 maxTurns: 60
 omitClaudeMd: true
@@ -444,7 +444,7 @@ Report finale: formato RPT standard (vedi .claude/POLICY.md del progetto, o ~/.c
     'teams/common/agents/architect.md': r'''---
 name: architect
 description: Analizza struttura e qualità del progetto (solo lettura sul codice) e produce docs/survey.md con la skill project-survey.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Grep, Glob, Bash, SendMessage
 skills:
   - project-survey
@@ -472,7 +472,7 @@ Report finale: formato RPT standard (vedi .claude/POLICY.md del progetto, o ~/.c
     'teams/dotnet/agents/backend-dev.md': r'''---
 name: backend-dev
 description: Implementa il codice applicativo (dotnet). Lanciare sempre con name esplicito.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, Agent, SendMessage, Skill
 maxTurns: 60
 omitClaudeMd: true
@@ -506,7 +506,7 @@ Report finale: formato RPT standard (vedi .claude/POLICY.md del progetto, o ~/.c
     'teams/common/agents/doc-writer.md': r'''---
 name: doc-writer
 description: Scrive la documentazione del lavoro svolto. Lanciare quando implementazione e test hanno riportato STATO ok.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Grep, Glob, SendMessage
 maxTurns: 40
 omitClaudeMd: true
@@ -531,7 +531,7 @@ con `TEST` sostituito da `TODO: <punti da verificare, o "nessuno">`.
     'teams/dotnet/agents/frontend-dev.md': r'''---
 name: frontend-dev
 description: Implementa il client che consuma l'API. Lanciare sempre con name esplicito.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, Agent, SendMessage, Skill
 maxTurns: 60
 omitClaudeMd: true
@@ -564,7 +564,7 @@ Report finale: formato RPT standard (vedi .claude/POLICY.md del progetto, o ~/.c
     'teams/dotnet/agents/test-engineer.md': r'''---
 name: test-engineer
 description: Scrive i test. Lanciare SOLO dopo che gli agenti di implementazione hanno riportato STATO ok.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, Agent, SendMessage, Skill
 maxTurns: 60
 omitClaudeMd: true
@@ -596,7 +596,7 @@ Report finale: formato RPT standard (vedi .claude/POLICY.md del progetto, o ~/.c
     'teams/python/agents/backend-dev.md': r'''---
 name: backend-dev
 description: Implementa il codice applicativo (python). Lanciare sempre con name esplicito.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, Agent, SendMessage, Skill
 maxTurns: 60
 omitClaudeMd: true
@@ -627,7 +627,7 @@ Report finale: formato RPT standard (vedi .claude/POLICY.md del progetto, o ~/.c
     'teams/python/agents/test-engineer.md': r'''---
 name: test-engineer
 description: Scrive i test. Lanciare SOLO dopo che gli agenti di implementazione hanno riportato STATO ok.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, Agent, SendMessage, Skill
 maxTurns: 60
 omitClaudeMd: true
@@ -808,7 +808,7 @@ def build(paths, stack, name, out_dir, claude_md_exists):
             fm = frontmatter(t)
             rows.append((fm.get("name", f.stem), fm.get("model", "—"), "—", "—"))
     put_agent(ASSETS / "agents" / "security-guardian.md")
-    rows.append(("security-guardian", "sonnet", "sola lettura", "—"))
+    rows.append(("security-guardian", "claude-haiku-5-5", "sola lettura", "—"))
 
     shutil.copy(ASSETS / "POLICY.md", work / ".claude" / "POLICY.md")
     written.append(".claude/POLICY.md")
@@ -852,7 +852,7 @@ Generato il {today}.
 
 Limiti di questo bundle:
 - È una copia: se la libreria cambia, questo bundle non si aggiorna.
-- Il comportamento da orchestratore (Opus in sessione, controllo automatico, automiglioramento)
+- Il comportamento da orchestratore (modello della sessione, controllo automatico, automiglioramento)
   viene dal blocco ORCHESTRA in ~/.claude/CLAUDE.md, NON da questo bundle. Senza, gli agenti
   esistono e si possono invocare per nome, ma la sessione principale non si comporta da sola
   come orchestratore.

@@ -48,7 +48,7 @@ describe("StaffCheckin", () => {
     await user.type(screen.getByLabelText("Enrollment ID"), "e9");
     await user.click(screen.getByRole("button", { name: "Print badge" }));
     await waitFor(() => expect(openSpy).toHaveBeenCalledWith("blob:badge", "_blank", "noopener,noreferrer"));
-    expect(apiMock).toHaveBeenCalledWith("/staff/print/e9");
+    expect(apiMock).toHaveBeenCalledWith("/staff/print/e9?lang=it");
     const blob = (createUrl.mock.calls[0] as unknown as [Blob])[0];
     expect(blob.type).toContain("text/html");
     const text = await new Promise<string>((resolve) => {

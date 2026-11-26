@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import {
+  Checkbox,
   Chip,
+  FormControlLabel,
   Dialog,
   DialogActions,
   DialogContent,
@@ -13,7 +15,8 @@ import {
   ListItemText,
   MenuItem,
   Select,
-  TextField
+  TextField,
+  Tooltip
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -71,6 +74,16 @@ export default function CategoriesCard({ language, data }: { language: Language;
     await refresh();
   }
 
+  async function toggleFree(cat: AdminCategory) {
+    try {
+      await api(`/categories/${cat.id}`, { method: "PUT", body: JSON.stringify({ freeToEnter: !cat.freeToEnter }) });
+      await refresh();
+      toast.success(t(language, "adminSaved"));
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    }
+  }
+
   async function toggleStatus(cat: AdminCategory) {
     const newStatus = cat.status === "open" ? "closed" : "open";
     try {
@@ -118,6 +131,20 @@ export default function CategoriesCard({ language, data }: { language: Language;
           {categories.map((category) => (
             <ListItem key={category.id} disableGutters>
               <ListItemText primary={category.name} secondary={eventName(category.eventId)} />
+              <Tooltip title={t(language, "tipCategoryFree")} describeChild>
+                <FormControlLabel
+                  sx={{ mr: 1 }}
+                  label={t(language, "adminCategoryFree")}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={!!category.freeToEnter}
+                      onChange={() => toggleFree(category)}
+                      inputProps={{ "aria-label": `${t(language, "adminCategoryFree")}: ${category.name}` }}
+                    />
+                  }
+                />
+              </Tooltip>
               <Chip
                 label={category.status === "open" ? t(language, "adminCategoryOpen") : t(language, "adminCategoryClosed")}
                 color={category.status === "open" ? "success" : "default"}

@@ -10,6 +10,8 @@ export default defineConfig({
 
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:5173",
+    // The app picks its first language from the browser: pin Italian so selectors stay stable.
+    locale: "it-IT",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",

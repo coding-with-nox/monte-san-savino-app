@@ -80,7 +80,7 @@ type ModelDetail = {
   images: { id: string; url: string }[];
   teamMembers?: TeamMember[];
 };
-type Category = { id: string; eventId: string; name: string; status: string };
+type Category = { id: string; eventId: string; name: string; status: string; freeToEnter?: boolean };
 
 interface ModelsProps {
   language: Language;
@@ -181,21 +181,24 @@ export default function Models({ language }: ModelsProps) {
     return adminNotesRef.current;
   }
 
-  async function saveInternalNotes(modelId: string) {
+  /** Returns false when a specific error toast was shown (the caller then skips its success toast). */
+  async function saveInternalNotes(modelId: string): Promise<boolean> {
     const value = editInternalNotes.trim();
     if (!internalNotesLoadedRef.current) {
       toast.error(t(language, "modelsInternalNotesNotLoaded"));
-      return;
+      return false;
     }
-    if (value === loadedInternalNotesRef.current) return;
+    if (value === loadedInternalNotesRef.current) return true;
     try {
       await api(`/admin/models/${encodeURIComponent(modelId)}`, {
         method: "PUT",
         body: JSON.stringify({ internalNotes: value })
       });
       if (adminNotesRef.current) (await adminNotesRef.current).set(modelId, value);
+      return true;
     } catch {
       toast.error(t(language, "modelsInternalNotesSaveFailed"));
+      return false;
     }
   }
 
@@ -275,20 +278,22 @@ export default function Models({ language }: ModelsProps) {
   async function createModel() {
     setSavingModel(true);
     try {
-      const created = await api<{ id: string }>("/models", {
+      const created = await api<{ id: string; code?: number | string | null }>("/models", {
         method: "POST",
         body: JSON.stringify({
           name: editName.trim(),
           categoryId: editCategoryId,
           levelId: editLevelId,
-          isTeam: editIsTeam,
-          teamId: editIsTeam ? editTeamId : null,
-          notes: editNotes.trim() || null
+          ...teamPayload(),
+          notes: editNotes.trim() || null,
+          // omitted when the model is mine
+          ...(owner ? { userId: owner.id } : {})
         })
       });
       setIsCreating(false);
-      if (isManager && created?.id) await saveInternalNotes(created.id);
+      const notesOk = isManager && created?.id ? await saveInternalNotes(created.id) : true;
       await load();
+      if (!notesOk) return;
       const message = created?.code
         ? t(language, owner ? "onBehalfCreatedWithCode" : "modelsCreatedWithCode").replace("{code}", String(created.code))
         : t(language, owner ? "onBehalfCreated" : "modelsCreated");
@@ -314,15 +319,14 @@ export default function Models({ language }: ModelsProps) {
           name: editName.trim(),
           categoryId: editCategoryId,
           levelId: editLevelId,
-          isTeam: editIsTeam,
-          teamId: editIsTeam ? editTeamId : null,
+          ...teamPayload(),
           notes: editNotes.trim() || null
         })
       });
-      if (isManager) await saveInternalNotes(detail.model.id);
+      const notesOk = isManager ? await saveInternalNotes(detail.model.id) : true;
       closePanel();
       await load();
-      toast.success(t(language, "modelsSaved"));
+      if (notesOk) toast.success(t(language, "modelsSaved"));
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
     } finally {
@@ -468,14 +472,15 @@ export default function Models({ language }: ModelsProps) {
   }, [panelOpen, pricingEventId, isCreating, owner]);
 
   const selectedLevel = levels.find((l) => l.id === editLevelId);
+  const selectedCategory = categories.find((c) => c.id === editCategoryId);
   const teamValid = !editIsTeam || (members.length ? members.every(isCoauthorValid) : !!editTeamId);
 
   const pricePreview = (
     <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="price-preview">
       <Stack spacing={0.75}>
         <Typography variant="subtitle2">{t(language, "pricePreviewTitle")}</Typography>
-        {selectedLevel?.freeToEnter ? (
-          <Typography variant="body2">{t(language, "priceLevelFree")}</Typography>
+        {selectedCategory?.freeToEnter ? (
+          <Typography variant="body2">{t(language, "priceCategoryFree")}</Typography>
         ) : (
           <>
             {pricing && pricing.baseFeeCents > 0 ? (

@@ -1,7 +1,7 @@
 ---
 name: documenter
 description: Documenta il progetto (Pre-SRS/SRS con la skill sky_doc, docs/api.md, docs/user-manual.md). Lanciare quando backend-dev, frontend-dev e test-engineer hanno tutti riportato STATO ok.
-model: sonnet
+model: claude-haiku-5-5
 tools: Read, Write, Edit, Grep, Glob, Skill
 skills:
   - sky_doc

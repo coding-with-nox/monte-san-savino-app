@@ -6,7 +6,7 @@ test.describe("Authentication", () => {
     await page.goto("/login");
     await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Login" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Accedi", exact: true })).toBeVisible();
   });
 
   test("unauthenticated redirect to login", async ({ page }) => {
@@ -25,7 +25,7 @@ test.describe("Authentication", () => {
     await disableTours(page);
     await page.getByLabel("Email").fill(ADMIN.email);
     await page.getByLabel("Password").fill("WrongPassword123!");
-    await page.getByRole("button", { name: "Login" }).click();
+    await page.getByRole("button", { name: "Accedi", exact: true }).click();
     // Error toast or message should appear
     await expect(page.getByText(/invalid|errore|credenziali|credential/i)).toBeVisible({ timeout: 5000 });
   });
@@ -35,7 +35,7 @@ test.describe("Authentication", () => {
     await disableTours(page);
     await page.getByLabel("Email").fill(INACTIVE.email);
     await page.getByLabel("Password").fill(INACTIVE.password);
-    await page.getByRole("button", { name: "Login" }).click();
+    await page.getByRole("button", { name: "Accedi", exact: true }).click();
     // Backend returns "User disabled" → shown as toast
     await expect(page.getByText(/invalid|inactive|disabled|errore|disattivato/i)).toBeVisible({ timeout: 5000 });
   });

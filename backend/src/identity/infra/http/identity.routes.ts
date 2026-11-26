@@ -13,6 +13,8 @@ import { clientIp, rateLimiterFromEnv, type SlidingWindowRateLimiter } from "../
 import crypto from "node:crypto";
 import { logger } from "../../../shared/infra/logger/logger";
 import { InvalidCredentialsError } from "../../domain/InvalidCredentialsError";
+import { eq } from "drizzle-orm";
+import { usersTable } from "../persistence/schema";
 
 // Per-process limiter (not shared between replicas); built lazily so env is read at first use.
 let limiter: SlidingWindowRateLimiter | null | undefined;
@@ -63,10 +65,19 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
       set.status = 400;
       return { error: "Password must be at least 8 characters long" };
     }
+    if (body.privacyAccepted !== true) {
+      set.status = 400;
+      return { error: "The privacy notice must be accepted" };
+    }
     try {
       const hasher = new BcryptHasher();
       const uc = new RegisterUser(new UserRepositoryDrizzle(db), hasher);
-      return await uc.execute({ id: crypto.randomUUID(), email: body.email, password: body.password });
+      const created = await uc.execute({ id: crypto.randomUUID(), email: body.email, password: body.password });
+      // Accountability (GDPR art. 7/5.2): store when and which privacy notice version was acknowledged.
+      await db.update(usersTable)
+        .set({ privacyAcceptedAt: new Date(), privacyPolicyVersion: body.privacyVersion.slice(0, 32) })
+        .where(eq(usersTable.id, created.id as any));
+      return created;
     } catch (error) {
       const message = error instanceof Error ? error.message : GENERIC_REGISTER_FAILURE;
       if (message === "Email already registered") {
@@ -80,7 +91,7 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
     }
   }, {
     beforeHandle: authRateLimit,
-    body: t.Object({ email: t.String(), password: t.String() }),
+    body: t.Object({ email: t.String(), password: t.String(), privacyAccepted: t.Boolean(), privacyVersion: t.String({ minLength: 1, maxLength: 32 }) }),
     detail: {
       summary: "Registrazione utente",
       description: "Crea un nuovo account utente con ruolo `user` di default.",
