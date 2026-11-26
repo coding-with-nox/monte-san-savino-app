@@ -1,4 +1,4 @@
-﻿import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   AppBar,
@@ -24,7 +24,6 @@ import {
   Typography,
   useMediaQuery
 } from "@mui/material";
-import SvgIcon from "@mui/material/SvgIcon";
 import BottomNavigation from "@mui/material/BottomNavigation";
 import BottomNavigationAction from "@mui/material/BottomNavigationAction";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -40,20 +39,10 @@ import BarChartIcon from "@mui/icons-material/BarChart";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import PeopleIcon from "@mui/icons-material/People";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
-
-function FigurineIcon(props: React.ComponentProps<typeof SvgIcon>) {
-  return (
-    <SvgIcon {...props} viewBox="0 0 24 24">
-      <circle cx="12" cy="4" r="2" />
-      <path d="M9 8h6l1 5H8z" />
-      <rect x="8" y="19" width="8" height="2" rx="1" />
-      <line x1="10" y1="13" x2="9" y2="19" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="14" y1="13" x2="15" y2="19" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="9" y1="9" x2="7" y2="12" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="15" y1="9" x2="17" y2="12" stroke="currentColor" strokeWidth="1.5" />
-    </SvgIcon>
-  );
-}
+import ViewInArIcon from "@mui/icons-material/ViewInAr";
+import LocalOfferIcon from "@mui/icons-material/LocalOffer";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import SettingsIcon from "@mui/icons-material/Settings";
 import Login from "./pages/Login";
 const Judge = lazy(() => import("./pages/Judge"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -70,6 +59,7 @@ const Labels = lazy(() => import("./pages/Labels"));
 const Stats = lazy(() => import("./pages/Stats"));
 const Podium = lazy(() => import("./pages/Podium"));
 import PageSkeleton from "./components/PageSkeleton";
+import SideNav from "./components/SideNav";
 import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
@@ -215,17 +205,17 @@ export default function App() {
   // `section` is matched against the backend visibility matrix; role minimums always apply too.
   const allNavItems = [
     { label: t(language, "navHome"), path: "/", minRole: "user" as Role, section: null, icon: <HomeIcon /> },
-    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role, section: "models", icon: <FigurineIcon /> },
+    { label: t(language, "navModels"), path: "/models", minRole: "user" as Role, section: "models", icon: <ViewInArIcon /> },
     { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role, section: "enrollments", icon: <AssignmentIcon /> },
     { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null, section: null, icon: <EventIcon /> },
     { label: t(language, "navCheckin"), path: "/staff-checkin", minRole: "staff" as Role, section: "checkin", icon: <HowToRegIcon /> },
     { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role, section: "judge", icon: <GavelIcon /> },
     { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role, section: "users", icon: <PeopleIcon /> },
     { label: t(language, "navAdmin"), path: "/admin", minRole: "manager" as Role, section: "admin", icon: <AdminPanelSettingsIcon /> },
-    { label: t(language, "navLabels"), path: "/labels", minRole: "manager" as Role, section: "labels", icon: null },
+    { label: t(language, "navLabels"), path: "/labels", minRole: "manager" as Role, section: "labels", icon: <LocalOfferIcon /> },
     { label: t(language, "navStats"), path: "/stats", minRole: "jury_president" as Role, section: "stats", icon: <BarChartIcon /> },
-    { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role, section: "podium", icon: null },
-    { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role, section: "settings", icon: null }
+    { label: t(language, "navAwards"), path: "/podium", minRole: "manager" as Role, section: "podium", icon: <EmojiEventsIcon /> },
+    { label: t(language, "navSettings"), path: "/settings", minRole: "admin" as Role, section: "settings", icon: <SettingsIcon /> }
   ];
 
   const navItems = allNavItems.filter((item) => {
@@ -267,6 +257,7 @@ export default function App() {
             selected={isActive(item.path)}
             aria-current={isActive(item.path) ? "page" : undefined}
           >
+            <ListItemIcon>{item.icon}</ListItemIcon>
             <ListItemText primary={item.label} />
           </ListItemButton>
         ))}
@@ -299,7 +290,7 @@ export default function App() {
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
-      <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <Box sx={{ minHeight: "100vh", bgcolor: "background.default", display: "flex", flexDirection: "column" }}>
         <AppBar position="static" elevation={0} sx={{ bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" }}>
           <Toolbar sx={{ gap: 2 }}>
             {isMobile && (
@@ -307,26 +298,9 @@ export default function App() {
                 <MenuIcon />
               </IconButton>
             )}
-            <Typography variant="h6" sx={{ flexGrow: isMobile ? 1 : 0, color: "text.primary" }}>
+            <Typography variant="h6" sx={{ flexGrow: 1, color: "text.primary" }}>
               {appName}
             </Typography>
-            {!isMobile && (
-              <Stack direction="row" spacing={0.5} sx={{ flexGrow: 1, ml: 2, flexWrap: "wrap" }}>
-                {navItems.map((item) => (
-                  <Button
-                    key={item.path}
-                    component={RouterLink}
-                    to={item.path}
-                    aria-current={isActive(item.path) ? "page" : undefined}
-                    variant={isActive(item.path) ? "contained" : "text"}
-                    color={isActive(item.path) ? "secondary" : "inherit"}
-                    sx={{ color: isActive(item.path) ? undefined : "text.primary" }}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </Stack>
-            )}
             <Stack direction="row" spacing={1} alignItems="center">
               <Select
                 size="small"
@@ -375,10 +349,11 @@ export default function App() {
             </Stack>
           </Toolbar>
         </AppBar>
-        <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+        <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
           {drawerContent}
         </Drawer>
-        <Box sx={{ pb: isMobile && role ? "56px" : 0 }}>
+        <Box sx={{ display: "flex", flexGrow: 1 }}>
+        <Box sx={{ flexGrow: 1, minWidth: 0, pb: isMobile && role ? "56px" : 0 }}>
           <Suspense fallback={<PageSkeleton variant="table" />}>
           <Routes>
             <Route
@@ -406,6 +381,8 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>
+        </Box>
+        {!isMobile && <SideNav items={navItems} isActive={isActive} language={language} />}
         </Box>
         {isMobile && role && (
           <BottomNavigation
