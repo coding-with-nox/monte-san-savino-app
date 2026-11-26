@@ -53,16 +53,16 @@ export default function SideNav({ items, isActive, language }: SideNavProps) {
         width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH,
         flexShrink: 0,
         bgcolor: "background.paper",
-        borderLeft: "1px solid",
+        borderRight: "1px solid",
         borderColor: "divider",
         transition: (theme) => theme.transitions.create("width"),
       }}
     >
       <Box sx={{ position: "sticky", top: 0, maxHeight: "100vh", overflowX: "hidden", overflowY: "auto" }}>
-        <Box sx={{ display: "flex", justifyContent: collapsed ? "center" : "flex-start", px: 1.5, pt: 1 }}>
-          <Tooltip title={toggleLabel} placement="left">
+        <Box sx={{ display: "flex", justifyContent: collapsed ? "center" : "flex-end", px: 1.5, pt: 1 }}>
+          <Tooltip title={toggleLabel} placement="right">
             <IconButton aria-label={toggleLabel} aria-expanded={!collapsed} aria-controls="side-nav-list" onClick={toggle}>
-              {collapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+              {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
             </IconButton>
           </Tooltip>
         </Box>
@@ -70,7 +70,7 @@ export default function SideNav({ items, isActive, language }: SideNavProps) {
           {items.map((item) => {
             const active = isActive(item.path);
             return (
-              <Tooltip key={item.path} title={collapsed ? item.label : ""} placement="left">
+              <Tooltip key={item.path} title={collapsed ? item.label : ""} placement="right">
                 <ListItemButton
                   component={RouterLink}
                   to={item.path}
