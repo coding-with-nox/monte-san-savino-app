@@ -1,7 +1,7 @@
 // fixtures must be imported first: it loads testApp, which sets the env (PG_DB=tenant_db_test, JWT_SECRET).
 import { createCategory, createEvent, createLevel, createMemberRole, createUser, member, request, resetDb } from "./fixtures";
 import { getTestDb } from "./testDb";
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
+import { describe, it, expect, beforeEach, afterAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { usersTable, userProfilesTable } from "../identity/infra/persistence/schema";
 import { eventCampaignsTable, modelsTable, registrationsTable, settingsTable } from "../contest/infra/persistence/schema";
@@ -27,14 +27,16 @@ describe("integration role permissions (enrollOnBehalf)", () => {
   const myPermissions = async (who: TestUser) =>
     (await request("GET", "/settings/section-visibility", who.token)).json.permissions;
 
-  beforeAll(async () => {
+  // Bun 1.1.x may run describe-level beforeAll hooks of later blocks before the tests of this one:
+  // set up lazily, once, right before the first test of this block.
+  let setup: Promise<void> | undefined;
+  beforeEach(() => (setup ??= (async () => {
     await resetDb();
     admin = await createUser("admin");
     manager = await createUser("manager");
     user = await createUser("user");
-  });
+  })()));
   beforeEach(async () => { await clearSettings(); });
-  afterAll(resetDb);
 
   it("defaults: admin and manager have it, every other role does not", async () => {
     const res = await request("GET", VISIBILITY, admin.token);
@@ -91,7 +93,10 @@ describe("integration GET /admin/users/enrollable", () => {
     request("GET", `/admin/users/enrollable${q === undefined ? "" : `?q=${encodeURIComponent(q)}`}`, who.token);
   const ids = (res: { json: any }) => res.json.map((r: any) => r.id);
 
-  beforeAll(async () => {
+  // Bun 1.1.x may run describe-level beforeAll hooks of later blocks before the tests of this one:
+  // set up lazily, once, right before the first test of this block.
+  let setup: Promise<void> | undefined;
+  beforeEach(() => (setup ??= (async () => {
     await resetDb();
     admin = await createUser("admin");
     manager = await createUser("manager");
@@ -101,8 +106,7 @@ describe("integration GET /admin/users/enrollable", () => {
       { id: inactiveId, email: "zeta.disattivo@example.com", role: "user", passwordHash: "unused", isActive: false }
     ]);
     await getTestDb().insert(userProfilesTable).values({ userId: target.id, firstName: "Ginevra", lastName: "Bianchi" });
-  });
-  afterAll(resetDb);
+  })()));
 
   it("401 without a token, 403 PERMISSION_DENIED without the permission", async () => {
     expect((await request("GET", "/admin/users/enrollable")).status).toBe(401);
@@ -168,7 +172,10 @@ describe("integration enrollment on behalf of another participant", () => {
   const modelRow = async (id: string) =>
     (await getTestDb().select().from(modelsTable).where(eq(modelsTable.id, id)))[0];
 
-  beforeAll(async () => {
+  // Bun 1.1.x may run describe-level beforeAll hooks of later blocks before the tests of this one:
+  // set up lazily, once, right before the first test of this block.
+  let setup: Promise<void> | undefined;
+  beforeEach(() => (setup ??= (async () => {
     await resetDb();
     admin = await createUser("admin");
     manager = await createUser("manager");
@@ -178,7 +185,7 @@ describe("integration enrollment on behalf of another participant", () => {
     categoryId = await createCategory(eventId);
     levelId = await createLevel();
     roleId = await createMemberRole("Scultore", 1500);
-  });
+  })()));
   afterAll(resetDb);
 
   it("403 PERMISSION_DENIED without the permission, and nothing is created", async () => {
