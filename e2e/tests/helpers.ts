@@ -5,10 +5,16 @@ export const MANAGER = { email: "manager@test.com", password: "Password1!" };
 export const USER = { email: "user1@test.com", password: "Password1!" };
 export const INACTIVE = { email: "user4@test.com", password: "Password1!" };
 
+/** Guided tours auto-start on the first visit of a page and would cover it. The "?" button still works. */
+export async function disableTours(page: Page) {
+  await page.evaluate(() => localStorage.setItem("guidedTours.disabled", "true"));
+}
+
 export async function login(page: Page, email: string, password: string) {
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   // Clear any stale token from previous tests
   await page.evaluate(() => localStorage.clear());
+  await disableTours(page);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Login" }).click();

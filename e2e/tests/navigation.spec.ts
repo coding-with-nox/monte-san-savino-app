@@ -7,9 +7,9 @@ test.describe("Navigation — admin role", () => {
     await waitForApp(page);
   });
 
-  test("profile page loads after login", async ({ page }) => {
+  test("dashboard loads after login", async ({ page }) => {
     await expect(page).toHaveURL("/");
-    await expect(page.getByText(/profilo|profile/i).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   });
 
   test("models page loads", async ({ page }) => {

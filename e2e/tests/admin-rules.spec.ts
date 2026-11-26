@@ -49,6 +49,42 @@ test.describe("Admin rules tab", () => {
     await expect(page.getByText(/^(Salvato\.|Saved\.)$/).first()).toBeVisible();
   });
 
+  test("saves a row of the permissions matrix, admin always granted", async ({ page }) => {
+    await openAdmin(page, ADMIN);
+    await rulesTab(page).click();
+
+    const permission = "(Iscrivere modelli per conto di altri|Enroll models on behalf of others)";
+    const staff = page.getByRole("checkbox", { name: new RegExp(`^staff: ${permission}$`) });
+    const admin = page.getByRole("checkbox", { name: new RegExp(`^admin: ${permission}$`) });
+    await expect(admin).toBeChecked();
+    await expect(admin).toBeDisabled();
+
+    const save = async () => {
+      const response = page.waitForResponse(
+        (r) => r.url().endsWith("/api/admin/settings/section-visibility") && r.request().method() === "PUT"
+      );
+      await page.locator(".MuiCard-root")
+        .filter({ has: page.locator('[data-tour="rules-permissions"]') })
+        .getByRole("button", { name: /^(Salva|Save)$/ })
+        .click();
+      return (await (await response).json()).permissions as Record<string, string[]>;
+    };
+
+    const initial = await staff.isChecked();
+    await staff.setChecked(!initial);
+    expect((await save()).staff).toEqual(initial ? [] : ["enrollOnBehalf"]);
+    await expect(page.getByText(/^(Salvato\.|Saved\.)$/).first()).toBeVisible();
+
+    await page.reload();
+    await waitForApp(page);
+    await rulesTab(page).click();
+    await expect(staff).toBeChecked({ checked: !initial });
+
+    // Restore.
+    await staff.setChecked(initial);
+    expect((await save()).staff).toEqual(initial ? ["enrollOnBehalf"] : []);
+  });
+
   test("is hidden from managers", async ({ page }) => {
     await openAdmin(page, MANAGER);
     await expect(page.getByRole("tab").first()).toBeVisible();
