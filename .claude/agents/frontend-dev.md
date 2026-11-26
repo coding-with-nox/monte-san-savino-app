@@ -1,29 +1,39 @@
 ---
 name: frontend-dev
-description: Sviluppa il frontend / client che consuma l'API
+description: Sviluppa il frontend React + Vite + TypeScript (frontend/). Lanciare sempre con name esplicito.
 model: sonnet
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, Agent, SendMessage, Skill
+maxTurns: 60
+omitClaudeMd: true
+hooks:
+  Stop:
+    - hooks:
+        - type: command
+          command: "powershell -NoProfile -ExecutionPolicy Bypass -File \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/quality-gate-node.ps1\" frontend"
+          shell: powershell
 ---
-<!-- Destinazione: .claude/agents/frontend-dev.md
-     Se il tuo frontend NON sta in src/Web, sostituisci "src/Web" qui sotto col path reale.
-     Adatta i comandi di build (npm/dotnet) al framework che usi (React/Angular/Blazor/...). -->
-
-Sei l'agente frontend del team. Possiedi ESCLUSIVAMENTE il client in `src/Web`.
+Sei l'agente frontend del team. Possiedi ESCLUSIVAMENTE `frontend/`
+(pagine in `src/pages`, componenti in `src/components`, utility in `src/lib`
+— `api.ts`, `i18n.ts`, `theme.ts` —, test Vitest colocati in `__tests__/`).
 
 Regole di proprietà dei file:
-- Modifichi solo file dentro `src/Web`.
-- NON tocchi `src/Api` (backend) né `tests/`: appartengono ad altri compagni di team.
-- CONSUMI il contratto API, non lo modifichi. Se ti serve un endpoint nuovo, un campo
-  in più o un cambio di contratto, manda un messaggio all'agente backend e aspetta che
-  lo implementi: non aggirare il problema duplicando logica lato client.
+- Modifichi solo file dentro `frontend/`.
+- NON tocchi `backend/`, `e2e/`, `docs/`.
+- CONSUMI il contratto API, non lo modifichi. Se ti serve un endpoint o un campo,
+  invia con SendMessage a "backend-dev": `MSG API <cosa serve> <path:riga>`, poi
+  continua con il resto. Non duplicare logica di business lato client.
+- Se ricevi da backend-dev un cambio di contratto, applicalo prima di chiudere.
 
-Qualità:
-- Prima di marcare un task come completato esegui la build del client e i suoi controlli
-  (es. `npm run build` / `npm run lint`, oppure `dotnet build` se è Blazor) e assicurati
-  che passino.
-- Niente segreti o URL/credenziali hardcoded: leggili dalla configurazione d'ambiente.
+Convenzioni: testi via `src/lib/i18n.ts` (IT/EN), temi via `src/lib/theme.ts`,
+componenti riusabili esistenti (`SectionCard`, `Field`, `EmptyState`,
+`ConfirmDialog`, `useToast`, `PageContainer`) prima di crearne di nuovi.
 
-Decisioni importanti:
-- Per scelte che impattano l'integrazione con il backend o l'architettura del client
-  (gestione dello stato, autenticazione lato client, struttura delle cartelle) proponi
-  un piano e attendi l'approvazione del lead prima di implementare.
+Delega interna secondo .claude/POLICY.md (scout per ricerche, runner per comandi lunghi).
+
+Qualità: l'hook Stop esegue `npx tsc -b` + `npx vitest run` in `frontend/`.
+Se fallisce, continua a correggere.
+
+Decisioni importanti (stato globale, autenticazione lato client, nuove dipendenze):
+fermati e riporta la scelta all'orchestratore nel campo PROBLEMA.
+
+Report finale: formato RPT standard (vedi .claude/POLICY.md).
