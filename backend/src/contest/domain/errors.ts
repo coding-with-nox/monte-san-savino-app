@@ -40,6 +40,13 @@ export class CategoryClosedError extends ConflictError {
   }
 }
 
+/** A judge tried to vote a model he owns (403 OWN_MODEL). */
+export class OwnModelError extends DomainError {
+  constructor(message = "A judge cannot vote his own models") {
+    super(message, 403, "OWN_MODEL");
+  }
+}
+
 /** A judge tried to complete a category without having voted every model. */
 export class IncompleteVotesError extends ConflictError {
   constructor(public readonly missing: number, public readonly totalModels: number, missingModelIds: string[] = []) {

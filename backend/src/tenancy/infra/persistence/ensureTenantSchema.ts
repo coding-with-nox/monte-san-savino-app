@@ -128,6 +128,23 @@ export async function ensureTenantSchema() {
       ALTER TABLE IF EXISTS judge_assignments
       ADD COLUMN IF NOT EXISTS category_id uuid;
     `);
+    // Several categories per judge (one row each) and stand-in judges: unique per (event, judge, category or whole event).
+    await pool.query(`
+      ALTER TABLE IF EXISTS judge_assignments
+      ADD COLUMN IF NOT EXISTS standing_in boolean NOT NULL DEFAULT false;
+    `);
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.judge_assignments') IS NULL THEN
+          RETURN;
+        END IF;
+        DROP INDEX IF EXISTS ux_judge_event;
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_judge_assignment ON judge_assignments (
+          event_id, judge_id, (coalesce(category_id, '00000000-0000-0000-0000-000000000000'::uuid))
+        );
+      END $$;
+    `);
     await pool.query(`
       ALTER TABLE IF EXISTS models
       ADD COLUMN IF NOT EXISTS description text;
