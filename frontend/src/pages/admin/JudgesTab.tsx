@@ -43,7 +43,7 @@ export default function JudgesTab({ language, data }: { language: Language; data
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const userEmail = (uid: string) => usersById.get(uid)?.email ?? uid.slice(0, 8);
   const judgeCandidates = useMemo(
-    () => users.filter((u) => u.role === "judge" || u.role === "manager" || u.role === "admin"),
+    () => users.filter((u) => u.role === "judge" || u.role === "jury_president" || u.role === "manager" || u.role === "admin"),
     [users]
   );
   const categoryLabel = useCallback(
