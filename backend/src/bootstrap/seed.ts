@@ -110,7 +110,8 @@ export async function seedDatabase() {
       classNumber: String(classId),
       levelId: levelIds.get(level)!,
       presentationOrder: classId,
-      outOfCompetition: classId === OUT_OF_COMPETITION_CLASS
+      outOfCompetition: classId === OUT_OF_COMPETITION_CLASS,
+      freeToEnter: level === "Juniors"
     };
   };
   await db.insert(categoriesTable).values([

@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import {
-  categoriesTable, eventsTable, levelsTable, memberRolesTable, modelsTable, modelTeamMembersTable, settingsTable, teamMatesTable
+  categoriesTable, eventsTable, memberRolesTable, modelsTable, modelTeamMembersTable, settingsTable, teamMatesTable
 } from "./schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
 import { formatModelCode, loadModelCodeFormatSettings } from "../http/model-code";
@@ -44,7 +44,7 @@ export async function loadPricingEntries(db: any, filters: { userId?: string; ev
       categorySeqId: categoriesTable.seqId,
       eventId: categoriesTable.eventId,
       eventName: eventsTable.name,
-      free: levelsTable.freeToEnter,
+      free: categoriesTable.freeToEnter,
       participantNumber: usersTable.seqId,
       email: usersTable.email,
       firstName: userProfilesTable.firstName,
@@ -53,7 +53,6 @@ export async function loadPricingEntries(db: any, filters: { userId?: string; ev
     .from(modelsTable)
     .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
     .leftJoin(eventsTable, eq(eventsTable.id, categoriesTable.eventId))
-    .leftJoin(levelsTable, eq(levelsTable.id, modelsTable.levelId))
     .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
     .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId))
     .where(conds.length ? and(...conds) : undefined)

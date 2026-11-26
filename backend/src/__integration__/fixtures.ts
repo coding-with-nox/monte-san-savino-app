@@ -41,9 +41,9 @@ export async function createEvent(name = "Contest test") {
   return id;
 }
 
-export async function createCategory(eventId: string, name = "Categoria", status: "open" | "closed" = "open") {
+export async function createCategory(eventId: string, name = "Categoria", status: "open" | "closed" = "open", freeToEnter = false) {
   const id = crypto.randomUUID();
-  await getTestDb().insert(categoriesTable).values({ id, eventId, name, status });
+  await getTestDb().insert(categoriesTable).values({ id, eventId, name, status, freeToEnter });
   return id;
 }
 

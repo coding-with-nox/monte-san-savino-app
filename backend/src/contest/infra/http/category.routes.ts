@@ -34,10 +34,10 @@ export const categoryRoutes = new Elysia({ prefix: "/categories" })
       return { error: "A category with this name already exists for this event" };
     }
     const id = crypto.randomUUID();
-    await tenantDb.insert(categoriesTable).values({ id, eventId: body.eventId, name: body.name, status: "open" });
+    await tenantDb.insert(categoriesTable).values({ id, eventId: body.eventId, name: body.name, status: "open", freeToEnter: body.freeToEnter ?? false });
     return { id };
   }, {
-    body: t.Object({ eventId: t.String(), name: t.String() }),
+    body: t.Object({ eventId: t.String(), name: t.String(), freeToEnter: t.Optional(t.Boolean()) }),
     detail: {
       summary: "Crea categoria",
       tags: ["Categories"],
@@ -49,7 +49,7 @@ export const categoryRoutes = new Elysia({ prefix: "/categories" })
     return { updated: true };
   }, {
     params: t.Object({ categoryId: t.String() }),
-    body: t.Object({ name: t.Optional(t.String()) }),
+    body: t.Object({ name: t.Optional(t.String()), freeToEnter: t.Optional(t.Boolean()) }),
     detail: {
       summary: "Aggiorna categoria",
       tags: ["Categories"],

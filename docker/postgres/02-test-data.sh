@@ -264,6 +264,9 @@ VALUES
   ('cccccccc-3333-0000-0000-000000000027', 'eeeeeeee-0000-0000-0000-000000000003', 'Time Chronicles Painting', 'open', '27', '1e1e1e1e-0000-0000-0000-000000000002', 27, false)
 ON CONFLICT (id) DO NOTHING;
 
+-- Iscrizione gratuita: decide la categoria (classe 0 Juniors), non il livello
+UPDATE categories SET free_to_enter = true WHERE class_number = '0';
+
 -- ===========================================================================
 -- TEAM
 -- ===========================================================================

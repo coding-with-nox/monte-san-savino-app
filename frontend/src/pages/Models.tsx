@@ -80,7 +80,7 @@ type ModelDetail = {
   images: { id: string; url: string }[];
   teamMembers?: TeamMember[];
 };
-type Category = { id: string; eventId: string; name: string; status: string };
+type Category = { id: string; eventId: string; name: string; status: string; freeToEnter?: boolean };
 
 interface ModelsProps {
   language: Language;
@@ -468,14 +468,15 @@ export default function Models({ language }: ModelsProps) {
   }, [panelOpen, pricingEventId, isCreating, owner]);
 
   const selectedLevel = levels.find((l) => l.id === editLevelId);
+  const selectedCategory = categories.find((c) => c.id === editCategoryId);
   const teamValid = !editIsTeam || (members.length ? members.every(isCoauthorValid) : !!editTeamId);
 
   const pricePreview = (
     <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="price-preview">
       <Stack spacing={0.75}>
         <Typography variant="subtitle2">{t(language, "pricePreviewTitle")}</Typography>
-        {selectedLevel?.freeToEnter ? (
-          <Typography variant="body2">{t(language, "priceLevelFree")}</Typography>
+        {selectedCategory?.freeToEnter ? (
+          <Typography variant="body2">{t(language, "priceCategoryFree")}</Typography>
         ) : (
           <>
             {pricing && pricing.baseFeeCents > 0 ? (

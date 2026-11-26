@@ -35,7 +35,9 @@ export const categoriesTable = pgTable("categories", {
   levelId: uuid("level_id"),
   classGroup: text("class_group"),
   presentationOrder: integer("presentation_order"),
-  outOfCompetition: boolean("out_of_competition").default(false).notNull()
+  outOfCompetition: boolean("out_of_competition").default(false).notNull(),
+  /** Models enrolled in a free category cost nothing (coauthors included). */
+  freeToEnter: boolean("free_to_enter").default(false).notNull()
 }, (t) => ({
   byEvent: index("ix_categories_event_id").on(t.eventId)
 }));
