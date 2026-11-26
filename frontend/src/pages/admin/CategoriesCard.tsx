@@ -86,6 +86,7 @@ export default function CategoriesCard({ language, data }: { language: Language;
 
   async function toggleStatus(cat: AdminCategory) {
     const newStatus = cat.status === "open" ? "closed" : "open";
+    if (newStatus === "closed" && !(await confirm(t(language, "adminCategoryCloseConfirm"), { destructive: false }))) return;
     try {
       await api(`/categories/${cat.id}/status`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
       await refresh();

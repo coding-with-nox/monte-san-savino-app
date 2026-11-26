@@ -247,7 +247,7 @@ Source: `payment.routes.ts`.
 | POST | `/categories` | `{ eventId, name }` | `{ id }` (`409` if name exists in event) |
 | PUT | `/categories/:categoryId` | `{ name? }` | `{ "updated": true }` |
 | DELETE | `/categories/:categoryId` | — | `{ "deleted": true }` |
-| PATCH | `/categories/:categoryId/status` | `{ status: "open" \| "closed" }` | `{ updated, status }` — closing requires **all judges to have voted all models** else `400` with `{ error, expected, actual }` |
+| PATCH | `/categories/:categoryId/status` | `{ status: "open" \| "closed" }` | `{ updated, status }` — closing requires at least one assigned judge (`409 NO_JUDGES`); missing votes are allowed (see Awards rules) |
 
 ### Public read endpoints (min role `user`)
 | Method | Path | Source |
@@ -335,12 +335,27 @@ except `/awards/monitoring/:eventId`.
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | `/awards/events/:eventId` | — | ranking: `[{ modelId, modelName, categoryId, averageRank, votes }]` sorted desc |
+| GET | `/awards/events/:eventId` | — | ranking: `[{ modelId, modelName, categoryId, averageRank, votes, totalScore, medalLabel, medalRank, issues }]` sorted desc; `issues: string[]` (`[]` when none, always present; live rows always `[]`) |
 | GET | `/awards/monitoring/:eventId` | — | live judging progress per category. Min role `jury_president`; `403 SECTION_HIDDEN` if `dashboard` is hidden |
 | GET | `/awards/mentions` | — | all special mentions |
 | GET | `/awards/mentions/events/:eventId` | — | mentions for event |
 | POST | `/awards/mentions` | `{ eventId, modelId, title, description? }` | `{ id }` |
 | DELETE | `/awards/mentions/:mentionId` | — | `{ "deleted": true }` |
+
+**Judging rules (applied at closing, `closeCategory`):**
+- Settings `maxVotesPerExhibitor` = N (default `3`) and `maxVoteDifferent` = D (default `2`); invalid or missing values fall back to the defaults.
+- Only the latest vote of each assigned judge counts. With `v` voters: `totalScore = round(sum(ranks) * N / v)`; no votes => `0` (`None`).
+- Issues: `PARTIAL_VOTES` when `0 < v < assigned judges`; `DISCORDANT_VOTES` when `v > 1` and `max(ranks) * v - sum(ranks) > D`. Stored in `awards.issues` (JSON array, null when none).
+- Manager close (`PATCH /categories/:id/status`) no longer requires every judge to vote every model. The judge completion path (`POST /judge/categories/:categoryId/complete`) still does.
+
+### Award brackets (`/admin/award-brackets`) — min role `manager` — `award-brackets.routes.ts`
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| POST | `/admin/award-brackets/preset` | `{ eventId }` | replaces all brackets of the event (one transaction) with the MSS preset and returns the list: None 0-0, Highly Commended 1-4, Bronze 5-7, Silver 8-10, Gold 11-12; `404` if event missing |
+| PUT | `/admin/award-brackets/:bracketId` | `{ medalLabel?, medalRank?, lowLimit?, highLimit? }` | updated row (merged with stored values); `404` if missing |
+| POST | `/admin/award-brackets` | `{ eventId, medalLabel, medalRank, lowLimit, highLimit }` | `{ id }` |
+
+Validation (POST and PUT, after merging): `medalLabel` 1–40 chars; `medalRank` integer 0–10; `lowLimit`/`highLimit` integers >= 0 with `lowLimit <= highLimit`; otherwise `422`.
 
 ---
 
@@ -391,8 +406,8 @@ GET `/?modelId=<id>`, PATCH `/:requestId/status` `{ status: pending\|resolved\|r
 ### Settings
 | Method | Path | Min role | Body | Response |
 |--------|------|----------|------|----------|
-| GET | `/settings` | user | — | settings map (defaults merged) incl. `modelImages, printCodePrefix, printCodeDigits, appTheme, themePreset` (default `savino`), `baseFeeCents` (default `"2500"`), `export*` |
-| PUT | `/admin/settings` | admin | `Record<string,string>` | `{ "updated": true }`; `422` if `baseFeeCents` is not a non-negative integer |
+| GET | `/settings` | user | — | settings map (defaults merged) incl. `modelImages, printCodePrefix, printCodeDigits, appTheme, themePreset` (default `savino`), `baseFeeCents` (default `"2500"`), `maxVotesPerExhibitor` (default `"3"`), `maxVoteDifferent` (default `"2"`), `export*` |
+| PUT | `/admin/settings` | admin | `Record<string,string>` | `{ "updated": true }`; `422` if `baseFeeCents` is not a non-negative integer, `maxVotesPerExhibitor` is not an integer 1–10, or `maxVoteDifferent` is not an integer 0–40 |
 | GET | `/settings/section-visibility` | user | — | `{ role, sections: [], permissions: [] }` for the caller |
 | GET | `/admin/settings/section-visibility` | admin | — | `{ sections, roles, visibility: { <role>: [] }, permissions: { <role>: [] }, availablePermissions: [] }` |
 | PUT | `/admin/settings/section-visibility` | admin | `{ visibility: { <role>: [] }, permissions?: { <role>: [] } }` (both partial by role; `visibility` is required, may be `{}`) | `{ updated, visibility, permissions }`; `422` unknown role/section |

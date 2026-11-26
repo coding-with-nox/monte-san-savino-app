@@ -81,7 +81,7 @@ export const categoryRoutes = new Elysia({ prefix: "/categories" })
     body: t.Object({ status: t.Union([t.Literal("open"), t.Literal("closed")]) }),
     detail: {
       summary: "Apri/chiudi categoria",
-      description: "Chiusura: richiede almeno un giudice assegnato e tutti i modelli votati da tutti i giudici assegnati (409 altrimenti); calcola i premi nella stessa transazione. Riapertura: elimina premi e completamenti della categoria.",
+      description: "Chiusura: richiede almeno un giudice assegnato (409 NO_JUDGES); punteggio = media dei voti × voti per esposizione, modelli non votati = Nothing, voti mancanti o discordanti segnalati in `issues`; premi calcolati nella stessa transazione. Riapertura: elimina premi e completamenti della categoria.",
       tags: ["Categories"],
       security: [{ bearerAuth: [] }]
     }

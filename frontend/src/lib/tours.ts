@@ -129,7 +129,13 @@ export const TOURS: TourDef[] = [
       { target: "admin-tabs", key: "tourAdminEventsAdminTabs" },
       { target: "admin-events-form", key: "tourAdminEventsAdminEventsForm" },
       { target: "admin-categories", key: "tourAdminEventsAdminCategories" },
-      { target: "admin-campaigns", key: "tourAdminEventsAdminCampaigns" },
+      { target: "admin-campaigns", key: "tourAdminEventsAdminCampaigns" }
+    ]
+  },
+  {
+    id: "admin-judging", key: "tourAdminJudging", path: "/admin", scope: "admin-judging", audience: "manager", section: "admin", helpPath: "/admin?tab=judging",
+    steps: [
+      { target: "admin-judging", key: "tourAdminJudgingAdminJudging" },
       { target: "admin-brackets", key: "tourAdminEventsAdminBrackets" }
     ]
   },

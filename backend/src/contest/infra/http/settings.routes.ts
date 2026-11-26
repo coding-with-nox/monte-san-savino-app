@@ -9,6 +9,7 @@ import { loadRolePermissions, ROLE_PERMISSIONS_KEY } from "../../../identity/inf
 import { ROLES, type Role } from "../../../identity/domain/Role";
 import { parsePrizeOrder } from "../../domain/prizeOrder";
 import { DEFAULT_BASE_FEE_CENTS } from "../../domain/pricing";
+import { judgingSettingsError } from "../../domain/categoryClosure";
 
 const PRIZE_ORDER_KEY = "prizeOrder";
 const BASE_FEE_KEY = "baseFeeCents";
@@ -77,6 +78,11 @@ export const adminSettingsRoutes = new Elysia({ prefix: "/admin/settings" })
     if (entries.some(([key, value]) => key === BASE_FEE_KEY && !/^\d{1,7}$/.test(value))) {
       set.status = 422;
       return { error: `${BASE_FEE_KEY} must be a non-negative integer (cents)` };
+    }
+    const judgingError = judgingSettingsError(entries);
+    if (judgingError) {
+      set.status = 422;
+      return { error: judgingError };
     }
     for (const [key, value] of entries) await saveSetting(tenantDb, key, String(value));
     return { updated: true };

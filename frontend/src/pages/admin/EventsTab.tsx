@@ -6,7 +6,6 @@ import SectionCard from "../../components/SectionCard";
 import PrintActions from "../../components/PrintActions";
 import CategoriesCard from "./CategoriesCard";
 import CampaignsCard from "./CampaignsCard";
-import BracketsCard from "./BracketsCard";
 import type { AdminData } from "./useAdminData";
 import { ActionButton } from "../../components/ActionButton";
 
@@ -82,7 +81,6 @@ export default function EventsTab({ language, data }: { language: Language; data
 
       <CategoriesCard language={language} data={data} />
       <CampaignsCard language={language} data={data} />
-      <BracketsCard language={language} data={data} />
     </Stack>
   );
 }

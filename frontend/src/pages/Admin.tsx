@@ -10,10 +10,12 @@ import AwardsTab from "./admin/AwardsTab";
 import SponsorsTab from "./admin/SponsorsTab";
 import CatalogTab from "./admin/CatalogTab";
 import RulesTab from "./admin/RulesTab";
+import JudgingRulesCard from "./admin/JudgingRulesCard";
+import BracketsCard from "./admin/BracketsCard";
 import { getRole } from "../lib/auth";
 import { ActionButton } from "../components/ActionButton";
 
-type TabKey = "events" | "judges" | "awards" | "sponsors" | "catalog" | "rules";
+type TabKey = "events" | "judges" | "awards" | "sponsors" | "catalog" | "judging" | "rules";
 
 interface AdminProps {
   language: Language;
@@ -29,7 +31,7 @@ export default function Admin({ language }: AdminProps) {
   // "?tab=awards" (help page) opens that tab.
   const [tab, setTab] = useState<TabKey>(() => {
     const wanted = new URLSearchParams(window.location.search).get("tab") as TabKey | null;
-    const allowed: TabKey[] = ["events", "judges", "awards", "sponsors", "catalog", ...(getRole() === "admin" ? ["rules" as const] : [])];
+    const allowed: TabKey[] = ["events", "judges", "awards", "sponsors", "catalog", "judging", ...(getRole() === "admin" ? ["rules" as const] : [])];
     return wanted && allowed.includes(wanted) ? wanted : "events";
   });
   const [visited, setVisited] = useState<Set<TabKey>>(() => new Set<TabKey>([tab]));
@@ -67,6 +69,7 @@ export default function Admin({ language }: AdminProps) {
               <Tab value="awards" label={t(language, "adminTabAwards")} />
               <Tab value="sponsors" label={t(language, "adminTabSponsors")} />
               <Tab value="catalog" label={t(language, "adminTabCatalog")} />
+              <Tab value="judging" label={t(language, "adminTabJudging")} />
               {getRole() === "admin" && <Tab value="rules" label={t(language, "adminTabRules")} />}
             </Tabs>
           </Paper>
@@ -79,6 +82,12 @@ export default function Admin({ language }: AdminProps) {
             {panel("awards", () => <AwardsTab language={language} data={data} />)}
             {panel("sponsors", () => <SponsorsTab language={language} data={data} />)}
             {panel("catalog", () => <CatalogTab language={language} data={data} />)}
+            {panel("judging", () => (
+              <Stack spacing={3}>
+                <JudgingRulesCard language={language} />
+                <BracketsCard language={language} data={data} />
+              </Stack>
+            ))}
             {panel("rules", () => <RulesTab language={language} />)}
           </>
         )}

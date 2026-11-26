@@ -1,10 +1,10 @@
 import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import {
-  awardBracketsTable, awardsTable, categoriesTable, judgeAssignmentsTable, judgeCompletionsTable, modelsTable, votesTable
+  awardBracketsTable, awardsTable, categoriesTable, judgeAssignmentsTable, judgeCompletionsTable, modelsTable, settingsTable, votesTable
 } from "./schema";
 import {
-  computeAwards, evaluateCompletion, judgesWithMissingVotes, latestVotePerJudgeModel, missingVoteModelIds,
-  type AwardRow, type Bracket, type LatestVote
+  computeAwards, evaluateCompletion, JUDGING_SETTING_KEYS, latestVotePerJudgeModel, missingVoteModelIds, parseJudgingRules,
+  serializeAwardIssues, type AwardRow, type Bracket, type JudgingSettingKey, type LatestVote
 } from "../../domain/categoryClosure";
 import { CategoryClosedError, ConflictError, ForbiddenError, IncompleteVotesError, NotFoundError } from "../../domain/errors";
 
@@ -15,10 +15,11 @@ export interface ClosureStore {
   listAssignedJudgeIds(eventId: string, categoryId: string): Promise<string[]>;
   listCategoryModelIds(categoryId: string): Promise<string[]>;
   listVotedModelIds(judgeId: string, modelIds: string[]): Promise<string[]>;
-  listVotePairs(modelIds: string[], judgeIds: string[]): Promise<{ judgeId: string; modelId: string }[]>;
   /** Newest first: ORDER BY created_at DESC, seq DESC. */
   listVotesNewestFirst(modelIds: string[], judgeIds: string[]): Promise<LatestVote[]>;
   listBrackets(eventId: string): Promise<Bracket[]>;
+  /** Values of the given settings keys (missing keys are absent from the result). */
+  listSettingValues(keys: string[]): Promise<Partial<Record<JudgingSettingKey, string>>>;
   upsertCompletion(judgeId: string, categoryId: string): Promise<void>;
   listCompletedJudgeIds(categoryId: string): Promise<string[]>;
   upsertAwards(categoryId: string, rows: AwardRow[]): Promise<void>;
@@ -42,8 +43,10 @@ const defaultStore = (tx: any): ClosureStore => new DrizzleClosureStore(tx);
  *  - { judgeId }: judge completion path. The judge must be assigned and must have voted every
  *    model (else 409 INCOMPLETE_VOTES). The completion is recorded, and the category is closed only if
  *    ALL assigned judges (distinct, assigned only) completed and there is at least one.
- *  - no judgeId: manager's manual close. Requires at least one assigned judge and that every assigned
- *    judge voted every model (else 409). Awards are computed exactly like the judge path.
+ *  - no judgeId: manager's manual close. Requires at least one assigned judge (else 409 NO_JUDGES).
+ *    Missing votes are allowed: unvoted models get a score of 0 and the awards flag the issues.
+ *
+ * Awards use the judging rules stored in settings (maxVotesPerExhibitor, maxVoteDifferent).
  */
 export async function closeCategory(
   db: TxRunner,
@@ -78,24 +81,16 @@ export async function closeCategory(
       if (!state.allDone) {
         return { outcome: "pending", allDone: false, totalJudges: state.totalJudges, completedJudges: state.completedJudges } as CloseResult;
       }
-    } else {
-      if (state.totalJudges === 0) throw new ConflictError("Cannot close category: no judges assigned", {}, "NO_JUDGES");
-      const pairs = await store.listVotePairs(modelIds, assigned);
-      if (judgesWithMissingVotes(assigned, modelIds, pairs).length > 0) {
-        const actual = new Set(pairs.map((p) => `${p.judgeId}::${p.modelId}`)).size;
-        throw new ConflictError(
-          "Cannot close category: not all judges have voted on all models",
-          { expected: assigned.length * modelIds.length, actual },
-          "INCOMPLETE_VOTES"
-        );
-      }
+    } else if (state.totalJudges === 0) {
+      throw new ConflictError("Cannot close category: no judges assigned", {}, "NO_JUDGES");
     }
 
     // Freeze awards (same transaction as the status change: all or nothing)
     if (modelIds.length > 0) {
       const votes = await store.listVotesNewestFirst(modelIds, assigned);
       const brackets = await store.listBrackets(category.eventId);
-      const awards = computeAwards(modelIds, assigned, latestVotePerJudgeModel(votes), brackets);
+      const rules = parseJudgingRules(await store.listSettingValues([...JUDGING_SETTING_KEYS]));
+      const awards = computeAwards(modelIds, assigned, latestVotePerJudgeModel(votes), brackets, rules);
       await store.upsertAwards(categoryId, awards);
     }
     await store.setStatus(categoryId, "closed");
@@ -154,13 +149,6 @@ export class DrizzleClosureStore implements ClosureStore {
       .where(and(eq(votesTable.judgeId, judgeId as any), inArray(votesTable.modelId, modelIds as any)));
     return rows.map((r: any) => r.modelId as string);
   }
-  async listVotePairs(modelIds: string[], judgeIds: string[]) {
-    if (!modelIds.length || !judgeIds.length) return [];
-    return await this.db
-      .selectDistinct({ judgeId: votesTable.judgeId, modelId: votesTable.modelId })
-      .from(votesTable)
-      .where(and(inArray(votesTable.modelId, modelIds as any), inArray(votesTable.judgeId, judgeIds as any)));
-  }
   async listVotesNewestFirst(modelIds: string[], judgeIds: string[]) {
     if (!modelIds.length || !judgeIds.length) return [];
     return await this.db
@@ -171,6 +159,13 @@ export class DrizzleClosureStore implements ClosureStore {
   }
   async listBrackets(eventId: string) {
     return await this.db.select().from(awardBracketsTable).where(eq(awardBracketsTable.eventId, eventId as any));
+  }
+  async listSettingValues(keys: string[]) {
+    const rows = await this.db
+      .select({ key: settingsTable.key, value: settingsTable.value })
+      .from(settingsTable)
+      .where(inArray(settingsTable.key, keys));
+    return Object.fromEntries(rows.map((r: any) => [r.key, r.value])) as Partial<Record<JudgingSettingKey, string>>;
   }
   async upsertCompletion(judgeId: string, categoryId: string) {
     await this.db
@@ -187,15 +182,16 @@ export class DrizzleClosureStore implements ClosureStore {
   }
   async upsertAwards(categoryId: string, rows: AwardRow[]) {
     for (const r of rows) {
+      const issues = serializeAwardIssues(r.issues);
       await this.db
         .insert(awardsTable)
         .values({
           id: crypto.randomUUID() as any, categoryId: categoryId as any, modelId: r.modelId as any,
-          totalScore: r.totalScore, medalLabel: r.medalLabel, medalRank: r.medalRank, source: "aggregate"
+          totalScore: r.totalScore, medalLabel: r.medalLabel, medalRank: r.medalRank, source: "aggregate", issues
         })
         .onConflictDoUpdate({
           target: [awardsTable.categoryId, awardsTable.modelId],
-          set: { totalScore: r.totalScore, medalLabel: r.medalLabel, medalRank: r.medalRank, source: "aggregate" }
+          set: { totalScore: r.totalScore, medalLabel: r.medalLabel, medalRank: r.medalRank, source: "aggregate", issues }
         });
     }
   }

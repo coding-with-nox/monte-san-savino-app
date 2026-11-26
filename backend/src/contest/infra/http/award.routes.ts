@@ -11,6 +11,7 @@ import {
   modelsTable,
   votesTable
 } from "../persistence/schema";
+import { parseAwardIssues } from "../../domain/categoryClosure";
 
 type CountRow = { categoryId: string; count: number };
 
@@ -64,6 +65,7 @@ const managerAwardRoutes = new Elysia({ prefix: "/awards" })
       votes: number;
       source: "live" | "frozen";
       averageRank: number | null;
+      issues: string[];
     }> = [];
 
     if (closedCatIds.length > 0) {
@@ -74,7 +76,8 @@ const managerAwardRoutes = new Elysia({ prefix: "/awards" })
           categoryId: awardsTable.categoryId,
           totalScore: awardsTable.totalScore,
           medalLabel: awardsTable.medalLabel,
-          medalRank: awardsTable.medalRank
+          medalRank: awardsTable.medalRank,
+          issues: awardsTable.issues
         })
         .from(awardsTable)
         .where(inArray(awardsTable.categoryId, closedCatIds as any));
@@ -89,7 +92,8 @@ const managerAwardRoutes = new Elysia({ prefix: "/awards" })
           medalRank: row.medalRank,
           votes: 0,
           source: "frozen",
-          averageRank: null
+          averageRank: null,
+          issues: parseAwardIssues(row.issues)
         });
       }
     }
@@ -104,6 +108,7 @@ const managerAwardRoutes = new Elysia({ prefix: "/awards" })
       votes: number;
       source: "live" | "frozen";
       averageRank: number | null;
+      issues: string[];
     }> = [];
 
     if (openCatIds.length > 0) {
@@ -154,7 +159,8 @@ const managerAwardRoutes = new Elysia({ prefix: "/awards" })
             medalRank: null,
             votes: totalVotes,
             source: "live",
-            averageRank
+            averageRank,
+            issues: []  // issues are computed when the category is closed
           });
         }
       }

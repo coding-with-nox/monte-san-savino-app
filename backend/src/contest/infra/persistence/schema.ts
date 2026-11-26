@@ -231,6 +231,7 @@ export const awardsTable = pgTable("awards", {
   medalLabel: text("medal_label").notNull(),
   medalRank: integer("medal_rank").notNull(),
   source: text("source").notNull().default("aggregate"),  // 'aggregate' | 'override'
+  issues: text("issues"),  // JSON array of issue codes (PARTIAL_VOTES, DISCORDANT_VOTES); null when none
   frozenAt: timestamp("frozen_at").defaultNow()
 }, (table) => ({
   uxCategoryModel: uniqueIndex("ux_awards_category_model").on(table.categoryId, table.modelId)
