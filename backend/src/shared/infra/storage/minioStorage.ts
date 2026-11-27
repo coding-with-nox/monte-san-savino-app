@@ -1,6 +1,7 @@
 import { Client } from "minio";
 import { assertProductionSecrets } from "../config/productionEnv";
 import { allowedImageBase, objectKeyFromImageUrl } from "../../domain/imageUrl";
+import { resolveMaxImageBytes } from "../../domain/imageUpload";
 import { logger } from "../logger/logger";
 import type { ObjectDeleter, ObjectStorage } from "../../application/ports/ObjectStorage";
 
@@ -37,16 +38,24 @@ export class MinioStorage implements ObjectStorage, ObjectDeleter {
     return p;
   }
 
-  // NOTE: presignedPutObject cannot sign content-type nor content-length-range, so `contentType`
-  // and `maxBytes` are enforced only by the API (allowlist, random key) and not by MinIO.
-  // Enforcing them server-side requires presignedPostPolicy (multipart POST), which changes the
-  // client upload flow (frontend currently does a PUT).
+  // POST policy (SEC-08): MinIO itself refuses another key, another Content-Type (no HTML or SVG)
+  // or a file larger than `maxBytes`. The policy signature does not cover the host, so the form is
+  // posted to the public URL even when the backend talks to MinIO on an internal address.
   async getUploadUrl(input: { key: string; contentType: string; maxBytes?: number }) {
     await this.ensureBucket();
-    const uploadUrl = await this.client.presignedPutObject(this.bucket, input.key, UPLOAD_URL_EXPIRY_SECONDS);
+    const policy = this.client.newPostPolicy();
+    policy.setBucket(this.bucket);
+    policy.setKey(input.key);
+    policy.setContentType(input.contentType);
+    policy.setContentLengthRange(1, input.maxBytes ?? resolveMaxImageBytes());
+    policy.setExpires(new Date(Date.now() + UPLOAD_URL_EXPIRY_SECONDS * 1000));
+    const { formData } = await this.client.presignedPostPolicy(policy);
     const publicBase = (process.env.MINIO_PUBLIC_URL ?? "http://localhost:9000").replace(/\/+$/, "");
-    const publicUrl = `${publicBase}/${this.bucket}/${input.key}`;
-    return { uploadUrl, publicUrl };
+    return {
+      uploadUrl: `${publicBase}/${this.bucket}`,
+      publicUrl: `${publicBase}/${this.bucket}/${input.key}`,
+      fields: formData as Record<string, string>
+    };
   }
 
   async deleteObjectByUrl(url: string): Promise<void> {

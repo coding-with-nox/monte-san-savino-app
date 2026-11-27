@@ -152,6 +152,17 @@ describe("integration forgotten password", () => {
     expect(sentLinks[0].link.startsWith(`${publicAppUrl()}/reset-password?token=`)).toBe(true);
   }, LONG);
 
+  it("ends the existing sessions: an old refresh token stops working after the reset (SEC-06)", async () => {
+    const user = resetUser;
+    const before = await login(user.email);
+    expect((await request("POST", "/auth/refresh", undefined, { refreshToken: before.json.refreshToken })).status).toBe(200);
+    expect((await request("POST", "/auth/reset-password", undefined, { token: VALID_TOKEN, password: "newpassword1" })).status).toBe(200);
+    expect((await request("POST", "/auth/refresh", undefined, { refreshToken: before.json.refreshToken })).status).toBe(401);
+    await new Promise((r) => setTimeout(r, 1100)); // sessions are compared by the second
+    const after = await login(user.email, "newpassword1");
+    expect((await request("POST", "/auth/refresh", undefined, { refreshToken: after.json.refreshToken })).status).toBe(200);
+  }, LONG);
+
   it("invalidates the previous unused token when a new one is issued", async () => {
     const user = resetUser;
     await request("POST", "/auth/forgot-password", undefined, { email: user.email });

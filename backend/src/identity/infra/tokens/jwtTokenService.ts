@@ -1,7 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 
 const DEFAULT_ACCESS_TTL_SECONDS = 15 * 60;
-const DEFAULT_REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
+// 7 days (was 30): a stolen refresh token is useful for a shorter time (SEC-06).
+const DEFAULT_REFRESH_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 export const MIN_JWT_SECRET_LENGTH = 32;
 

@@ -65,7 +65,12 @@ export class SlidingWindowRateLimiter {
     for (const [k, e] of this.entries) {
       if (e.blockedUntil <= now && (e.hits.length === 0 || e.hits[e.hits.length - 1]! <= windowStart)) this.entries.delete(k);
     }
-    // Still full: drop oldest insertions to bound memory.
+    // Still full: drop the oldest keys that are not locked out, so a flood of new keys cannot
+    // erase an active lock-out (SEC-04). Locked keys go last, only to bound memory.
+    for (const [k, e] of this.entries) {
+      if (this.entries.size < this.maxKeys) break;
+      if (e.blockedUntil <= now) this.entries.delete(k);
+    }
     while (this.entries.size >= this.maxKeys) {
       const first = this.entries.keys().next().value;
       if (first === undefined) break;
@@ -79,10 +84,14 @@ function positiveNumber(v: string | undefined, fallback: number) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-/** Client IP: X-Forwarded-For (first hop) only when TRUST_PROXY=true, else the socket address. */
+/**
+ * Client IP. With TRUST_PROXY=true (the backend is reachable only through our proxy) it is the last
+ * X-Forwarded-For entry, the one written by that proxy: the earlier entries come from the client and
+ * can be forged (SEC-17). Otherwise the socket address.
+ */
 export function clientIp(headers: Record<string, string | undefined>, socketIp: string | undefined, env: NodeJS.ProcessEnv = process.env): string {
   if (env.TRUST_PROXY === "true") {
-    const xff = headers["x-forwarded-for"]?.split(",")[0]?.trim();
+    const xff = headers["x-forwarded-for"]?.split(",").map((h) => h.trim()).filter(Boolean).pop();
     if (xff) return xff;
   }
   return socketIp ?? "unknown";
@@ -98,25 +107,42 @@ export function rateLimiterFromEnv(env: NodeJS.ProcessEnv = process.env, now?: (
   });
 }
 
+/** Limit per client IP on all the endpoints of a guard, whatever the key (password spraying, SEC-04). */
+export function ipRateLimiterFromEnv(env: NodeJS.ProcessEnv = process.env, now?: () => number): SlidingWindowRateLimiter | null {
+  if (env.RATE_LIMIT_ENABLED === "false") return null;
+  return new SlidingWindowRateLimiter({
+    max: positiveNumber(env.RATE_LIMIT_IP_MAX, 50),
+    windowMs: positiveNumber(env.RATE_LIMIT_WINDOW_SECONDS, 15 * 60) * 1000,
+    baseBackoffMs: positiveNumber(env.RATE_LIMIT_BACKOFF_SECONDS, 30) * 1000,
+    now
+  });
+}
+
 /**
- * beforeHandle guard factory: one limiter per guard, keyed by client IP plus `keyOf(body)`.
- * The limiter is built on first use (env read then); `reset` rebuilds it (tests).
+ * beforeHandle guard factory, two buckets per guard: client IP alone (all keys together) and client
+ * IP plus `keyOf(body)`. Keying by IP too means an attacker cannot lock an account out from their own
+ * address. The limiters are built on first use (env read then); `reset` rebuilds them (tests).
  */
-export function createRateLimitGuard(keyOf: (body: any) => string) {
+export function createRateLimitGuard(keyOf: (body: any) => string, limits: { max?: number; ipMax?: number } = {}) {
   let limiter: SlidingWindowRateLimiter | null | undefined;
+  let ipLimiter: SlidingWindowRateLimiter | null | undefined;
   let clock: (() => number) | undefined;
   const guard = ({ body, request, server, set }: any) => {
-    if (limiter === undefined) limiter = rateLimiterFromEnv(process.env, clock);
-    if (!limiter) return;
+    // Fixed limits of this guard win over the env defaults (still off with RATE_LIMIT_ENABLED=false).
+    const env = { ...process.env, ...(limits.max ? { RATE_LIMIT_MAX: String(limits.max) } : {}), ...(limits.ipMax ? { RATE_LIMIT_IP_MAX: String(limits.ipMax) } : {}) };
+    if (limiter === undefined) limiter = rateLimiterFromEnv(env, clock);
+    if (ipLimiter === undefined) ipLimiter = ipRateLimiterFromEnv(env, clock);
+    if (!limiter || !ipLimiter) return;
     const headers = { "x-forwarded-for": request.headers.get("x-forwarded-for") ?? undefined };
     const ip = clientIp(headers, server?.requestIP?.(request)?.address);
-    const r = limiter.hit(`${ip}|${keyOf(body)}`);
+    const perIp = ipLimiter.hit(ip);
+    const r = perIp.allowed ? limiter.hit(`${ip}|${keyOf(body)}`) : perIp;
     if (!r.allowed) {
       set.status = 429;
       set.headers["retry-after"] = String(r.retryAfterSeconds);
       return { error: "Too many attempts, try again later" };
     }
   };
-  guard.reset = (now?: () => number) => { limiter = undefined; clock = now; };
+  guard.reset = (now?: () => number) => { limiter = undefined; ipLimiter = undefined; clock = now; };
   return guard;
 }

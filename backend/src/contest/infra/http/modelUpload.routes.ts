@@ -6,6 +6,10 @@ import { MinioStorage } from "../../../shared/infra/storage/minioStorage";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { isUuid } from "../../../shared/domain/imageUpload";
 import { modelsTable } from "../persistence/schema";
+import { createRateLimitGuard } from "../../../shared/infra/http/rateLimiter";
+
+/** Upload forms per client IP (SEC-08): enough for a full model gallery, not for filling the storage. */
+export const imageUploadRateLimit = createRateLimitGuard(() => "image-upload", { max: 60, ipMax: 120 });
 
 export const modelUploadRoutes = new Elysia({ prefix: "/models" })
   .use(tenantMiddleware)
@@ -36,15 +40,17 @@ export const modelUploadRoutes = new Elysia({ prefix: "/models" })
     }
   }, {
     params: t.Object({ modelId: t.String() }),
+    beforeHandle: imageUploadRateLimit,
     body: t.Object({ contentType: t.String() }),
     detail: {
       summary: "Richiedi upload immagine",
-      description: "Restituisce una URL firmata (breve scadenza) per caricare l'immagine del modello. Solo il proprietario (o manager/admin).",
+      description: "Restituisce un modulo firmato (POST multipart, breve scadenza) che vincola chiave, Content-Type e dimensione massima. Solo il proprietario (o manager/admin). Limitato per IP.",
       tags: ["Models"],
       security: [{ bearerAuth: [] }]
     },
     response: {
-      200: t.Object({ uploadUrl: t.String(), publicUrl: t.String() }),
+      200: t.Object({ uploadUrl: t.String(), publicUrl: t.String(), fields: t.Record(t.String(), t.String()) }),
+      429: t.Object({ error: t.String() }),
       404: t.Object({ error: t.String() }),
       422: t.Object({ error: t.String() })
     }

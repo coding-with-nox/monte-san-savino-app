@@ -53,13 +53,22 @@ describe("SlidingWindowRateLimiter", () => {
     for (let i = 0; i < 50; i++) l.hit(`k${i}`);
     expect((l as any).entries.size).toBeLessThanOrEqual(5);
   });
+  it("a flood of new keys does not erase an active lock-out", () => {
+    const c = clock();
+    const l = new SlidingWindowRateLimiter({ max: 1, windowMs: 60_000, maxKeys: 5, now: c.now });
+    l.hit("victim"); expect(l.hit("victim").allowed).toBe(false);
+    for (let i = 0; i < 50; i++) l.hit(`flood${i}`);
+    expect(l.hit("victim").allowed).toBe(false);
+  });
 });
 
 describe("clientIp / rateLimiterFromEnv", () => {
   it("ignores X-Forwarded-For unless TRUST_PROXY=true", () => {
     const h = { "x-forwarded-for": "1.2.3.4, 5.6.7.8" };
     expect(clientIp(h, "9.9.9.9", {})).toBe("9.9.9.9");
-    expect(clientIp(h, "9.9.9.9", { TRUST_PROXY: "true" })).toBe("1.2.3.4");
+    // Last hop = written by our proxy; the first one is whatever the client sent (SEC-17).
+    expect(clientIp(h, "9.9.9.9", { TRUST_PROXY: "true" })).toBe("5.6.7.8");
+    expect(clientIp({ "x-forwarded-for": "1.2.3.4" }, "9.9.9.9", { TRUST_PROXY: "true" })).toBe("1.2.3.4");
     expect(clientIp({}, undefined, {})).toBe("unknown");
   });
   it("can be disabled and reads params from env", () => {
