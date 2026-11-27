@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { roleAtLeast } from "../auth";
+import { roleAtLeast, roleReaches } from "../auth";
 import { roleLabel } from "../roles";
 import { formatCents, parseEuros } from "../pricing";
 
@@ -12,6 +12,18 @@ describe("jury president role", () => {
   it("has a localized label", () => {
     expect(roleLabel("it", "jury_president")).toBe("Presidente di giuria");
     expect(roleLabel("it", "judge")).toBe("judge");
+  });
+});
+
+describe("front desk access", () => {
+  it("is for staff, manager and admin only, not for judges", () => {
+    for (const r of ["staff", "manager", "admin"] as const) expect(roleReaches(r, "staff")).toBe(true);
+    for (const r of ["user", "judge", "jury_president"] as const) expect(roleReaches(r, "staff")).toBe(false);
+  });
+
+  it("keeps the rank rule for the other roles", () => {
+    expect(roleReaches("admin", "judge")).toBe(true);
+    expect(roleReaches("staff", "judge")).toBe(false);
   });
 });
 

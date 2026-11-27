@@ -26,7 +26,11 @@ export default function useToast(): UseToastReturn {
   const success = useCallback((message: string) => show(message, "success"), [show]);
   const info    = useCallback((message: string) => show(message, "info"),    [show]);
 
-  const handleClose = () => setState((prev) => ({ ...prev, open: false }));
+  // A click elsewhere (even the button that raised the message) must not hide it: only the timeout or the close icon.
+  const handleClose = (_event?: unknown, reason?: string) => {
+    if (reason === "clickaway") return;
+    setState((prev) => ({ ...prev, open: false }));
+  };
 
   const node = (
     <Snackbar
