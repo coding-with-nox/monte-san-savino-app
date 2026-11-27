@@ -57,10 +57,10 @@ describe("VoteModel authorization and transaction", () => {
 describe("RequestModelImageUpload", () => {
   it("requests an upload url under models/<id>/<random>.<ext>", async () => {
     let seen: any;
-    const storage = { getUploadUrl: async (i: any) => { seen = i; return { uploadUrl: "u", publicUrl: "p" }; } };
+    const storage = { getUploadUrl: async (i: any) => { seen = i; return { uploadUrl: "u", publicUrl: "p", fields: {} }; } };
     const r = await new RequestModelImageUpload(storage).execute({ modelId: "123e4567-e89b-12d3-a456-426614174000", contentType: "image/png" });
     expect(seen.key).toMatch(/^models\/123e4567-e89b-12d3-a456-426614174000\/[0-9a-f-]{36}\.png$/);
     expect(seen.contentType).toBe("image/png");
-    expect(r).toEqual({ uploadUrl: "u", publicUrl: "p" });
+    expect(r).toEqual({ uploadUrl: "u", publicUrl: "p", fields: {} });
   });
 });

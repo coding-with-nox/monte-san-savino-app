@@ -422,11 +422,16 @@ export default function Models({ language }: ModelsProps) {
       const optimizedFile = await resizeImageForUpload(file);
       const contentType = optimizedFile.type;
       if (!ALLOWED_UPLOAD_TYPES.includes(contentType)) throw new Error(t(language, "modelImageUnsupported"));
-      const { uploadUrl, publicUrl } = await api<{ uploadUrl: string; publicUrl: string }>(
+      const { uploadUrl, publicUrl, fields } = await api<{ uploadUrl: string; publicUrl: string; fields: Record<string, string> }>(
         `/models/${detail.model.id}/image-upload`,
         { method: "POST", body: JSON.stringify({ contentType }) }
       );
-      await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body: optimizedFile });
+      // Signed form: the storage checks key, type and size; the file must be the last field.
+      const form = new FormData();
+      for (const [name, value] of Object.entries(fields)) form.append(name, value);
+      form.append("file", optimizedFile);
+      const stored = await fetch(uploadUrl, { method: "POST", body: form });
+      if (!stored.ok) throw new Error(t(language, "modelImageRejected"));
       await api(`/models/${detail.model.id}/images`, { method: "POST", body: JSON.stringify({ url: publicUrl }) });
       const d = await api<ModelDetail>(`/models/${detail.model.id}`);
       setDetail(d);

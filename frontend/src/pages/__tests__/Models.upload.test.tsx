@@ -20,7 +20,7 @@ function setupApi() {
     if (path === "/models/m1" && !init) return { model, images: [] };
     if (path === "/models/m1/image-upload") {
       if (uploadError) throw uploadError;
-      return { uploadUrl: "https://signed/put", publicUrl: "https://cdn/x" };
+      return { uploadUrl: "https://storage/models", publicUrl: "https://cdn/x", fields: { key: "models/m1/x", "Content-Type": "image/png" } };
     }
     if (path === "/models/m1/images") return {};
     if (path === "/public/categories") return [{ id: "c1", eventId: "e1", name: "Historical", status: "open" }];
@@ -72,12 +72,29 @@ describe("Models image upload content type", () => {
     vi.restoreAllMocks();
   });
 
-  it("re-encodes a gif to jpeg and uses the same type for backend and PUT", async () => {
+  it("re-encodes a gif to jpeg and uses the same type for backend and upload", async () => {
     await openAndPick(new File(["g"], "a.gif", { type: "image/gif" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(JSON.parse(uploadCalls()[0][1].body)).toEqual({ contentType: "image/jpeg" });
-    expect(fetchMock.mock.calls[0][1].headers["Content-Type"]).toBe("image/jpeg");
-    expect((fetchMock.mock.calls[0][1].body as Blob).type).toBe("image/jpeg");
+    expect(((fetchMock.mock.calls[0][1].body as FormData).get("file") as Blob).type).toBe("image/jpeg");
+  });
+
+  it("posts the signed form fields first and the file last (SEC-08)", async () => {
+    await openAndPick(new File(["p"], "a.png", { type: "image/png" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://storage/models");
+    expect(init.method).toBe("POST");
+    const form = init.body as FormData;
+    expect([...form.keys()]).toEqual(["key", "Content-Type", "file"]);
+    expect(form.get("Content-Type")).toBe("image/png");
+  });
+
+  it("does not attach the image when the storage refuses the file", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 403 });
+    await openAndPick(new File(["p"], "a.png", { type: "image/png" }));
+    expect(await screen.findByText("Image rejected: invalid file type.")).toBeInTheDocument();
+    expect(apiMock.mock.calls.filter((c) => c[0] === "/models/m1/images")).toHaveLength(0);
   });
 
   it("shows a clear error and does not call the backend when the format cannot be decoded", async () => {
@@ -92,7 +109,7 @@ describe("Models image upload content type", () => {
     await openAndPick(new File(["p"], "a.png", { type: "image/png" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(JSON.parse(uploadCalls()[0][1].body)).toEqual({ contentType: "image/png" });
-    expect(fetchMock.mock.calls[0][1].headers["Content-Type"]).toBe("image/png");
+    expect(((fetchMock.mock.calls[0][1].body as FormData).get("file") as Blob).type).toBe("image/png");
   });
 
   it("errors out if the encoder returns a disallowed type for a disallowed source", async () => {
