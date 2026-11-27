@@ -8,7 +8,7 @@ const apiMock = vi.fn();
 let roleValue: string | null = "user";
 let maxModels: number | null = null;
 
-vi.mock("../../lib/api", () => ({ ApiError: class extends Error {}, api: (...a: unknown[]) => apiMock(...a) }));
+vi.mock("../../lib/api", () => ({ ApiError: class extends Error {}, errorCode: (e: any) => e?.code, api: (...a: unknown[]) => apiMock(...a) }));
 vi.mock("../../lib/auth", () => ({
   getRole: () => roleValue,
   roleAtLeast: (actual: string, min: string) => {

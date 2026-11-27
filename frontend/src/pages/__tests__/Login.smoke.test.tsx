@@ -18,6 +18,7 @@ vi.mock("../../lib/api", () => ({
       this.status = status;
     }
   },
+  errorCode: (e: any) => e?.code,
   api: vi.fn(),
 }));
 
@@ -65,12 +66,12 @@ describe("Login smoke tests", () => {
   it("shows error toast when API throws an error", async () => {
     const { api } = await import("../../lib/api");
     const { ApiError } = await import("../../lib/api");
+    const user = userEvent.setup();
+    // Render first: the mount-time GET /public/registration consumes the first api() call.
+    renderLogin();
     (api as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new ApiError(422, "Invalid credentials")
     );
-
-    const user = userEvent.setup();
-    renderLogin();
     await user.type(screen.getByLabelText(/email/i), "bad@example.com");
     await user.type(screen.getByLabelText(/password/i), "wrongpass");
     await user.click(screen.getByRole("button", { name: /sign in/i }));

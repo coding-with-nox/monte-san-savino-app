@@ -2,8 +2,8 @@ import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { categoriesTable, eventsTable, levelsTable } from "../persistence/schema";
-import { parseClassesCsv, parseLevelsCsv, type ImportError } from "../../../shared/domain/csvImport";
+import { categoriesTable, eventsTable, levelsTable, previousResultsTable } from "../persistence/schema";
+import { parseClassesCsv, parsePreviousResultsCsv, parseLevelsCsv, type ImportError } from "../../../shared/domain/csvImport";
 import { isUuid } from "./class-print.routes";
 
 const csvOpts = {
@@ -77,4 +77,25 @@ export const adminImportRoutes = new Elysia({ prefix: "/admin/import" })
       created++;
     }
     return { created, errors: out.sort((a, b) => a.line - b.line) };
-  }, { ...csvOpts, detail: { ...csvOpts.detail, summary: "Import classi da CSV (query eventId obbligatoria)" } });
+  }, { ...csvOpts, detail: { ...csvOpts.detail, summary: "Import classi da CSV (query eventId obbligatoria)" } })
+  // Replaces ALL previous results. Atomic: any invalid row refuses the whole file (nothing is changed).
+  .post("/previous-results", async ({ tenantDb, body, set }) => {
+    const { valid, errors } = parsePreviousResultsCsv(body);
+    if (errors.length || valid.length === 0) {
+      set.status = 422;
+      return { imported: 0, errors: errors.length ? errors : [{ line: 0, message: "No rows to import" }] };
+    }
+    await tenantDb.transaction(async (tx: any) => {
+      await tx.delete(previousResultsTable);
+      await tx.insert(previousResultsTable).values(valid.map((row) => ({
+        id: crypto.randomUUID(),
+        email: row.email,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        levelName: row.levelName,
+        medalRank: row.medalRank,
+        year: row.year
+      })));
+    });
+    return { imported: valid.length, errors: [] };
+  }, { ...csvOpts, detail: { ...csvOpts.detail, summary: "Import risultati precedenti da CSV (Email,First Name,Last Name,Level,Medal Rank,Year); sostituisce tutto" } });

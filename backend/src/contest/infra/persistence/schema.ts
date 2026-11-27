@@ -270,3 +270,15 @@ export const honorAssignmentsTable = pgTable("honor_assignments", {
 }, (table) => ({
   uxHonor: uniqueIndex("ux_honor_assignments_honor").on(table.honorId)
 }));
+
+/** Previous contest results, imported from CSV (replaced as a whole). Used for the level-up rules. */
+export const previousResultsTable = pgTable("previous_results", {
+  id: uuid("id").primaryKey(),
+  email: text("email"),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  levelName: text("level_name").notNull(),
+  medalRank: integer("medal_rank").notNull(),
+  year: integer("year"),
+  importedAt: timestamp("imported_at").defaultNow().notNull()
+});

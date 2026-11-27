@@ -36,6 +36,7 @@ import { awardBracketsRoutes } from "../contest/infra/http/award-brackets.routes
 import { adminImportRoutes } from "../contest/infra/http/import.routes";
 import { adminStatsRoutes } from "../contest/infra/http/stats.routes";
 import { userPricingRoutes, adminPricingRoutes } from "../contest/infra/http/pricing.routes";
+import { adminLevelUpRoutes, userLevelUpRoutes } from "../contest/infra/http/level-up.routes";
 
 type Env = Record<string, string | undefined>;
 
@@ -173,6 +174,8 @@ export function buildApp() {
     .use(awardBracketsRoutes)
     .use(adminImportRoutes)
     .use(adminStatsRoutes)
+    .use(adminLevelUpRoutes)
+    .use(userLevelUpRoutes)
     .use(userPricingRoutes)
     .use(adminPricingRoutes);
 }

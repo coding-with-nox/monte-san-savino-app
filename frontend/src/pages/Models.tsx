@@ -40,7 +40,7 @@ import PrintIcon from "@mui/icons-material/Print";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import ImageIcon from "@mui/icons-material/Image";
-import { api } from "../lib/api";
+import { api, errorCode } from "../lib/api";
 import { getRole, roleAtLeast } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
@@ -121,6 +121,10 @@ export default function Models({ language }: ModelsProps) {
   const [editIsTeam, setEditIsTeam] = useState(false);
   const [editTeamId, setEditTeamId] = useState("");
   const [attachName, setAttachName] = useState("");
+  /** Level already chosen for this event by the user (LEVEL_LOCKED); null when not locked. */
+  const [levelLock, setLevelLock] = useState<{ id: string; name: string } | null>(null);
+  /** Standard level picked by a user who won a Gold there in an earlier edition (GET /users/me/level-up). */
+  const [levelUpWarn, setLevelUpWarn] = useState(false);
   // Managers/admins only: internalNotes lives on GET/PUT /admin/models, never on /models.
   const adminNotesRef = useRef<Promise<Map<string, string>> | null>(null);
   const loadedInternalNotesRef = useRef("");
@@ -202,12 +206,31 @@ export default function Models({ language }: ModelsProps) {
     }
   }
 
+  /** Shows the registration-closed and level-lock errors of POST/PUT /models; other errors become a toast. */
+  function reportModelError(err: any) {
+    const code = errorCode(err);
+    if (code === "REGISTRATION_CLOSED") {
+      toast.error(t(language, "registrationClosed"));
+      return;
+    }
+    if (code === "LEVEL_LOCKED") {
+      const lockedLevelId = String(err?.details?.lockedLevelId ?? "");
+      const lockedLevelName = String(err?.details?.lockedLevelName ?? "");
+      setLevelLock({ id: lockedLevelId, name: lockedLevelName });
+      setEditLevelId(lockedLevelId);
+      setStep(0);
+      return;
+    }
+    toast.error(err?.message ?? String(err));
+  }
+
   async function openModel(modelId: string) {
     if (expandedId === modelId) {
       setExpandedId(null);
       setDetail(null);
       return;
     }
+    setLevelLock(null);
     try {
       const d = await api<ModelDetail>(`/models/${modelId}`);
       let internal = "";
@@ -248,9 +271,11 @@ export default function Models({ language }: ModelsProps) {
     setExpandedId(null);
     setDetail(null);
     setIsCreating(false);
+    setLevelLock(null);
   }
 
   function startCreate() {
+    setLevelLock(null);
     setExpandedId(null);
     setDetail(null);
     setEditName("");
@@ -299,7 +324,7 @@ export default function Models({ language }: ModelsProps) {
         : t(language, owner ? "onBehalfCreated" : "modelsCreated");
       toast.success(owner ? message.replace("{name}", participantName(owner)) : message);
     } catch (err: any) {
-      toast.error(err?.message ?? String(err));
+      reportModelError(err);
     } finally {
       setSavingModel(false);
     }
@@ -328,7 +353,7 @@ export default function Models({ language }: ModelsProps) {
       await load();
       if (notesOk) toast.success(t(language, "modelsSaved"));
     } catch (err: any) {
-      toast.error(err?.message ?? String(err));
+      reportModelError(err);
     } finally {
       setSavingModel(false);
     }
@@ -473,6 +498,22 @@ export default function Models({ language }: ModelsProps) {
 
   const selectedLevel = levels.find((l) => l.id === editLevelId);
   const selectedCategory = categories.find((c) => c.id === editCategoryId);
+  const selectedLevelIsStandard = selectedLevel?.name.trim().toLowerCase() === "standard";
+
+  // Move-up to Masters warning: only for the user's own enrollments (not on behalf of someone else).
+  useEffect(() => {
+    if (!isCreating || owner || !pricingEventId || !selectedLevelIsStandard) { setLevelUpWarn(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api<{ warn?: boolean }>(`/users/me/level-up?eventId=${encodeURIComponent(pricingEventId)}`);
+        if (!cancelled) setLevelUpWarn(!!res?.warn);
+      } catch {
+        if (!cancelled) setLevelUpWarn(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isCreating, owner, pricingEventId, selectedLevelIsStandard]);
   const teamValid = !editIsTeam || (members.length ? members.every(isCoauthorValid) : !!editTeamId);
 
   const pricePreview = (
@@ -533,6 +574,11 @@ export default function Models({ language }: ModelsProps) {
           {levels.map((lvl) => <MenuItem key={lvl.id} value={lvl.id}>{lvl.name}</MenuItem>)}
         </Select>
       </FormControl>
+      {levelLock && (
+        <Alert severity="warning" sx={{ py: 0.5 }} data-testid="level-locked">
+          {t(language, "levelLockedMessage").replace("{lockedLevelName}", levelLock.name)}
+        </Alert>
+      )}
     </>
   );
   const noteFields = (
@@ -603,6 +649,9 @@ export default function Models({ language }: ModelsProps) {
         )}
         <Stack data-tour="wizard-fields" spacing={2}>
         {step === 0 && classFields}
+        {step === 0 && levelUpWarn && (
+          <Alert severity="warning" data-testid="level-up-warning">{t(language, "levelUpWarningStandard")}</Alert>
+        )}
         {step === 1 && <>{nameField}{noteFields}</>}
         {step === 2 && teamFields}
         {step === 3 && (

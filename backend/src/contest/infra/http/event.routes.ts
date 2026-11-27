@@ -5,6 +5,7 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 import { categoriesTable, eventsTable, modelsTable, registrationsTable } from "../persistence/schema";
 import { planEnrollment } from "../../domain/enrollment";
 import { isEventEnrollmentClosed } from "./enrollment-guard";
+import { isRegistrationClosed } from "../persistence/registrationSettings";
 import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { domainErrorHandler } from "../../../shared/infra/http/domainErrorHandler";
 import { hasPermission } from "../../../identity/infra/http/permission.middleware";
@@ -117,6 +118,7 @@ export const enrollmentRoutes = new Elysia({ prefix: "/events" })
       model: model ?? null,
       requested: { modelId: body.modelId ?? null, categoryId: body.categoryId ?? null },
       windowClosed: await isEventEnrollmentClosed(db, params.eventId),
+      registrationClosed: await isRegistrationClosed(db),
       canEnrollOnBehalf: await hasPermission(db, user!.role, "enrollOnBehalf")
     });
 

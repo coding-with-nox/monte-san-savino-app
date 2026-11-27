@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderWithProviders } from "../../test/renderWithProviders";
 
 const apiMock = vi.fn();
-vi.mock("../../lib/api", () => ({ ApiError: class extends Error {}, api: (...a: unknown[]) => apiMock(...a) }));
+vi.mock("../../lib/api", () => ({ ApiError: class extends Error {}, errorCode: (e: any) => e?.code, api: (...a: unknown[]) => apiMock(...a) }));
 vi.mock("../../lib/auth", () => ({ getRole: () => "user", roleAtLeast: () => false }));
 vi.mock("../../components/PrintActions", () => ({ default: () => null }));
 
