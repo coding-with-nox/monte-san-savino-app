@@ -122,3 +122,25 @@ export function buildHonorViews(input: HonorViewInput): HonorView[] {
       return { id: h.id, code: h.code, name: h.name, sortOrder: h.sortOrder, assignment };
     });
 }
+
+/** Statistics summary: catalogue size, assigned count and the assigned honors (catalogue order). */
+export type HonorsSummary = {
+  total: number;
+  assigned: number;
+  list: { code: string; name: string; exhibitor: string; categoryName: string | null; displayNumber: number }[];
+};
+
+export function buildHonorsSummary(views: HonorView[]): HonorsSummary {
+  const assigned = views.filter((v) => v.assignment !== null);
+  return {
+    total: views.length,
+    assigned: assigned.length,
+    list: assigned.map((v) => ({
+      code: v.code,
+      name: v.name,
+      exhibitor: v.assignment!.exhibitor,
+      categoryName: v.assignment!.categoryName,
+      displayNumber: v.assignment!.displayNumber
+    }))
+  };
+}

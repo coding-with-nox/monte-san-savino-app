@@ -34,6 +34,31 @@ describe("Stats", () => {
     expect(apiMock).toHaveBeenCalledWith("/admin/stats/overview");
   });
 
+  it("shows special awards and highly commended totals", async () => {
+    apiMock.mockResolvedValue({
+      ...overview,
+      honors: { total: 5, assigned: 2, list: [{ code: "bos", name: "Best of Show", exhibitor: "Rossi", categoryName: "Diorama", displayNumber: 12 }] },
+      commendedTotal: 4
+    });
+    renderWithProviders(<MemoryRouter><Stats language="en" /></MemoryRouter>);
+    expect(await screen.findByTestId("kpi-honors")).toHaveTextContent("2/5");
+    expect(screen.getByTestId("kpi-commended")).toHaveTextContent("4");
+    expect(screen.getByText("Special awards (2/5)")).toBeInTheDocument();
+    expect(screen.getByText("Best of Show")).toBeInTheDocument();
+    expect(screen.getByText("Rossi")).toBeInTheDocument();
+  });
+
+  it("reads the zero-model users in the { count, list } shape", async () => {
+    apiMock.mockResolvedValue({
+      ...overview,
+      zeroModelUsers: { count: 1, list: [{ participantNumber: 7, name: "Anna", email: "anna@x.it" }] }
+    });
+    renderWithProviders(<MemoryRouter><Stats language="en" /></MemoryRouter>);
+    expect(await screen.findByTestId("kpi-zero")).toHaveTextContent("1");
+    expect(screen.getByText("Anna")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open profile" })).not.toBeInTheDocument();
+  });
+
   it("polls every 30 seconds", async () => {
     vi.useFakeTimers();
     renderWithProviders(<MemoryRouter><Stats language="en" /></MemoryRouter>);

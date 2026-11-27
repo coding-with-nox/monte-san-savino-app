@@ -97,7 +97,10 @@ export function buildClassPrizes(awards: AwardInput[], prizeOrder: readonly stri
 }
 
 /** presentationOrder, then classNumber (numeric), then name. Missing values go last. */
-export function compareCeremonyClasses(a: CeremonyClass, b: CeremonyClass): number {
+export function compareCeremonyClasses(
+  a: Pick<CeremonyClass, "name" | "classNumber" | "presentationOrder">,
+  b: Pick<CeremonyClass, "name" | "classNumber" | "presentationOrder">
+): number {
   const pa = a.presentationOrder ?? Number.MAX_SAFE_INTEGER;
   const pb = b.presentationOrder ?? Number.MAX_SAFE_INTEGER;
   if (pa !== pb) return pa - pb;

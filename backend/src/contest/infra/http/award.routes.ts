@@ -14,8 +14,10 @@ import {
   votesTable
 } from "../persistence/schema";
 import { isOverrideMedalAllowed, latestVotePerJudgeModel, parseAwardIssues, type Bracket } from "../../domain/categoryClosure";
-import { DrizzleClosureStore } from "../persistence/categoryClosure";
+import { DrizzleClosureStore, loadLiveJudgingInput } from "../persistence/categoryClosure";
+import { buildLiveJudging } from "../../domain/liveJudging";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
+import { isUuid } from "./class-print.routes";
 
 type CountRow = { categoryId: string; count: number };
 
@@ -419,6 +421,23 @@ const monitoringRoutes = new Elysia({ prefix: "/awards" })
     beforeHandle: requireVisibleSection("dashboard"),
     detail: {
       summary: "Monitoraggio live giudici per categoria",
+      tags: ["Awards"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/events/:eventId/live", async ({ tenantDb, params, set }) => {
+    if (!isUuid(params.eventId)) {
+      set.status = 422;
+      return { error: "eventId must be a valid uuid" };
+    }
+    const input = await loadLiveJudgingInput(tenantDb, params.eventId);
+    return buildLiveJudging({ updatedAt: new Date().toISOString(), ...input });
+  }, {
+    params: t.Object({ eventId: t.String() }),
+    beforeHandle: requireVisibleSection("dashboard"),
+    detail: {
+      summary: "Andamento live giudizi dell'evento (voti, fase, medaglie proiettate o frozen)",
+      description: "{ updatedAt, totals: { classes, closed, models, votesCast, votesExpected, percent, medals }, classes: [{ categoryId, name, classNumber, presentationOrder, phase (judging|reconciliation|closed), models, votesCast, votesExpected, percent (0-100), judgesTotal, judgesCompleted, discordant, medals }] }. Classi aperte: medaglie proiettate dai voti correnti (come in chiusura, missing/assenti esclusi). Classi chiuse: medaglie frozen (con override). Ordine: presentationOrder, classNumber, name.",
       tags: ["Awards"],
       security: [{ bearerAuth: [] }]
     }

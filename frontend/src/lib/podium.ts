@@ -1,6 +1,9 @@
 /** Presentation order of medalLabel values (first = presented first). Edited in the admin Rules tab. */
 export const DEFAULT_PRIZE_ORDER = ["Highly Commended", "Bronze", "Silver", "Gold"];
 
+/** Standard MSS medal labels (lowercase) and their rank: shown in the UI language, custom labels as typed. */
+export const STANDARD_MEDALS: Record<string, number> = { none: 0, "highly commended": 1, commended: 1, bronze: 2, silver: 3, gold: 4 };
+
 /** Code of the Best of Show special award: always presented last. */
 export const BEST_OF_SHOW_CODE = "bos";
 

@@ -13,6 +13,10 @@ import SectionCard from "../components/SectionCard";
 import BarList, { BarItem } from "../components/BarList";
 import { ActionButton } from "../components/ActionButton";
 import AwardReviewCard from "../components/AwardReviewCard";
+import LiveJudgingCard from "../components/LiveJudgingCard";
+
+export type StatsZeroModelUser = { userId?: string; participantNumber?: number | string | null; name: string; email: string };
+export type StatsHonor = { code: string; name: string; exhibitor?: string | null; categoryName?: string | null; displayNumber?: number | null };
 
 export type StatsOverview = {
   usersTotal: number;
@@ -20,8 +24,11 @@ export type StatsOverview = {
   modelsPerUser: { userId: string; name: string; count: number }[];
   modelsPerCategory: { categoryId: string; name: string; count: number }[];
   medals: { name: string; count: number }[];
-  zeroModelUsers: { userId: string; name: string; email: string }[];
+  /** Plain list (older shape) or `{ count, list }`. */
+  zeroModelUsers: StatsZeroModelUser[] | { count: number; list: StatsZeroModelUser[] };
   honorsSummary?: unknown[];
+  honors?: { total: number; assigned: number; list: StatsHonor[] };
+  commendedTotal?: number;
 };
 
 export const STATS_POLL_MS = 30_000;
@@ -92,13 +99,18 @@ export default function Stats({ language }: StatsProps) {
   const topUsers: BarItem[] = [...(data?.modelsPerUser ?? [])].sort((a, b) => b.count - a.count).slice(0, 10).map((u) => ({ key: u.userId, label: u.name, value: u.count }));
   const modelsTotal = (data?.modelsPerCategory ?? []).reduce((s, c) => s + c.count, 0);
   const medalsTotal = (data?.medals ?? []).reduce((s, m) => s + m.count, 0);
-  const zeroUsers = data?.zeroModelUsers ?? [];
+  const zeroRaw = data?.zeroModelUsers ?? [];
+  const zeroUsers = Array.isArray(zeroRaw) ? zeroRaw : zeroRaw.list;
+  const zeroCount = Array.isArray(zeroRaw) ? zeroRaw.length : zeroRaw.count;
+  const honors = data?.honors ?? { total: 0, assigned: 0, list: [] };
 
   const kpis = [
     { key: "users", label: t(language, "statsUsers"), value: data?.usersTotal ?? 0 },
     { key: "models", label: t(language, "statsModels"), value: modelsTotal },
     { key: "medals", label: t(language, "statsMedalsTotal"), value: medalsTotal },
-    { key: "zero", label: t(language, "statsZeroUsersKpi"), value: zeroUsers.length }
+    { key: "zero", label: t(language, "statsZeroUsersKpi"), value: zeroCount },
+    { key: "honors", label: t(language, "statsHonorsKpi"), value: `${honors.assigned}/${honors.total}` },
+    { key: "commended", label: t(language, "statsCommendedKpi"), value: data?.commendedTotal ?? 0 }
   ];
 
   const body = (
@@ -136,7 +148,7 @@ export default function Stats({ language }: StatsProps) {
 
       <Grid data-tour="stats-kpis" container spacing={2}>
         {kpis.map((k) => (
-          <Grid item xs={6} md={3} key={k.key}>
+          <Grid item xs={6} md={2} key={k.key}>
             <Card>
               <CardContent>
                 <Typography color="text.secondary" variant={projection ? "h6" : "body2"}>{k.label}</Typography>
@@ -146,6 +158,10 @@ export default function Stats({ language }: StatsProps) {
           </Grid>
         ))}
       </Grid>
+
+      <SectionCard title={t(language, "liveTitle")}>
+        <LiveJudgingCard language={language} eventId={eventId} projection={projection} />
+      </SectionCard>
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>
@@ -172,6 +188,36 @@ export default function Stats({ language }: StatsProps) {
           </SectionCard>
         </Grid>
         <Grid item xs={12} md={6}>
+          <SectionCard title={`${t(language, "statsHonors")} (${honors.assigned}/${honors.total})`}>
+            {honors.list.length === 0 ? (
+              <Typography color="text.secondary">{t(language, "statsNoData")}</Typography>
+            ) : (
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "statsHonorsAward")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "statsHonorsExhibitor")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t(language, "statsHonorsClass")}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">{t(language, "statsHonorsNumber")}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {honors.list.map((h) => (
+                      <TableRow key={h.code} hover>
+                        <TableCell>{h.name}</TableCell>
+                        <TableCell>{h.exhibitor || "-"}</TableCell>
+                        <TableCell>{h.categoryName || "-"}</TableCell>
+                        <TableCell align="right">{h.displayNumber ?? "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </SectionCard>
+        </Grid>
+        <Grid item xs={12} md={6}>
           <SectionCard title={t(language, "statsTopUsers")}>
             <BarList items={topUsers} emptyLabel={t(language, "statsNoData")} large={projection} />
           </SectionCard>
@@ -186,7 +232,7 @@ export default function Stats({ language }: StatsProps) {
       )}
 
       {!projection && (
-        <SectionCard tourId="stats-zero" title={`${t(language, "statsZeroUsers")} (${zeroUsers.length})`}>
+        <SectionCard tourId="stats-zero" title={`${t(language, "statsZeroUsers")} (${zeroCount})`}>
           {zeroUsers.length === 0 ? (
             <Typography color="text.secondary">{t(language, "statsNoData")}</Typography>
           ) : (
@@ -201,15 +247,17 @@ export default function Stats({ language }: StatsProps) {
                 </TableHead>
                 <TableBody>
                   {zeroUsers.map((u) => (
-                    <TableRow key={u.userId} hover>
+                    <TableRow key={u.userId ?? u.email} hover>
                       <TableCell>{u.name || "-"}</TableCell>
                       <TableCell>{u.email}</TableCell>
                       <TableCell align="right">
-                        <Tooltip title={t(language, "tipStatsProfile")} describeChild>
-                          <Link component={RouterLink} to={`/users?open=${encodeURIComponent(u.userId)}`}>
-                            {t(language, "statsOpenProfile")}
-                          </Link>
-                        </Tooltip>
+                        {u.userId && (
+                          <Tooltip title={t(language, "tipStatsProfile")} describeChild>
+                            <Link component={RouterLink} to={`/users?open=${encodeURIComponent(u.userId)}`}>
+                              {t(language, "statsOpenProfile")}
+                            </Link>
+                          </Tooltip>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

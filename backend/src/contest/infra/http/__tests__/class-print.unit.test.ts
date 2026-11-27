@@ -46,7 +46,10 @@ describe("class print", () => {
 describe("stats overview", () => {
   it("aggregates and returns empty arrays when no data", () => {
     const empty = buildStatsOverview({ usersByCountryRaw: [], users: [], modelsByUser: [], modelsByCategory: [], categories: [], awardsByMedal: [], mentionsByTitle: [] });
-    expect(empty).toEqual({ usersTotal: 0, usersByCountry: [], modelsPerUser: [], modelsPerCategory: [], medals: [], zeroModelUsers: [], honorsSummary: [] });
+    expect(empty).toEqual({
+      usersTotal: 0, usersByCountry: [], modelsPerUser: [], modelsPerCategory: [], medals: [], zeroModelUsers: { count: 0, list: [] }, honorsSummary: [],
+      honors: { total: 0, assigned: 0, list: [] }, commendedTotal: 0
+    });
     const r = buildStatsOverview({
       usersByCountryRaw: [{ country: "IT", count: 1 }, { country: null, count: 1 }],
       users: [{ id: "a", email: "a@x", firstName: "A" }, { id: "b", email: "b@x" }],
@@ -58,7 +61,7 @@ describe("stats overview", () => {
     });
     expect(r.usersTotal).toBe(2);
     expect(r.modelsPerUser).toEqual([{ userId: "a", name: "A", count: 2 }]);
-    expect(r.zeroModelUsers).toEqual([{ userId: "b", name: "b@x", email: "b@x" }]);
+    expect(r.zeroModelUsers).toEqual({ count: 1, list: [{ userId: "b", participantNumber: null, name: "b@x", email: "b@x" }] });
     expect(r.modelsPerCategory[1]).toEqual({ categoryId: "c2", name: "Z", count: 0 });
     expect(r.medals[0]).toEqual({ name: "Gold", count: 2 });
     expect(r.honorsSummary).toEqual([{ title: "Best", count: 1 }]);
