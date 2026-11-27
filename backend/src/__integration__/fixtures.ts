@@ -69,7 +69,7 @@ export async function request(method: string, path: string, token?: string, body
   const text = await res.text();
   let json: any = null;
   try { json = JSON.parse(text); } catch { /* non JSON response */ }
-  return { status: res.status, json, text };
+  return { status: res.status, json, text, headers: res.headers };
 }
 
 export const member = (roleId: string, name = "Mario", surname = "Rossi") => ({ name, surname, roleId });

@@ -1,3 +1,4 @@
+import { PRINT_SCRIPT } from "../../../shared/infra/http/printHeaders";
 import { escapeHtml } from "../../../shared/domain/escapeHtml";
 import { pt, type PrintLang } from "../../../shared/domain/printI18n";
 import { page } from "./class-print.routes";
@@ -65,7 +66,7 @@ export function renderDeskEnvelopesHtml(envelopes: DeskEnvelope[], lang: PrintLa
   </head>
   <body>
     ${body || `<p>${pt(lang, "common.noData")}</p>`}
-    <script>window.onload = () => window.print();</script>
+    <script>${PRINT_SCRIPT}</script>
   </body>
 </html>`;
 }

@@ -9,6 +9,13 @@ export function exportMaxRows(env: NodeJS.ProcessEnv = process.env): number {
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_EXPORT_MAX_ROWS;
 }
 
+/** Exports that draw one QR code per row (labels, model cards). QR_EXPORT_MAX_ROWS, default 5000 (NEW-11). */
+export const DEFAULT_QR_EXPORT_MAX_ROWS = 5_000;
+export function qrExportMaxRows(env: NodeJS.ProcessEnv = process.env): number {
+  const n = Number(env.QR_EXPORT_MAX_ROWS);
+  return Number.isInteger(n) && n > 0 ? Math.min(n, exportMaxRows(env)) : Math.min(DEFAULT_QR_EXPORT_MAX_ROWS, exportMaxRows(env));
+}
+
 export function exportLimitMessage(max: number): string {
   return `Export too large: more than ${max} rows. Narrow the export with filters (eventId, categoryId, ...) or raise EXPORT_MAX_ROWS.`;
 }

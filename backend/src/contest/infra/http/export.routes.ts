@@ -1,3 +1,4 @@
+import { PRINT_HTML_HEADERS, PRINT_SCRIPT } from "../../../shared/infra/http/printHeaders";
 import { Elysia, t } from "elysia";
 import { and, asc, eq } from "drizzle-orm";
 import QRCode from "qrcode";
@@ -13,7 +14,7 @@ import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { loadPricingEntries } from "../persistence/pricingRepository";
 import { loadCeremony } from "../persistence/ceremony";
 import { formatEuro, type PricingSummary } from "../../domain/pricing";
-import { exportLimitError, exportMaxRows, mapInChunks, QR_CHUNK_SIZE } from "./exportLimits";
+import { exportLimitError, exportMaxRows, mapInChunks, QR_CHUNK_SIZE, qrExportMaxRows } from "./exportLimits";
 import { parseParticipantRange, type ParticipantRange } from "../../domain/participantRange";
 import { buildPhotographyRows, MIN_PHOTO_MEDAL_RANK_KEY, parseMinPhotoMedalRank } from "../../domain/photography";
 import {
@@ -485,10 +486,10 @@ async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSetting
     .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(asc(usersTable.seqId), asc(modelsTable.displayNumber), asc(modelsTable.code))
-    .limit(exportMaxRows() + 1);
+    .limit(qrExportMaxRows() + 1);
 
-  // null = over EXPORT_MAX_ROWS (callers answer 413); checked before generating any QR code
-  if (exportLimitError((rows as any[]).length)) return null;
+  // null = over QR_EXPORT_MAX_ROWS (callers answer 413); checked before generating any QR code
+  if (exportLimitError((rows as any[]).length, qrExportMaxRows())) return null;
 
   return mapInChunks(rows as any[], QR_CHUNK_SIZE, async (row) => ({
     utente: fullName(row.firstName, row.lastName, row.userEmail) || row.userEmail || "",
@@ -513,6 +514,7 @@ const managerExportRoutes = new Elysia()
   .use(requireRole("manager"))
   .get("/enrollments", async ({ tenantDb, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
+    if (eventId && !UUID_RE.test(eventId)) { set.status = 422; return { error: "eventId must be a valid uuid" }; }
     const lang = parsePrintLang(query?.lang);
     const exportSettings = await loadExportSettings(tenantDb, lang);
 
@@ -534,7 +536,8 @@ const managerExportRoutes = new Elysia()
         absent: registrationsTable.absent,
         patreon: userProfilesTable.patreon,
         pinterest: userProfilesTable.pinterest,
-        tiktok: userProfilesTable.tiktok
+        tiktok: userProfilesTable.tiktok,
+        publicProfile: userProfilesTable.publicProfile
       })
       .from(registrationsTable)
       .leftJoin(eventsTable, eq(eventsTable.id, registrationsTable.eventId))
@@ -558,9 +561,10 @@ const managerExportRoutes = new Elysia()
         [pt(lang, "col.category")]: row.categoryName ?? "",
         [pt(lang, "col.checkIn")]: row.checkedIn ? "true" : "false",
         [pt(lang, "col.absent")]: row.absent ? "true" : "false",
-        patreon: row.patreon ?? "",
-        pinterest: row.pinterest ?? "",
-        tiktok: row.tiktok ?? ""
+        // Social links only with the owner's consent (public profile), as the privacy notice says.
+        patreon: row.publicProfile ? row.patreon ?? "" : "",
+        pinterest: row.publicProfile ? row.pinterest ?? "" : "",
+        tiktok: row.publicProfile ? row.tiktok ?? "" : ""
       };
 
       if (exportSettings.includeParticipantEmail) {
@@ -586,6 +590,7 @@ const managerExportRoutes = new Elysia()
   })
   .get("/models", async ({ tenantDb, query, set }) => {
     const categoryId = query?.categoryId ? String(query.categoryId) : null;
+    if (categoryId && !UUID_RE.test(categoryId)) { set.status = 422; return { error: "categoryId must be a valid uuid" }; }
     const lang = parsePrintLang(query?.lang);
     const exportSettings = await loadExportSettings(tenantDb, lang);
 
@@ -640,6 +645,7 @@ const managerExportRoutes = new Elysia()
       set.status = 400;
       return { error: "eventId is required" };
     }
+    if (!UUID_RE.test(eventId)) { set.status = 422; return { error: "eventId must be a valid uuid" }; }
 
     const lang = parsePrintLang(query.lang);
     const exportSettings = await loadExportSettings(tenantDb, lang);
@@ -656,7 +662,8 @@ const managerExportRoutes = new Elysia()
         website: userProfilesTable.website,
         patreon: userProfilesTable.patreon,
         pinterest: userProfilesTable.pinterest,
-        tiktok: userProfilesTable.tiktok
+        tiktok: userProfilesTable.tiktok,
+        publicProfile: userProfilesTable.publicProfile
       })
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
@@ -713,12 +720,14 @@ const managerExportRoutes = new Elysia()
       if (exportSettings.includeParticipantEmail) {
         base[pt(lang, "col.email")] = u.email;
       }
-      base.instagram = u.instagram ?? "";
-      base.facebook = u.facebook ?? "";
-      base.website = u.website ?? "";
-      base.patreon = u.patreon ?? "";
-      base.pinterest = u.pinterest ?? "";
-      base.tiktok = u.tiktok ?? "";
+      // Social links only with the owner's consent (public profile), as the privacy notice says.
+      const social: Record<string, string | null | undefined> = u.publicProfile ? u : {};
+      base.instagram = social.instagram ?? "";
+      base.facebook = social.facebook ?? "";
+      base.website = social.website ?? "";
+      base.patreon = social.patreon ?? "";
+      base.pinterest = social.pinterest ?? "";
+      base.tiktok = social.tiktok ?? "";
       return base;
     });
 
@@ -738,6 +747,7 @@ const managerExportRoutes = new Elysia()
       set.status = 400;
       return { error: "eventId is required" };
     }
+    if (!UUID_RE.test(eventId)) { set.status = 422; return { error: "eventId must be a valid uuid" }; }
     const lang = parsePrintLang(query.lang);
     const exportSettings = await loadExportSettings(tenantDb, lang);
 
@@ -759,7 +769,8 @@ const managerExportRoutes = new Elysia()
         website: userProfilesTable.website,
         patreon: userProfilesTable.patreon,
         pinterest: userProfilesTable.pinterest,
-        tiktok: userProfilesTable.tiktok
+        tiktok: userProfilesTable.tiktok,
+        publicProfile: userProfilesTable.publicProfile
       })
       .from(registrationsTable)
       .innerJoin(usersTable, eq(usersTable.id, registrationsTable.userId))
@@ -804,11 +815,11 @@ const managerExportRoutes = new Elysia()
         const participant = fullName(u.firstName, u.lastName, u.email);
         const modelList = modelsByUser.get(u.userId) ?? [];
         const modelsHtml = modelList.map((m) => escapeHtml(m)).join("<br/>") || "-";
-        return `<tr><td>${escapeHtml(participant)}</td><td>${escapeHtml(u.email)}</td><td>${renderSocialHtml(u) || "-"}</td><td>${modelsHtml}</td></tr>`;
+        return `<tr><td>${escapeHtml(participant)}</td><td>${escapeHtml(u.email)}</td><td>${(u.publicProfile ? renderSocialHtml(u) : "") || "-"}</td><td>${modelsHtml}</td></tr>`;
       })
       .join("");
 
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename=\"users-by-event-${normalizeFilePart(eventId, "event")}.html\"`;
 
     return `<!DOCTYPE html>
@@ -844,7 +855,7 @@ const managerExportRoutes = new Elysia()
         ${rows || `<tr><td colspan=\"4\">${pt(lang, "common.noData")}</td></tr>`}
       </tbody>
     </table>
-    <script>window.onload = () => window.print();</script>
+    <script>${PRINT_SCRIPT}</script>
   </body>
 </html>`;
   }, {
@@ -884,9 +895,10 @@ const managerExportRoutes = new Elysia()
       .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
       .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId));
     const rows = (await (filters.length
-      ? baseQuery.where(and(...filters)).limit(exportMaxRows() + 1)
-      : baseQuery.limit(exportMaxRows() + 1))) as any[];
-    const tooLarge = exportLimitError(rows.length);
+      ? baseQuery.where(and(...filters)).limit(qrExportMaxRows() + 1)
+      : baseQuery.limit(qrExportMaxRows() + 1))) as any[];
+    // One QR code per model: lower limit than the plain exports (NEW-11).
+    const tooLarge = exportLimitError(rows.length, qrExportMaxRows());
     if (tooLarge) { set.status = 413; return tooLarge; }
 
     const cards = await mapInChunks(rows, QR_CHUNK_SIZE, async (row) => {
@@ -905,7 +917,7 @@ const managerExportRoutes = new Elysia()
       </section>`;
     });
 
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="models-print.html"`;
 
     return `<!DOCTYPE html>
@@ -927,7 +939,7 @@ const managerExportRoutes = new Elysia()
   <body>
     <h1>${pt(lang, "models.heading")}</h1>
     ${cards.join("") || `<p>${pt(lang, "common.noModels")}</p>`}
-    <script>window.onload = () => window.print();</script>
+    <script>${PRINT_SCRIPT}</script>
   </body>
 </html>`;
   }, {
@@ -947,7 +959,7 @@ const managerExportRoutes = new Elysia()
     // JSON keys are a machine contract (DYMO/direct print): `lang` is accepted but does not change them.
     const exportSettings = await loadExportSettings(tenantDb, parsePrintLang(query.lang));
     const labelRows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
-    if (!labelRows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
+    if (!labelRows) { set.status = 413; return exportLimitError(qrExportMaxRows() + 1, qrExportMaxRows())!; }
     return labelRows;
   }, {
     query: exportFilterQuerySchema,
@@ -967,7 +979,7 @@ const managerExportRoutes = new Elysia()
     const lang = parsePrintLang(query.lang);
     const exportSettings = await loadExportSettings(tenantDb, lang);
     const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
-    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
+    if (!rows) { set.status = 413; return exportLimitError(qrExportMaxRows() + 1, qrExportMaxRows())!; }
     setXlsxHeaders(set, buildFileName(exportSettings, "labels", filtersFileSuffix(parsed.filters)));
     return toXlsx(buildSheetName(exportSettings, pt(lang, "sheet.labels")), rows.map(({ utente, categoria, nomeModello, codice, note, qrPayload }) => ({
       [pt(lang, "col.user")]: utente,
@@ -1004,12 +1016,12 @@ const managerExportRoutes = new Elysia()
 
     const exportSettings = await loadExportSettings(tenantDb, lang);
     const rows = await getLabelRows(tenantDb, parsed.filters, exportSettings);
-    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
+    if (!rows) { set.status = 413; return exportLimitError(qrExportMaxRows() + 1, qrExportMaxRows())!; }
     const bodyRows = rows
       .map((row) => `<tr><td>${escapeHtml(row.utente)}</td><td>${escapeHtml(row.categoria)}</td><td>${escapeHtml(row.nomeModello)}</td><td>${escapeHtml(row.codice)}</td><td>${escapeHtml(row.note)}</td><td><img class="qr" alt="${escapeHtml(row.qrPayload)}" src="${escapeHtml(row.qr)}" width="80" height="80"/></td></tr>`)
       .join("");
 
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename=\"labels-${normalizeFilePart(filtersFileSuffix(parsed.filters), "labels")}.html\"`;
 
     return `<!DOCTYPE html>
@@ -1047,7 +1059,7 @@ const managerExportRoutes = new Elysia()
         ${bodyRows || `<tr><td colspan=\"6\">${pt(lang, "common.noData")}</td></tr>`}
       </tbody>
     </table>
-    <script>window.onload = () => window.print();</script>
+    <script>${PRINT_SCRIPT}</script>
   </body>
 </html>`;
   }, {
@@ -1090,8 +1102,8 @@ const managerExportRoutes = new Elysia()
     const lang = parsePrintLang(query.lang);
     const exportSettings = await loadExportSettings(tenantDb, lang);
     const rows = await getLabelRows(tenantDb, { eventId: params.eventId }, exportSettings, parsed.range);
-    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    if (!rows) { set.status = 413; return exportLimitError(qrExportMaxRows() + 1, qrExportMaxRows())!; }
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="desk-labels.html"`;
     return renderDeskLabelsHtml(event, rows, lang);
   }, {
@@ -1109,7 +1121,7 @@ const managerExportRoutes = new Elysia()
     // Same JSON rows as /labels/data (DYMO flow).
     const exportSettings = await loadExportSettings(tenantDb, parsePrintLang(query.lang));
     const rows = await getLabelRows(tenantDb, { eventId: params.eventId }, exportSettings, parsed.range);
-    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
+    if (!rows) { set.status = 413; return exportLimitError(qrExportMaxRows() + 1, qrExportMaxRows())!; }
     return rows;
   }, {
     params: t.Object({ eventId: t.String() }),
@@ -1148,7 +1160,7 @@ const managerExportRoutes = new Elysia()
       country: p.country ?? "",
       models: modelsByUser.get(p.userId) ?? []
     }));
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="desk-lists.html"`;
     return renderDeskListsHtml(event, lists, lang);
   }, {
@@ -1172,7 +1184,7 @@ const managerExportRoutes = new Elysia()
       username: p.username,
       country: p.country ?? ""
     }));
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="desk-envelopes.html"`;
     return renderDeskEnvelopesHtml(envelopes, lang);
   }, {
@@ -1191,7 +1203,7 @@ const managerExportRoutes = new Elysia()
     if (!event) { set.status = 404; return { error: "Event not found" }; }
     const lang = parsePrintLang(query.lang);
     const rows = await loadPhotographyRows(tenantDb, event.id);
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="photography.html"`;
     return renderPhotographyHtml(event, rows, lang);
   }, {
@@ -1318,6 +1330,7 @@ const userExportRoutes = new Elysia()
   // Task 06+07: stampa scheda utente con modelli e info team
   .get("/model-card/pdf", async ({ tenantDb, user, query, set }) => {
     const eventId = query?.eventId ? String(query.eventId) : null;
+    if (eventId && !UUID_RE.test(eventId)) { set.status = 422; return { error: "eventId must be a valid uuid" }; }
     const lang = parsePrintLang(query?.lang);
     const exportSettings = await loadExportSettings(tenantDb, lang);
 
@@ -1374,7 +1387,7 @@ const userExportRoutes = new Elysia()
     });
 
     const title = "Monte San Savino";
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="model-card-${paddedUserId}.html"`;
 
     return `<!DOCTYPE html>
@@ -1421,7 +1434,7 @@ const userExportRoutes = new Elysia()
     </table>
   </div>
   ${renderPricingHtml(pricing, lang)}
-  <script>window.onload = () => window.print();</script>
+  <script>${PRINT_SCRIPT}</script>
 </body>
 </html>`;
   }, {
