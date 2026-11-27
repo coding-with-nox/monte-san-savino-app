@@ -213,3 +213,109 @@ export function parsePreviousResultsCsv(text: string): ParsedImport<PreviousResu
   }
   return { valid, errors };
 }
+
+const MEDAL_HEADER = ["medal", "value", "low limit", "high limit"];
+const HONOR_HEADER = ["code", "name", "order"];
+const JURY_HEADER = ["judge email", "class number", "stand-in"];
+const NON_NEGATIVE_INT_RE = /^\d{1,6}$/;
+
+export type MedalImportRow = { line: number; medalLabel: string; medalRank: number; lowLimit: number; highLimit: number };
+export type HonorImportRow = { line: number; code: string; name: string; sortOrder: number | null };
+export type JuryImportRow = { line: number; judgeEmail: string; classNumber: string | null; standingIn: boolean };
+
+/**
+ * Medal brackets: Medal,Value,Low Limit,High Limit. `Value` is the medal rank and must be unique in the file.
+ * Range rules (rank 0-10, low <= high) are applied by the route with bracketInputError.
+ */
+export function parseMedalBracketsCsv(text: string): ParsedImport<MedalImportRow> {
+  const g = guard(text);
+  if (!g.rows) return { valid: [], errors: g.errors! };
+  const rows = g.rows[0] && isHeader(g.rows[0].cells, MEDAL_HEADER) ? g.rows.slice(1) : g.rows;
+  const valid: MedalImportRow[] = [];
+  const errors: ImportError[] = [];
+  const seen = new Set<number>();
+  for (const r of rows) {
+    if (r.cells.length !== 4) { errors.push({ line: r.line, message: "Expected 4 columns" }); continue; }
+    const label = validateCell(r.cells[0], "Medal", { required: true });
+    if (!label.ok) { errors.push({ line: r.line, message: label.error }); continue; }
+    const value = r.cells[1].trim();
+    const low = r.cells[2].trim();
+    const high = r.cells[3].trim();
+    if (!NON_NEGATIVE_INT_RE.test(value)) { errors.push({ line: r.line, message: "Value must be an integer" }); continue; }
+    if (!NON_NEGATIVE_INT_RE.test(low)) { errors.push({ line: r.line, message: "Low Limit must be a non-negative integer" }); continue; }
+    if (!NON_NEGATIVE_INT_RE.test(high)) { errors.push({ line: r.line, message: "High Limit must be a non-negative integer" }); continue; }
+    const medalRank = Number(value);
+    if (seen.has(medalRank)) { errors.push({ line: r.line, message: `Duplicate Value ${medalRank} in file` }); continue; }
+    seen.add(medalRank);
+    valid.push({ line: r.line, medalLabel: label.value, medalRank, lowLimit: Number(low), highLimit: Number(high) });
+  }
+  return { valid, errors };
+}
+
+/**
+ * Special awards: Code,Name[,Order]. Code and name are checked for syntax here; their length limits
+ * are applied by the route with honorInputError. Order is optional (empty = keep / next available).
+ */
+export function parseHonorsCsv(text: string): ParsedImport<HonorImportRow> {
+  const g = guard(text);
+  if (!g.rows) return { valid: [], errors: g.errors! };
+  const rows = g.rows[0] && isHeader(g.rows[0].cells, HONOR_HEADER) ? g.rows.slice(1) : g.rows;
+  const valid: HonorImportRow[] = [];
+  const errors: ImportError[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (r.cells.length !== 2 && r.cells.length !== 3) { errors.push({ line: r.line, message: "Expected 2 or 3 columns" }); continue; }
+    const code = validateCell(r.cells[0], "Code", { required: true });
+    if (!code.ok) { errors.push({ line: r.line, message: code.error }); continue; }
+    const name = validateCell(r.cells[1], "Name", { required: true });
+    if (!name.ok) { errors.push({ line: r.line, message: name.error }); continue; }
+    const orderRaw = (r.cells[2] ?? "").trim();
+    if (orderRaw && !NON_NEGATIVE_INT_RE.test(orderRaw)) { errors.push({ line: r.line, message: "Order must be a non-negative integer" }); continue; }
+    const key = code.value.toLowerCase();
+    if (seen.has(key)) { errors.push({ line: r.line, message: `Duplicate code "${code.value}" in file` }); continue; }
+    seen.add(key);
+    valid.push({ line: r.line, code: code.value, name: name.value, sortOrder: orderRaw ? Number(orderRaw) : null });
+  }
+  return { valid, errors };
+}
+
+/** Stand-in flag: 1/yes = true, 0/no/empty = false (case-insensitive). */
+function parseStandIn(value: string): { ok: true; value: boolean } | { ok: false; error: string } {
+  const v = value.trim().toLowerCase();
+  if (v === "1" || v === "yes") return { ok: true, value: true };
+  if (v === "0" || v === "no" || v === "") return { ok: true, value: false };
+  return { ok: false, error: "Stand-in must be 1/0 or yes/no" };
+}
+
+/**
+ * Judge assignments: Judge Email,Class Number,Stand-in. An empty Class Number means the whole event;
+ * a stand-in needs a class. The judge's account and the class of the event are checked by the route.
+ */
+export function parseJuryCsv(text: string): ParsedImport<JuryImportRow> {
+  const g = guard(text);
+  if (!g.rows) return { valid: [], errors: g.errors! };
+  const rows = g.rows[0] && isHeader(g.rows[0].cells, JURY_HEADER) ? g.rows.slice(1) : g.rows;
+  const valid: JuryImportRow[] = [];
+  const errors: ImportError[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (r.cells.length !== 3) { errors.push({ line: r.line, message: "Expected 3 columns" }); continue; }
+    const judgeEmail = r.cells[0].trim().toLowerCase();
+    if (!judgeEmail) { errors.push({ line: r.line, message: "Judge Email is required" }); continue; }
+    if (!EMAIL_RE.test(judgeEmail)) { errors.push({ line: r.line, message: "Judge Email is not valid" }); continue; }
+    const cls = validateCell(r.cells[1], "Class Number");
+    if (!cls.ok) { errors.push({ line: r.line, message: cls.error }); continue; }
+    const classNumber = cls.value || null;
+    const standIn = parseStandIn(r.cells[2]);
+    if (!standIn.ok) { errors.push({ line: r.line, message: standIn.error }); continue; }
+    if (standIn.value && classNumber === null) { errors.push({ line: r.line, message: "Stand-in requires a Class Number" }); continue; }
+    const key = `${judgeEmail}|${classNumber ?? ""}`;
+    if (seen.has(key)) {
+      errors.push({ line: r.line, message: `Duplicate assignment for ${judgeEmail}${classNumber ? ` in class ${classNumber}` : ""} in file` });
+      continue;
+    }
+    seen.add(key);
+    valid.push({ line: r.line, judgeEmail, classNumber, standingIn: standIn.value });
+  }
+  return { valid, errors };
+}

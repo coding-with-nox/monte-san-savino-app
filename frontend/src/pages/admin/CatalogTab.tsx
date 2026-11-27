@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
+  FormControl,
   InputAdornment,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -36,6 +40,8 @@ export default function CatalogTab({ language, data }: { language: Language; dat
   const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
   const [newMemberRoleName, setNewMemberRoleName] = useState("");
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+  // Event shared by the medals, special awards and judges imports (step 10).
+  const [importEventId, setImportEventId] = useState("");
   const toast = useToast();
 
   // Lookup tables load only when the catalog tab is first opened. Failures degrade to an empty list.
@@ -136,6 +142,33 @@ export default function CatalogTab({ language, data }: { language: Language; dat
         title={`${t(language, "importTitle")}: ${t(language, "importPreviousResults")}`}
         help={t(language, "importHelpPreviousResults")}
         endpoint="/admin/import/previous-results"
+      />
+      <FormControl size="small" sx={{ maxWidth: 360 }}>
+        <InputLabel id="catalog-import-event">{t(language, "awardsSelectEvent")}</InputLabel>
+        <Select labelId="catalog-import-event" value={importEventId} label={t(language, "awardsSelectEvent")} onChange={(e) => setImportEventId(e.target.value)}>
+          {events.map((ev) => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
+        </Select>
+      </FormControl>
+      <CsvImportCard
+        language={language}
+        title={`${t(language, "importTitle")}: ${t(language, "importMedals")}`}
+        help={t(language, "importHelpMedals")}
+        endpoint="/admin/import/medals"
+        eventId={importEventId}
+      />
+      <CsvImportCard
+        language={language}
+        title={`${t(language, "importTitle")}: ${t(language, "importHonors")}`}
+        help={t(language, "importHelpHonors")}
+        endpoint="/admin/import/honors"
+        eventId={importEventId}
+      />
+      <CsvImportCard
+        language={language}
+        title={`${t(language, "importTitle")}: ${t(language, "importJury")}`}
+        help={t(language, "importHelpJury")}
+        endpoint="/admin/import/jury"
+        eventId={importEventId}
       />
       </Box>
       <LevelUpReportCard language={language} events={events} />
