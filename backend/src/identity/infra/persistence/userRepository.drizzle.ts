@@ -32,7 +32,7 @@ export class UserRepositoryDrizzle {
     });
   }
   private toUser(r: any): User {
-    return new User(r.id, Email.create(r.email), r.role, r.passwordHash, r.isActive, null, r.username ?? null);
+    return new User(r.id, Email.create(r.email), r.role, r.passwordHash, r.isActive, null, r.username ?? null, r.sessionsRevokedAt ?? null);
   }
 }
 

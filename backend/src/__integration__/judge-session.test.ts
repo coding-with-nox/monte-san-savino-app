@@ -93,7 +93,7 @@ describe("integration judge session (JUDGE_SESSION_HOURS, default 24)", () => {
     expect(res.status).toBe(200);
     const next = decode(res.json.refreshToken);
     expect(next.sst).toBe(sst);
-    expect(next.exp! - nowSec()).toBeGreaterThan(29 * 24 * HOUR);
+    expect(next.exp! - nowSec()).toBeGreaterThan(6 * 24 * HOUR);
   });
 
   it("a judge deleted after login is refused", async () => {

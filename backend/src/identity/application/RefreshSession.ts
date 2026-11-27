@@ -28,6 +28,8 @@ export class RefreshSession {
     if (sessionStart === undefined) throw new Error("Invalid refresh token");
     const user = await this.users.findById(payload.sub);
     if (!user || !user.canLogin()) throw new Error("Invalid refresh token");
+    // Password reset (by the user or an admin) ends every session started before it.
+    if (user.isSessionRevoked(sessionStart)) throw new Error("Invalid refresh token");
     if (user.role === JUDGE_ROLE && isJudgeSessionOver(sessionStart, this.judgeSessionHours, nowSeconds())) {
       throw new Error("Invalid refresh token");
     }

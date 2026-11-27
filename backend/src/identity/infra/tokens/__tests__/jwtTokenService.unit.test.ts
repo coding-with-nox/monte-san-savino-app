@@ -96,11 +96,11 @@ describe("hardening", () => {
     expect(capped.expiresIn).toBeLessThanOrEqual(3600);
 
     const longer = await svc.signRefresh(p, { expiresAt: now + 10 * 365 * 24 * 3600 });
-    expect(longer.expiresIn).toBe(60 * 60 * 24 * 30);
+    expect(longer.expiresIn).toBe(60 * 60 * 24 * 7);
   });
-  it("access token default TTL is 15 minutes, refresh 30 days", async () => {
+  it("access token default TTL is 15 minutes, refresh 7 days", async () => {
     const svc = new JwtTokenService();
     expect((await svc.signAccess(p)).expiresIn).toBe(900);
-    expect((await svc.signRefresh(p)).expiresIn).toBe(60 * 60 * 24 * 30);
+    expect((await svc.signRefresh(p)).expiresIn).toBe(60 * 60 * 24 * 7);
   });
 });
