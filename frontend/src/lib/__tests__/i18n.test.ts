@@ -30,7 +30,7 @@ describe("i18n translations", () => {
   });
 
   it("t() returns the string for the requested language", () => {
-    expect(t("it", "staffCheckinPrintButton")).toBe("Stampa badge");
-    expect(t("en", "staffCheckinPrintButton")).toBe("Print badge");
+    expect(t("it", "staffCheckinSearch")).toBe("Cerca");
+    expect(t("en", "staffCheckinSearch")).toBe("Search");
   });
 });

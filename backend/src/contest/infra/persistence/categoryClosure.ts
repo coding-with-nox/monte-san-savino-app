@@ -3,12 +3,14 @@ import {
   awardBracketsTable, awardsTable, categoriesTable, judgeCompletionsTable, modelsTable, settingsTable, votesTable
 } from "./schema";
 import { loadEventAssignments } from "./judgeAccess";
+import { loadPresenceFilter } from "./absence";
 import {
   assessCategory, categoryPhase, excludeMissingModels, judgeMissingVoteModelIds, JUDGING_SETTING_KEYS, latestVotePerJudgeModel,
   parseJudgingRules, readyToClose, serializeAwardIssues, type AwardRow, type Bracket, type CategoryAssessment, type JudgingSettingKey,
   type LatestVote, type ModelExpectation
 } from "../../domain/categoryClosure";
 import { assignedJudgeIds, expectedVoterIds, type JudgeAssignmentRow } from "../../domain/expectedVoters";
+import { excludeAbsentOwners } from "../../domain/absenceRegister";
 import { CategoryClosedError, ConflictError, ForbiddenError, IncompleteVotesError, NotFoundError } from "../../domain/errors";
 
 /** All operations are executed on a transaction-scoped store. */
@@ -17,6 +19,8 @@ export interface ClosureStore {
   lockCategory(categoryId: string): Promise<{ id: string; eventId: string; status: string } | null>;
   /** Assignments (regular and stand-in) of every judge of the event. */
   listEventAssignments(eventId: string): Promise<JudgeAssignmentRow[]>;
+  /** Participants present in the event (absence register); null when the register is disabled. */
+  loadPresentOwnerIds(eventId: string): Promise<Set<string> | null>;
   /** Models of the category with their owners and the missing flag (missing models are excluded from judging). */
   listCategoryModels(categoryId: string): Promise<{ modelId: string; ownerId: string; missing: boolean }[]>;
   listVotedModelIds(judgeId: string, modelIds: string[]): Promise<string[]>;
@@ -48,7 +52,9 @@ type CategoryRow = { id: string; eventId: string; status: string };
 async function loadExpectations(store: ClosureStore, category: CategoryRow): Promise<{ models: ModelExpectation[]; assigned: string[] }> {
   const ref = { id: category.id, eventId: category.eventId };
   const assignments = await store.listEventAssignments(category.eventId);
-  const models = excludeMissingModels(await store.listCategoryModels(category.id)).map((m) => ({
+  const presentOwnerIds = await store.loadPresentOwnerIds(category.eventId);
+  // Missing models and models of absent owners take part in no judging (same treatment).
+  const models = excludeAbsentOwners(excludeMissingModels(await store.listCategoryModels(category.id)), presentOwnerIds).map((m) => ({
     modelId: m.modelId,
     expectedJudgeIds: expectedVoterIds(assignments, ref, m.ownerId)
   }));
@@ -186,6 +192,11 @@ export class DrizzleClosureStore implements ClosureStore {
   }
   async listEventAssignments(eventId: string) {
     return await loadEventAssignments(this.db, [eventId]);
+  }
+  async loadPresentOwnerIds(eventId: string) {
+    const presence = await loadPresenceFilter(this.db, [eventId]);
+    if (presence === null) return null;
+    return new Set(presence.get(eventId) ?? []);
   }
   async listCategoryModels(categoryId: string) {
     const rows = await this.db

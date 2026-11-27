@@ -137,13 +137,19 @@ export function buildDymoLabelXml(row: LabelRow): string {
 
 export type DymoPrintResult = "printed" | "noPrinter" | "noData";
 
-/** Fetches label rows from the backend (optionally filtered) and prints them on the first DYMO LabelWriter. */
-export async function printDymoLabels(params: Record<string, string | undefined>): Promise<DymoPrintResult> {
+/**
+ * Fetches label rows from the backend (optionally filtered) and prints them on the first DYMO LabelWriter.
+ * `dataPath` defaults to the event labels; the front desk passes its own rows endpoint.
+ */
+export async function printDymoLabels(
+  params: Record<string, string | undefined>,
+  dataPath = "/exports/labels/data"
+): Promise<DymoPrintResult> {
   await loadDymoSdk();
   const printers: any[] = dymo.label.framework.getPrinters();
   const printer = printers.find((p: any) => p.printerType === "LabelWriterPrinter");
   if (!printer) return "noPrinter";
-  const rows = await api<LabelRow[]>(`/exports/labels/data${buildQuery(params)}`);
+  const rows = await api<LabelRow[]>(`${dataPath}${buildQuery(params)}`);
   if (!rows || rows.length === 0) return "noData";
   for (const row of rows) {
     const label = dymo.label.framework.openLabelXml(buildDymoLabelXml(row));

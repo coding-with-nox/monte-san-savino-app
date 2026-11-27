@@ -10,6 +10,8 @@ import { ROLES, type Role } from "../../../identity/domain/Role";
 import { parsePrizeOrder, PRIZE_ORDER_KEY } from "../../domain/prizeOrder";
 import { DEFAULT_BASE_FEE_CENTS } from "../../domain/pricing";
 import { judgingSettingsError } from "../../domain/categoryClosure";
+import { absenceRegisterSettingError } from "../../domain/absenceRegister";
+import { photographySettingError } from "../../domain/photography";
 
 const BASE_FEE_KEY = "baseFeeCents";
 
@@ -34,7 +36,9 @@ const DEFAULTS: Record<string, string> = {
   maxVotesPerExhibitor: "3",
   maxVoteDifferent: "2",
   app_name: "Miniatures Contest",
-  [BASE_FEE_KEY]: String(DEFAULT_BASE_FEE_CENTS)
+  [BASE_FEE_KEY]: String(DEFAULT_BASE_FEE_CENTS),
+  absenceRegisterEnabled: "false",
+  minPhotoMedalRank: "4"
 };
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })
@@ -78,7 +82,7 @@ export const adminSettingsRoutes = new Elysia({ prefix: "/admin/settings" })
       set.status = 422;
       return { error: `${BASE_FEE_KEY} must be a non-negative integer (cents)` };
     }
-    const judgingError = judgingSettingsError(entries);
+    const judgingError = judgingSettingsError(entries) ?? absenceRegisterSettingError(entries) ?? photographySettingError(entries);
     if (judgingError) {
       set.status = 422;
       return { error: judgingError };

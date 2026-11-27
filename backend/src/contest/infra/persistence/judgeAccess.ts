@@ -2,6 +2,8 @@ import { eq, inArray } from "drizzle-orm";
 import { categoriesTable, judgeAssignmentsTable, modelsTable } from "./schema";
 import { buildJudgeScope, type JudgeScope } from "../../domain/judgeScope";
 import { mayVoteModel, type JudgeAssignmentRow } from "../../domain/expectedVoters";
+import { isOwnerPresent, type PresenceByEvent } from "../../domain/absenceRegister";
+import { loadPresenceFilter } from "./absence";
 
 /** Loads the authorization scope of the current user (managers/admins are privileged, no query needed). */
 export async function loadJudgeScope(db: any, user: { id: string; role?: string }): Promise<JudgeScope> {
@@ -28,24 +30,33 @@ export async function loadEventAssignments(db: any, eventIds: string[]): Promise
   return rows.map((r: any) => ({ judgeId: r.judgeId, eventId: r.eventId, categoryId: r.categoryId ?? null, standingIn: Boolean(r.standingIn) }));
 }
 
-export type JudgeContext = { judgeId: string; privileged: boolean; assignments: JudgeAssignmentRow[] };
+/** `presence` (absence register) is null when the register is disabled or the judge is privileged. */
+export type JudgeContext = { judgeId: string; privileged: boolean; assignments: JudgeAssignmentRow[]; presence: PresenceByEvent };
 
 /** Visibility context of a judge: the assignments of the events he is assigned to. Managers/admins are privileged. */
 export async function loadJudgeContext(db: any, user: { id: string; role?: string }): Promise<JudgeContext> {
-  if (user.role === "admin" || user.role === "manager") return { judgeId: user.id, privileged: true, assignments: [] };
+  if (user.role === "admin" || user.role === "manager") return { judgeId: user.id, privileged: true, assignments: [], presence: null };
   const own = await db
     .select({ eventId: judgeAssignmentsTable.eventId })
     .from(judgeAssignmentsTable)
     .where(eq(judgeAssignmentsTable.judgeId, user.id as any));
   const eventIds = [...new Set<string>(own.map((r: any) => r.eventId as string))];
-  return { judgeId: user.id, privileged: false, assignments: await loadEventAssignments(db, eventIds) };
+  return {
+    judgeId: user.id,
+    privileged: false,
+    assignments: await loadEventAssignments(db, eventIds),
+    presence: await loadPresenceFilter(db, eventIds)
+  };
 }
 
 /**
  * Whether the judge may see and vote the model. Own models are NOT handled here (callers answer OWN_MODEL first).
+ * With the absence register on, models of absent owners are out of reach.
  */
 export function judgeCanVote(ctx: JudgeContext, model: { categoryId: string; eventId: string; userId: string }): boolean {
-  return ctx.privileged || mayVoteModel(ctx.assignments, ctx.judgeId, { id: model.categoryId, eventId: model.eventId }, model.userId);
+  if (ctx.privileged) return true;
+  return isOwnerPresent(ctx.presence, model.eventId, model.userId)
+    && mayVoteModel(ctx.assignments, ctx.judgeId, { id: model.categoryId, eventId: model.eventId }, model.userId);
 }
 
 export async function loadCategoryRef(db: any, categoryId: string): Promise<{ id: string; eventId: string } | null> {
