@@ -12,6 +12,7 @@ import PageSkeleton from "../components/PageSkeleton";
 import SectionCard from "../components/SectionCard";
 import BarList, { BarItem } from "../components/BarList";
 import { ActionButton } from "../components/ActionButton";
+import AwardReviewCard from "../components/AwardReviewCard";
 
 export type StatsOverview = {
   usersTotal: number;
@@ -176,6 +177,13 @@ export default function Stats({ language }: StatsProps) {
           </SectionCard>
         </Grid>
       </Grid>
+
+      {/* Jury president review of closed classes (the admin Awards tab is manager-only). */}
+      {!projection && events.length > 0 && (
+        <SectionCard title={t(language, "reviewTitle")}>
+          <AwardReviewCard language={language} events={events} />
+        </SectionCard>
+      )}
 
       {!projection && (
         <SectionCard tourId="stats-zero" title={`${t(language, "statsZeroUsers")} (${zeroUsers.length})`}>

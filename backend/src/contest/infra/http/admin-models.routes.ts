@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
-import { categoriesTable, modelImagesTable, modelsTable, registrationsTable } from "../persistence/schema";
+import { categoriesTable, judgeCompletionsTable, modelImagesTable, modelsTable, registrationsTable } from "../persistence/schema";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { applyCategoryChange } from "./model-category-change";
 import { cleanupUnreferencedImages } from "./model-image-cleanup";
@@ -46,6 +46,7 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
           teamCode: modelsTable.teamCode,
           notes: modelsTable.notes,
           internalNotes: modelsTable.internalNotes,
+          missing: modelsTable.missing,
           categorySeqId: categoriesTable.seqId
         })
         .from(modelsTable);
@@ -129,6 +130,49 @@ export const adminModelsRoutes = new Elysia({ prefix: "/admin/models" })
     }),
     detail: {
       summary: "Aggiorna modello (admin)",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  /**
+   * Mark Missing: the model leaves the judging (displays, expected votes, completion, awards). Votes are kept.
+   * Changing the flag invalidates the judge completions of its category (expected votes changed).
+   * 409 CATEGORY_CLOSED when the category is closed (awards are frozen).
+   */
+  .patch("/:modelId/missing", async ({ tenantDb, params, body, set }) => {
+    const [model] = await tenantDb
+      .select({ categoryId: modelsTable.categoryId })
+      .from(modelsTable)
+      .where(eq(modelsTable.id, params.modelId as any))
+      .limit(1);
+    if (!model) {
+      set.status = 404;
+      return { error: "Model not found" };
+    }
+    return await tenantDb.transaction(async (tx: any) => {
+      // Locks the category like closeCategory: the flag cannot change while the category is being closed.
+      const [cat] = await tx
+        .select({ status: categoriesTable.status })
+        .from(categoriesTable)
+        .where(eq(categoriesTable.id, model.categoryId as any))
+        .for("update");
+      if (cat?.status === "closed") {
+        set.status = 409;
+        return { error: "Category is closed: reopen it before changing missing models", code: "CATEGORY_CLOSED" };
+      }
+      const [current] = await tx.select({ missing: modelsTable.missing }).from(modelsTable).where(eq(modelsTable.id, params.modelId as any));
+      if (current.missing !== body.missing) {
+        await tx.update(modelsTable).set({ missing: body.missing }).where(eq(modelsTable.id, params.modelId as any));
+        await tx.delete(judgeCompletionsTable).where(eq(judgeCompletionsTable.categoryId, model.categoryId as any));
+      }
+      return { updated: true, missing: body.missing };
+    });
+  }, {
+    params: t.Object({ modelId: t.String() }),
+    body: t.Object({ missing: t.Boolean() }),
+    detail: {
+      summary: "Segna/rimuove modello come Missing (escluso dal giudizio)",
+      description: "409 CATEGORY_CLOSED se la categoria è chiusa. Cambiare il flag annulla i completamenti dei giudici della categoria (votanti attesi cambiati); i voti restano.",
       tags: ["Admin"],
       security: [{ bearerAuth: [] }]
     }

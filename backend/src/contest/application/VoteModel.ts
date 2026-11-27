@@ -23,7 +23,8 @@ export class VoteModel {
     return await run(async ({ votes, models }) => {
       // lock: true => the category row is share-locked, so a concurrent closeCategory (FOR UPDATE) serializes with the vote
       const model = await models.getModelCategory(input.modelId, { lock: true });
-      if (!model) throw new NotFoundError("Model not found");
+      // A missing model is not part of the judging: it is unknown to the judge (as in the judge lists).
+      if (!model || model.missing) throw new NotFoundError("Model not found");
       if (input.authorize && !(await input.authorize(model))) throw new ForbiddenError("Judge is not assigned to this category");
       if (model.categoryStatus === "closed") throw new CategoryClosedError("Category is closed");
 

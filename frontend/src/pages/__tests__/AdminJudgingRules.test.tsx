@@ -225,7 +225,6 @@ describe("Admin categories: closing", () => {
 describe("Admin awards: issue chips", () => {
   const data = {
     events: [{ id: "e1", name: "Event One" }],
-    categoryName: () => "Cat A",
     modelName: (id: string) => id,
     eventName: () => "Event One",
     ensureModels: vi.fn(),
@@ -235,11 +234,20 @@ describe("Admin awards: issue chips", () => {
 
   beforeEach(() => {
     apiMock.mockReset().mockImplementation(async (path: string) => {
-      if (path === "/awards/events/e1")
+      if (path === "/public/categories")
         return [
-          { modelId: "m1", modelName: "Model A", categoryId: "c1", totalScore: 12, medalLabel: null, medalRank: null, votes: 1, source: "live", averageRank: null, issues: ["PARTIAL_VOTES", "DISCORDANT_VOTES"] },
-          { modelId: "m2", modelName: "Model B", categoryId: "c1", totalScore: 9, medalLabel: null, medalRank: null, votes: 3, source: "live", averageRank: null }
+          { id: "c1", eventId: "e1", name: "Cat A", status: "closed" },
+          { id: "c2", eventId: "e1", name: "Cat B", status: "open" }
         ];
+      if (path === "/admin/award-brackets?eventId=e1") return MSS;
+      if (path === "/awards/categories/c1/review")
+        return {
+          brackets: MSS,
+          rows: [
+            { modelId: "m1", name: "Model A", totalScore: 12, award: { id: "a1", medalLabel: "Gold", medalRank: 4 }, source: "aggregate", issues: ["PARTIAL_VOTES", "DISCORDANT_VOTES"], votes: [] },
+            { modelId: "m2", name: "Model B", totalScore: 9, award: { id: "a2", medalLabel: null, medalRank: null }, source: "aggregate", votes: [] }
+          ]
+        };
       return [];
     });
   });
@@ -247,9 +255,11 @@ describe("Admin awards: issue chips", () => {
   it("renders one warning chip per issue, and nothing when issues are absent", async () => {
     const user = userEvent.setup();
     renderWithProviders(<AwardsTab language="en" data={data} />);
-    const selects = await screen.findAllByRole("combobox");
-    await user.click(selects[selects.length - 1]);
+    const [eventSelect] = (await screen.findAllByRole("combobox")).slice(-2);
+    await user.click(eventSelect);
     await user.click(await screen.findByRole("option", { name: "Event One" }));
+    await user.click(screen.getAllByRole("combobox").slice(-1)[0]);
+    await user.click(await screen.findByRole("option", { name: "Cat A" }));
 
     const modelA = await screen.findByText("Model A");
     const row = modelA.closest("tr") as HTMLElement;

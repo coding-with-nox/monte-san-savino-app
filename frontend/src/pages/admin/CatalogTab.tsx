@@ -17,6 +17,7 @@ import { Language, t } from "../../lib/i18n";
 import SectionCard from "../../components/SectionCard";
 import CsvImportCard from "../../components/CsvImportCard";
 import ModelMoveCard from "../../components/ModelMoveCard";
+import MissingModelsCard from "./MissingModelsCard";
 import { useConfirm } from "../../components/ConfirmDialog";
 import useToast from "../../components/useToast";
 import { MemberRole, parseEuros } from "../../lib/pricing";
@@ -106,6 +107,13 @@ export default function CatalogTab({ language, data }: { language: Language; dat
         onMoved={() => { void refreshModels(); }}
       />
       </Box>
+      <MissingModelsCard
+        language={language}
+        events={events}
+        categories={categories}
+        models={models}
+        onChanged={() => { void refreshModels(); }}
+      />
       <Box data-tour="admin-import" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <CsvImportCard
         language={language}

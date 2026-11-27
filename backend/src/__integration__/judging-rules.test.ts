@@ -64,7 +64,7 @@ describe("integration judging rules, award brackets and manual close", () => {
     const awards = await request("GET", `/awards/events/${eventId}`, manager.token);
     expect(awards.status).toBe(200);
     const byModel = new Map<string, any>(awards.json.map((r: any) => [r.modelId, r]));
-    expect(byModel.get(m1)).toMatchObject({ totalScore: 12, medalLabel: "Gold", source: "frozen", issues: ["PARTIAL_VOTES"] });
+    expect(byModel.get(m1)).toMatchObject({ totalScore: 12, medalLabel: "Gold", source: "aggregate", issues: ["PARTIAL_VOTES"] });
     expect(byModel.get(m2)).toMatchObject({ totalScore: 9, medalLabel: "Silver", issues: ["DISCORDANT_VOTES"] });
     expect(byModel.get(m3)).toMatchObject({ totalScore: 0, medalLabel: "None", issues: [] });
     for (const row of awards.json) expect(Array.isArray(row.issues)).toBe(true);
