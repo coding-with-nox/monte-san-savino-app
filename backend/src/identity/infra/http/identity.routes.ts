@@ -16,6 +16,7 @@ import { logger } from "../../../shared/infra/logger/logger";
 import { InvalidCredentialsError } from "../../domain/InvalidCredentialsError";
 import { eq } from "drizzle-orm";
 import { usersTable } from "../persistence/schema";
+import { isRegistrationClosed } from "../../../contest/infra/persistence/registrationSettings";
 
 // Per-process limiter (not shared between replicas); built lazily so env is read at first use.
 let limiter: SlidingWindowRateLimiter | null | undefined;
@@ -62,6 +63,10 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
   .use(tenantMiddleware)
   .post("/register", async ({ body, tenantDb, set }) => {
     const db = tenantDb ?? getTenantDbFromEnv();
+    if (await isRegistrationClosed(db)) {
+      set.status = 403;
+      return { error: "Registration is closed", code: "REGISTRATION_CLOSED" };
+    }
     if (body.password.length < 8) {
       set.status = 400;
       return { error: "Password must be at least 8 characters long" };
@@ -101,6 +106,7 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
     response: {
       200: t.Object({ id: t.String(), email: t.String(), role: t.String() }),
       400: t.Object({ error: t.String() }),
+      403: t.Object({ error: t.String(), code: t.String() }),
       429: t.Object({ error: t.String() }),
       500: t.Object({ error: t.String() })
     }

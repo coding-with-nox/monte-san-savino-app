@@ -167,7 +167,7 @@ export default function Enrollments({ language }: EnrollmentsProps) {
       }
       toast.success(t(language, "enrollmentsSubmitted"));
     } catch (err: any) {
-      toast.error(err?.message ?? String(err));
+      toast.error(err?.code === "REGISTRATION_CLOSED" ? t(language, "registrationClosed") : (err?.message ?? String(err)));
     } finally {
       setSaving(false);
     }

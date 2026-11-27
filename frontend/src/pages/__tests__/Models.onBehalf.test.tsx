@@ -7,7 +7,7 @@ import { AccessContext } from "../../lib/access";
 import { setSession } from "../../lib/auth";
 
 const apiMock = vi.fn();
-vi.mock("../../lib/api", () => ({ ApiError: class extends Error {}, api: (...a: unknown[]) => apiMock(...a) }));
+vi.mock("../../lib/api", () => ({ ApiError: class extends Error {}, errorCode: (e: any) => e?.code, api: (...a: unknown[]) => apiMock(...a) }));
 vi.mock("../../components/PrintActions", () => ({ default: () => null }));
 
 import Models from "../Models";

@@ -14,6 +14,8 @@ export type EnrollmentContext = {
   windowClosed: boolean;
   /** Caller holds the enrollOnBehalf permission: may enroll other users' models (the window still applies). */
   canEnrollOnBehalf?: boolean;
+  /** Setting registrationStatus = "closed": non-privileged callers are refused (REGISTRATION_CLOSED). */
+  registrationClosed?: boolean;
 };
 
 export type EnrollmentPlan = { ownerUserId: string; modelId: string | null; categoryId: string | null };
@@ -62,6 +64,9 @@ export function planEnrollment(ctx: EnrollmentContext): EnrollmentPlan {
     }
   }
 
+  if (!privileged && ctx.registrationClosed) {
+    throw new DomainError("Registration is closed", 403, "REGISTRATION_CLOSED");
+  }
   if (!privileged && ctx.windowClosed) {
     throw new DomainError("Enrollment period is closed", 403, "ENROLLMENT_CLOSED");
   }

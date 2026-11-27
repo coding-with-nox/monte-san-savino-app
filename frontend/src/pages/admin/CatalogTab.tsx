@@ -18,6 +18,7 @@ import SectionCard from "../../components/SectionCard";
 import CsvImportCard from "../../components/CsvImportCard";
 import ModelMoveCard from "../../components/ModelMoveCard";
 import MissingModelsCard from "./MissingModelsCard";
+import LevelUpReportCard from "./LevelUpReportCard";
 import { useConfirm } from "../../components/ConfirmDialog";
 import useToast from "../../components/useToast";
 import { MemberRole, parseEuros } from "../../lib/pricing";
@@ -130,7 +131,14 @@ export default function CatalogTab({ language, data }: { language: Language; dat
         events={events}
         onImported={() => { void refresh(); }}
       />
+      <CsvImportCard
+        language={language}
+        title={`${t(language, "importTitle")}: ${t(language, "importPreviousResults")}`}
+        help={t(language, "importHelpPreviousResults")}
+        endpoint="/admin/import/previous-results"
+      />
       </Box>
+      <LevelUpReportCard language={language} events={events} />
       <SectionCard tourId="admin-levels" title={t(language, "adminLevelsTitle")}>
         <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
           <TextField size="small" label={t(language, "adminLevelName")} value={newLevelName} onChange={(e) => setNewLevelName(e.target.value)} />

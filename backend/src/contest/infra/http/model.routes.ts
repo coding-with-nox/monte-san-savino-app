@@ -6,6 +6,8 @@ import { hasPermission, permissionDenied } from "../../../identity/infra/http/pe
 import { usersTable } from "../../../identity/infra/persistence/schema";
 import { logger } from "../../../shared/infra/logger/logger";
 import { checkEnrollmentOpen } from "./enrollment-guard";
+import { findOwnerLevelLock } from "../persistence/levelLock";
+import type { LevelLock } from "../../domain/levelUp";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { isAllowedImageUrl, allowedImageBase } from "../../../shared/domain/imageUrl";
 import { countParticipantModels, nextTeamCodeForUser, resolveTeamMembers } from "../persistence/modelTeam";
@@ -99,6 +101,16 @@ const teamMembersSchema = () => t.Optional(t.Array(t.Object({
 
 const membersRequired = { error: "teamMembers required for team models", code: "TEAM_MEMBERS_REQUIRED" };
 const invalidRole = { error: "Unknown or missing member role", code: "INVALID_MEMBER_ROLE" };
+function levelLockedError(set: any, lock: LevelLock) {
+  set.status = 422;
+  return {
+    error: "The participant already has models at another level in this event",
+    code: "LEVEL_LOCKED",
+    lockedLevelId: lock.lockedLevelId,
+    lockedLevelName: lock.lockedLevelName
+  };
+}
+
 const modelLimit = {
   error: `Maximum ${MAX_MODELS_PER_PARTICIPANT} models per participant`,
   code: "MODEL_LIMIT",
@@ -178,6 +190,9 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
       set.status = 422;
       return { error: "Invalid image url" };
     }
+
+    const lock = await findOwnerLevelLock(tenantDb, { ownerId, categoryId: body.categoryId, levelId: body.levelId });
+    if (lock) return levelLockedError(set, lock);
 
     if (await countParticipantModels(tenantDb, ownerId, body.categoryId) >= MAX_MODELS_PER_PARTICIPANT) {
       set.status = 409;
@@ -380,6 +395,18 @@ export const modelRoutes = new Elysia({ prefix: "/models" })
 
     // If category changes: votes/completions are cleared (and a closed category rejected) by applyCategoryChange
     const categoryChanged = body.categoryId !== undefined && body.categoryId !== model.categoryId;
+
+    // Level lock: checked only when the level or the event (category) changes; the model itself is excluded.
+    const levelChanged = body.levelId !== undefined && body.levelId !== model.levelId;
+    if (levelChanged || categoryChanged) {
+      const lock = await findOwnerLevelLock(tenantDb, {
+        ownerId: user!.id,
+        categoryId: body.categoryId ?? model.categoryId,
+        levelId: body.levelId ?? model.levelId,
+        excludeModelId: model.id
+      });
+      if (lock) return levelLockedError(set, lock);
+    }
 
     const updateData: Record<string, unknown> = {};
     if (body.name !== undefined) updateData.name = body.name;

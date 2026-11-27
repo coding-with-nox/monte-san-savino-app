@@ -2,11 +2,18 @@ import React, { useEffect, useState } from "react";
 import {
   Alert,
   Checkbox,
+  FormControl,
+  FormControlLabel,
+  FormHelperText,
   InputAdornment,
+  InputLabel,
   List,
   ListItem,
   ListItemText,
+  MenuItem,
+  Select,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -39,6 +46,15 @@ const PERMISSION_KEYS: Record<string, TranslationKey> = {
   enrollOnBehalf: "permissionEnrollOnBehalf"
 };
 
+type RegistrationStatus = "open" | "openday" | "closed";
+type RegistrationSettings = { status: RegistrationStatus; defaultPage: "login" | "register"; lockLevel: boolean; levelUpWarning: boolean };
+
+const REGISTRATION_OPTIONS: Record<RegistrationStatus, { label: TranslationKey; help: TranslationKey }> = {
+  open: { label: "rulesRegistrationOpen", help: "rulesRegistrationOpenHelp" },
+  openday: { label: "rulesRegistrationOpenDay", help: "rulesRegistrationOpenDayHelp" },
+  closed: { label: "rulesRegistrationClosed", help: "rulesRegistrationClosedHelp" }
+};
+
 const SECTION_KEYS: Record<string, TranslationKey> = {
   dashboard: "sectionDashboard",
   stats: "sectionStats",
@@ -61,6 +77,7 @@ export default function RulesTab({ language }: { language: Language }) {
   const [matrix, setMatrix] = useState<Visibility | null>(null);
   const [matrixError, setMatrixError] = useState(false);
   const [order, setOrder] = useState<string[]>(DEFAULT_PRIZE_ORDER);
+  const [registration, setRegistration] = useState<RegistrationSettings>({ status: "open", defaultPage: "login", lockLevel: false, levelUpWarning: false });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -68,6 +85,12 @@ export default function RulesTab({ language }: { language: Language }) {
       .then((s) => {
         const cents = Number.parseInt(s?.baseFeeCents ?? "", 10);
         if (Number.isFinite(cents)) setFee(String(cents / 100));
+        setRegistration({
+          status: s?.registrationStatus === "openday" || s?.registrationStatus === "closed" ? s.registrationStatus : "open",
+          defaultPage: s?.defaultPublicPage === "register" ? "register" : "login",
+          lockLevel: s?.lockLevelToFirstSelection === "true",
+          levelUpWarning: s?.levelUpWarning === "true"
+        });
       })
       .catch(() => undefined);
     api<Visibility>("/admin/settings/section-visibility")
@@ -127,6 +150,15 @@ export default function RulesTab({ language }: { language: Language }) {
     void save("/admin/settings/section-visibility", {
       visibility: pick(matrix.visibility),
       ...(matrix.availablePermissions ? { permissions: pick(matrix.permissions) } : {})
+    });
+  }
+
+  function saveRegistration() {
+    void save("/admin/settings", {
+      registrationStatus: registration.status,
+      defaultPublicPage: registration.defaultPage,
+      lockLevelToFirstSelection: String(registration.lockLevel),
+      levelUpWarning: String(registration.levelUpWarning)
     });
   }
 
@@ -280,6 +312,67 @@ export default function RulesTab({ language }: { language: Language }) {
             wrapperSx={{ alignSelf: "flex-start" }}
             disabled={saving}
             onClick={() => save("/admin/settings/prize-order", { order })}
+          >
+            {t(language, "adminSave")}
+          </ActionButton>
+        </Stack>
+      </SectionCard>
+
+      <SectionCard tourId="rules-registration" title={t(language, "rulesRegistrationTitle")}>
+        <Stack spacing={2}>
+          <Typography variant="body2" color="text.secondary">{t(language, "rulesRegistrationHelp")}</Typography>
+          <FormControl size="small" sx={{ maxWidth: 360 }}>
+            <InputLabel id="rules-registration-status">{t(language, "rulesRegistrationStatusLabel")}</InputLabel>
+            <Select
+              labelId="rules-registration-status"
+              label={t(language, "rulesRegistrationStatusLabel")}
+              value={registration.status}
+              onChange={(e) => setRegistration((r) => ({ ...r, status: e.target.value as RegistrationStatus }))}
+            >
+              {(Object.keys(REGISTRATION_OPTIONS) as RegistrationStatus[]).map((value) => (
+                <MenuItem key={value} value={value}>{t(language, REGISTRATION_OPTIONS[value].label)}</MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>{t(language, REGISTRATION_OPTIONS[registration.status].help)}</FormHelperText>
+          </FormControl>
+
+          <FormControl size="small" sx={{ maxWidth: 360 }}>
+            <InputLabel id="rules-default-page">{t(language, "rulesDefaultPageLabel")}</InputLabel>
+            <Select
+              labelId="rules-default-page"
+              label={t(language, "rulesDefaultPageLabel")}
+              value={registration.defaultPage}
+              onChange={(e) => setRegistration((r) => ({ ...r, defaultPage: e.target.value as "login" | "register" }))}
+            >
+              <MenuItem value="login">{t(language, "rulesDefaultPageLogin")}</MenuItem>
+              <MenuItem value="register">{t(language, "rulesDefaultPageRegister")}</MenuItem>
+            </Select>
+            <FormHelperText>{t(language, "rulesDefaultPageHelp")}</FormHelperText>
+          </FormControl>
+
+          <Stack spacing={0.5}>
+            <FormControlLabel
+              control={<Switch checked={registration.lockLevel} onChange={(e) => setRegistration((r) => ({ ...r, lockLevel: e.target.checked }))} />}
+              label={t(language, "rulesLockLevelLabel")}
+            />
+            <Typography variant="body2" color="text.secondary">{t(language, "rulesLockLevelHelp")}</Typography>
+          </Stack>
+
+          <Stack spacing={0.5}>
+            <FormControlLabel
+              control={<Switch checked={registration.levelUpWarning} onChange={(e) => setRegistration((r) => ({ ...r, levelUpWarning: e.target.checked }))} />}
+              label={t(language, "rulesLevelUpWarningLabel")}
+            />
+            <Typography variant="body2" color="text.secondary">{t(language, "rulesLevelUpWarningHelp")}</Typography>
+          </Stack>
+
+          <ActionButton
+            tip={t(language, "tipRulesSaveRegistration")}
+            variant="contained"
+            size="small"
+            wrapperSx={{ alignSelf: "flex-start" }}
+            disabled={saving}
+            onClick={saveRegistration}
           >
             {t(language, "adminSave")}
           </ActionButton>

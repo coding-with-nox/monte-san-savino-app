@@ -46,6 +46,8 @@ Create a new account with default role `user`.
 - `200`: `{ "id": string, "email": string, "role": "user" }`
 - `400`: `{ "error": "The privacy notice must be accepted" }`, `{ "error": "Password must be at least 8 characters long" }` or
   `{ "error": "Email already registered" }` or `{ "error": "Invalid email" }`
+- `403`: `{ "error": "Registration is closed", "code": "REGISTRATION_CLOSED" }` when setting `registrationStatus` is `"closed"`
+  (`"open"` and `"openday"` accept registrations). No account is created.
 
 ```json
 // POST /auth/register
@@ -104,6 +106,7 @@ Min role: `user`. Requires Bearer token. Source: `user.routes.ts`.
 |--------|------|------|----------|
 | GET | `/users/profile` | — | profile object (id, email, role, firstName, lastName, phone, city, address, emergencyContact, emergencyContactName, avatarUrl) or `null` |
 | PUT | `/users/profile` | `{ firstName?, lastName?, phone?, city?, address?, emergencyContact?, emergencyContactName? }` | `{ "updated": true }` |
+| GET | `/users/me/level-up?eventId=<id>` | `{ warn: boolean }` — `true` only when setting `levelUpWarning` is `"true"` and the caller matches a previous Standard Gold (see Level-up). `422` bad `eventId`, `404` unknown event |
 
 ```json
 // GET /users/profile → 200
@@ -130,6 +133,10 @@ Min role: `user` (operations are scoped to the authenticated owner). Sources:
 | POST | `/models/:modelId/images` | `{ url }` | `{ id }` |
 | DELETE | `/models/:modelId/images/:imageId` | — | `{ "deleted": true }` |
 | POST | `/models/:modelId/image-upload` | `{ contentType }` | `{ uploadUrl, publicUrl }` (presigned MinIO PUT) |
+
+**Registration closed** (setting `registrationStatus` = `"closed"`): for non-privileged users (not `manager`/`admin`) `POST /models`, `PUT /models/:modelId`, the image routes and `POST /events/:eventId/enroll` answer `403 { "code": "REGISTRATION_CLOSED" }`, in addition to the campaign dates. `"openday"` behaves like `"open"`.
+
+**Level lock** (setting `lockLevelToFirstSelection` = `"true"`): within one event, a participant's models must share one level, except `All` (never blocked, never locks). `POST /models` (also on behalf of another participant, by managers) and `PUT /models/:modelId` (only when the level or the event changes) answer `422 { "code": "LEVEL_LOCKED", "lockedLevelId", "lockedLevelName" }` when the owner already has, in the same event, a model at another non-All level. Pure rule: `contest/domain/levelUp.ts` (`findLevelLock`).
 
 ```json
 // POST /models
@@ -193,6 +200,8 @@ Sources: `enrollment.routes.ts`, `event.routes.ts`.
 | GET | `/admin/enrollments?eventId=<id>` | jury_president | — | all registrations (optionally by event); `403 SECTION_HIDDEN` if `dashboard` is hidden for jury_president |
 
 Registration shape: `{ id, userId, eventId, modelId, categoryId, status, checkedIn }`.
+
+With setting `registrationStatus` = `"closed"`, a non-privileged caller gets `403 { "code": "REGISTRATION_CLOSED" }` (checked before the campaign window, which answers `403 ENROLLMENT_CLOSED`).
 
 **Enrolling another user's model**: allowed to `manager`/`admin` and to roles with
 `enrollOnBehalf`; the registration is owned by the **model owner**. Without either,
@@ -269,6 +278,7 @@ Source: `payment.routes.ts`.
 | Method | Path | Source |
 |--------|------|--------|
 | GET | `/public/events?status=<active\|all\|…>` | `public.routes.ts` (no auth) |
+| GET | `/public/registration` | `public.routes.ts` (no auth) → `{ status: "open" \| "openday" \| "closed", defaultPage: "login" \| "register" }`. `defaultPage` is `"register"` for `openday` or when `defaultPublicPage` = `"register"`, else `"login"` |
 | GET | `/public/categories?eventId=<id>` | `public-categories.routes.ts` |
 | GET | `/public/levels` | `levels.routes.ts` |
 | GET | `/public/member-roles` | `member-roles.routes.ts` |
@@ -464,11 +474,22 @@ Fields added to the response (existing ones unchanged):
 - `commendedTotal`: number of awards with `medalRank` 1 (commended) in the event.
 - `zeroModelUsers`: `{ count, list: [{ userId, participantNumber, name, email }] }` — users with role `user` and no model in the event; `participantNumber` = the user's `seqId` (`null` if missing). **Changed shape**: it was an array of `{ userId, name, email }`; the frontend accepts both.
 
+### Imports and level-up reports — `import.routes.ts`, `level-up.routes.ts`
+| Method | Path | Min role | Body / query | Response |
+|--------|------|----------|--------------|----------|
+| POST | `/admin/import/previous-results` | manager | CSV (`text/csv`), header `Email,First Name,Last Name,Level,Medal Rank,Year` | `{ imported, errors: [{ line, message }] }`. **Replaces all previous results.** Atomic: any invalid row (or an empty file) answers `422` with `imported: 0` and changes nothing. A row needs an email or both first and last name; `Medal Rank` 0–10; `Year` optional (4 digits). Same size/row limits as the other CSV imports |
+| GET | `/admin/reports/level-up?eventId=<id>` | manager | — | `[{ participantNumber, name, email, models: [{ name, code, categoryName }] }]`, by participant number. Participants with at least one model at the `Standard` level (case-insensitive) in the event who match a previous `Standard` result with `medalRank >= 4` |
+| GET | `/admin/reports/level-up/excel?eventId=<id>` | manager | `lang` optional | XLSX, one row per Standard model of the matched participants |
+
+**Level-up matching**: a previous result matches a participant by **email** when both have one (case-insensitive); otherwise by **first + last name** (both required, case-insensitive). Pure rule: `contest/domain/levelUp.ts` (`isSamePerson`, `matchesStandardGold`).
+
+**Level-up warning** (`GET /users/me/level-up?eventId=`, see User routes): `warn` is `true` only when setting `levelUpWarning` = `"true"` and the caller matches a previous Standard Gold, whatever the caller's models in the event.
+
 ### Settings
 | Method | Path | Min role | Body | Response |
 |--------|------|----------|------|----------|
-| GET | `/settings` | user | — | settings map (defaults merged) incl. `modelImages, printCodePrefix, printCodeDigits, appTheme, themePreset` (default `savino`), `baseFeeCents` (default `"2500"`), `maxVotesPerExhibitor` (default `"3"`), `maxVoteDifferent` (default `"2"`), `export*`, `absenceRegisterEnabled` (default `"false"`), `minPhotoMedalRank` (default `"4"`, Gold) |
-| PUT | `/admin/settings` | admin | `Record<string,string>` | `{ "updated": true }`; `422` if `baseFeeCents` is not a non-negative integer, `maxVotesPerExhibitor` is not an integer 1–10, `maxVoteDifferent` is not an integer 0–40, `absenceRegisterEnabled` is not `"true"`/`"false"`, or `minPhotoMedalRank` is not an integer 0–10 |
+| GET | `/settings` | user | — | settings map (defaults merged) incl. `modelImages, printCodePrefix, printCodeDigits, appTheme, themePreset` (default `savino`), `baseFeeCents` (default `"2500"`), `maxVotesPerExhibitor` (default `"3"`), `maxVoteDifferent` (default `"2"`), `export*`, `absenceRegisterEnabled` (default `"false"`), `minPhotoMedalRank` (default `"4"`, Gold), `registrationStatus` (default `"open"`: `open` \| `openday` \| `closed`), `defaultPublicPage` (default `"login"`: `login` \| `register`), `lockLevelToFirstSelection` (default `"false"`), `levelUpWarning` (default `"false"`) |
+| PUT | `/admin/settings` | admin | `Record<string,string>` | `{ "updated": true }`; `422` if `baseFeeCents` is not a non-negative integer, `maxVotesPerExhibitor` is not an integer 1–10, `maxVoteDifferent` is not an integer 0–40, `absenceRegisterEnabled` is not `"true"`/`"false"`, or `minPhotoMedalRank` is not an integer 0–10, `registrationStatus` is not `open`/`openday`/`closed`, `defaultPublicPage` is not `login`/`register`, or `lockLevelToFirstSelection`/`levelUpWarning` is not `"true"`/`"false"` |
 | GET | `/settings/section-visibility` | user | — | `{ role, sections: [], permissions: [] }` for the caller |
 | GET | `/admin/settings/section-visibility` | admin | — | `{ sections, roles, visibility: { <role>: [] }, permissions: { <role>: [] }, availablePermissions: [] }` |
 | PUT | `/admin/settings/section-visibility` | admin | `{ visibility: { <role>: [] }, permissions?: { <role>: [] } }` (both partial by role; `visibility` is required, may be `{}`) | `{ updated, visibility, permissions }`; `422` unknown role/section |
@@ -581,6 +602,8 @@ XLSX content is shaped by tenant settings (`exportIncludeModelCode`,
 | `INVALID_MEMBER_ROLE` | 422 | `POST`/`PUT /models` |
 | `MODEL_LIMIT` | 409 | `POST`/`PUT /models` beyond 50 per participant per event |
 | `ENROLLMENT_CLOSED` | 403 | `POST /events/:eventId/enroll` |
+| `REGISTRATION_CLOSED` | 403 | `POST /auth/register` (setting `registrationStatus` = `closed`), `POST /models`, `PUT /models/:modelId`, `POST /models/:modelId/images`, `POST /events/:eventId/enroll` (non-privileged callers) |
+| `LEVEL_LOCKED` | 422 | `POST /models`, `PUT /models/:modelId` (setting `lockLevelToFirstSelection`; body carries `lockedLevelId`, `lockedLevelName`) |
 | `NOT_FOUND` | 404 | `POST /events/:eventId/enroll` |
 | `EVENT_CLOSED` | 409 | `POST /events/:eventId/enroll` |
 | `CATEGORY_CLOSED` | 409 | `POST /events/:eventId/enroll`, `POST /judge/displays/vote` |

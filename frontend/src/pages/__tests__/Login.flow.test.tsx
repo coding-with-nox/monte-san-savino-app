@@ -6,18 +6,25 @@ import { MemoryRouter } from "react-router-dom";
 import { renderWithProviders } from "../../test/renderWithProviders";
 
 const apiMock = vi.fn();
+const registrationMock = vi.fn();
 const setSessionMock = vi.fn();
 const navigateMock = vi.fn();
 
 vi.mock("../../lib/api", () => ({
   ApiError: class ApiError extends Error {
     status: number;
-    constructor(status: number, message: string) {
+    code?: string;
+    details?: Record<string, unknown>;
+    constructor(status: number, message: string, code?: string, details?: Record<string, unknown>) {
       super(message);
       this.status = status;
+      this.code = code;
+      this.details = details;
     }
   },
-  api: (...a: unknown[]) => apiMock(...a)
+  errorCode: (e: any) => e?.code,
+  // Registration settings are read on mount; the queued auth responses below belong to apiMock only.
+  api: (...a: unknown[]) => (a[0] === "/public/registration" ? registrationMock(...a) : apiMock(...a))
 }));
 vi.mock("../../lib/auth", () => ({
   setSession: (...a: unknown[]) => setSessionMock(...a),
@@ -39,6 +46,10 @@ async function fillAndSubmit(email = "a@b.it", password = "secret123") {
   await user.type(screen.getByLabelText(/password/i), password);
   return user;
 }
+
+beforeEach(() => {
+  registrationMock.mockReset().mockResolvedValue({ status: "open", defaultPage: "login" });
+});
 
 describe("Login flow", () => {
   beforeEach(() => {

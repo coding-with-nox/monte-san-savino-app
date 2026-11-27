@@ -6,8 +6,8 @@ import { JwtTokenService } from "../identity/infra/tokens/jwtTokenService";
 import { usersTable, userProfilesTable } from "../identity/infra/persistence/schema";
 import {
   categoriesTable, eventCampaignsTable, eventsTable, judgeAssignmentsTable, judgeCompletionsTable, levelsTable,
-  memberRolesTable, modelImagesTable, modelsTable, modelTeamMembersTable, registrationsTable, settingsTable,
-  votesTable
+  memberRolesTable, modelImagesTable, modelsTable, modelTeamMembersTable, previousResultsTable, registrationsTable,
+  settingsTable, votesTable
 } from "../contest/infra/persistence/schema";
 import type { Role } from "../identity/domain/Role";
 
@@ -16,7 +16,7 @@ export const app: Handler = buildTestApp();
 const TABLES = [
   votesTable, judgeCompletionsTable, judgeAssignmentsTable, modelTeamMembersTable, modelImagesTable,
   registrationsTable, modelsTable, categoriesTable, eventCampaignsTable, eventsTable, levelsTable,
-  memberRolesTable, settingsTable, userProfilesTable, usersTable
+  memberRolesTable, previousResultsTable, settingsTable, userProfilesTable, usersTable
 ] as const;
 
 /** Wipes the test database (always tenant_db_test, see testDb.ts). */

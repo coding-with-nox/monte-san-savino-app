@@ -12,6 +12,8 @@ import { DEFAULT_BASE_FEE_CENTS } from "../../domain/pricing";
 import { judgingSettingsError } from "../../domain/categoryClosure";
 import { absenceRegisterSettingError } from "../../domain/absenceRegister";
 import { photographySettingError } from "../../domain/photography";
+import { registrationSettingError } from "../../domain/registration";
+import { levelUpSettingError } from "../../domain/levelUp";
 
 const BASE_FEE_KEY = "baseFeeCents";
 
@@ -38,7 +40,11 @@ const DEFAULTS: Record<string, string> = {
   app_name: "Miniatures Contest",
   [BASE_FEE_KEY]: String(DEFAULT_BASE_FEE_CENTS),
   absenceRegisterEnabled: "false",
-  minPhotoMedalRank: "4"
+  minPhotoMedalRank: "4",
+  registrationStatus: "open",
+  defaultPublicPage: "login",
+  lockLevelToFirstSelection: "false",
+  levelUpWarning: "false"
 };
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })
@@ -82,7 +88,8 @@ export const adminSettingsRoutes = new Elysia({ prefix: "/admin/settings" })
       set.status = 422;
       return { error: `${BASE_FEE_KEY} must be a non-negative integer (cents)` };
     }
-    const judgingError = judgingSettingsError(entries) ?? absenceRegisterSettingError(entries) ?? photographySettingError(entries);
+    const judgingError = judgingSettingsError(entries) ?? absenceRegisterSettingError(entries) ?? photographySettingError(entries)
+      ?? registrationSettingError(entries) ?? levelUpSettingError(entries);
     if (judgingError) {
       set.status = 422;
       return { error: judgingError };

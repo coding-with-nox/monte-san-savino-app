@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { categoriesTable, eventCampaignsTable } from "../persistence/schema";
+import { isRegistrationClosed } from "../persistence/registrationSettings";
 
 /**
  * True when any campaign of the event has an enrollment close date in the past.
@@ -29,6 +30,13 @@ export async function checkEnrollmentOpen(
   categoryId: string,
   set: any
 ): Promise<{ blocked: boolean }> {
+  // Callers must pass this guard only when non-privileged (model routes check the role first).
+  if (await isRegistrationClosed(tenantDb)) {
+    set.status = 403;
+    set.body = { error: "Registration is closed", code: "REGISTRATION_CLOSED" };
+    return { blocked: true };
+  }
+
   const [catRow] = await tenantDb
     .select({ eventId: categoriesTable.eventId })
     .from(categoriesTable)
