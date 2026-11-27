@@ -11,6 +11,7 @@ import {
 } from "../../domain/categoryClosure";
 import { assignedJudgeIds, expectedVoterIds, type JudgeAssignmentRow } from "../../domain/expectedVoters";
 import { excludeAbsentOwners } from "../../domain/absenceRegister";
+import type { LiveCategory, LiveModel } from "../../domain/liveJudging";
 import { CategoryClosedError, ConflictError, ForbiddenError, IncompleteVotesError, NotFoundError } from "../../domain/errors";
 
 /** All operations are executed on a transaction-scoped store. */
@@ -292,4 +293,57 @@ export async function loadCompletionState(db: any, categoryId: string) {
     allDone: assessment.completion.allDone,
     discordantModelIds: assessment.discordantModelIds
   };
+}
+
+/**
+ * Read-only input of the live judging view of an event: a fixed number of queries for all its classes.
+ * Models follow the closing rules (missing and absent owners left out) and carry their expected voters.
+ */
+export async function loadLiveJudgingInput(db: any, eventId: string) {
+  const store = new DrizzleClosureStore(db);
+  const categories = (await db
+    .select({
+      id: categoriesTable.id,
+      name: categoriesTable.name,
+      status: categoriesTable.status,
+      classNumber: categoriesTable.classNumber,
+      presentationOrder: categoriesTable.presentationOrder
+    })
+    .from(categoriesTable)
+    .where(eq(categoriesTable.eventId, eventId as any))) as LiveCategory[];
+  const catIds = categories.map((c) => c.id);
+  const assignments = await store.listEventAssignments(eventId);
+  const presentOwnerIds = await store.loadPresentOwnerIds(eventId);
+  const brackets = await store.listBrackets(eventId);
+  const rules = parseJudgingRules(await store.listSettingValues([...JUDGING_SETTING_KEYS]));
+
+  const modelRows: { modelId: string; categoryId: string; ownerId: string; missing: boolean }[] = catIds.length
+    ? (await db
+      .select({ modelId: modelsTable.id, categoryId: modelsTable.categoryId, ownerId: modelsTable.userId, missing: modelsTable.missing })
+      .from(modelsTable)
+      .where(inArray(modelsTable.categoryId, catIds as any))).map((r: any) => ({ ...r, missing: Boolean(r.missing) }))
+    : [];
+  const models: LiveModel[] = excludeAbsentOwners(excludeMissingModels(modelRows), presentOwnerIds).map((m) => ({
+    modelId: m.modelId,
+    categoryId: m.categoryId,
+    expectedJudgeIds: expectedVoterIds(assignments, { id: m.categoryId, eventId }, m.ownerId)
+  }));
+
+  const votes = models.length
+    ? latestVotePerJudgeModel(await store.listVotesNewestFirst(models.map((m) => m.modelId)))
+    : [];
+  const completions: { categoryId: string; judgeId: string }[] = catIds.length
+    ? await db
+      .select({ categoryId: judgeCompletionsTable.categoryId, judgeId: judgeCompletionsTable.judgeId })
+      .from(judgeCompletionsTable)
+      .where(inArray(judgeCompletionsTable.categoryId, catIds as any))
+    : [];
+  const closedIds = categories.filter((c) => c.status === "closed").map((c) => c.id);
+  const frozenAwards: { categoryId: string; medalLabel: string }[] = closedIds.length
+    ? await db
+      .select({ categoryId: awardsTable.categoryId, medalLabel: awardsTable.medalLabel })
+      .from(awardsTable)
+      .where(inArray(awardsTable.categoryId, closedIds as any))
+    : [];
+  return { categories, models, votes, completions, frozenAwards, brackets, rules };
 }

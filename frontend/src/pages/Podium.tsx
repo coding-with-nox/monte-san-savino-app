@@ -6,7 +6,7 @@ import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
-import { buildCeremony, CeremonyData } from "../lib/podium";
+import { buildCeremony, CeremonyData, STANDARD_MEDALS } from "../lib/podium";
 import { ActionButton, TipIconButton } from "../components/ActionButton";
 
 type Event = { id: string; name: string };
@@ -29,9 +29,6 @@ function useWinnerDetail(language: Language) {
       w.wholeDisplay ? t(language, "wholeDisplayLabel") : (w.modelName ?? w.modelCode ?? null)
     ].filter(Boolean).join(" · ");
 }
-
-/** Standard MSS medal names are shown in the UI language; custom labels are shown as typed. */
-const STANDARD_MEDALS: Record<string, number> = { none: 0, "highly commended": 1, commended: 1, bronze: 2, silver: 3, gold: 4 };
 
 export default function Podium({ language }: PodiumProps) {
   const navigate = useNavigate();
