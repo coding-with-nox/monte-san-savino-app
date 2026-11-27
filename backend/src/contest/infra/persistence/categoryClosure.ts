@@ -4,9 +4,9 @@ import {
 } from "./schema";
 import { loadEventAssignments } from "./judgeAccess";
 import {
-  assessCategory, categoryPhase, judgeMissingVoteModelIds, JUDGING_SETTING_KEYS, latestVotePerJudgeModel, parseJudgingRules,
-  readyToClose, serializeAwardIssues, type AwardRow, type Bracket, type CategoryAssessment, type JudgingSettingKey, type LatestVote,
-  type ModelExpectation
+  assessCategory, categoryPhase, excludeMissingModels, judgeMissingVoteModelIds, JUDGING_SETTING_KEYS, latestVotePerJudgeModel,
+  parseJudgingRules, readyToClose, serializeAwardIssues, type AwardRow, type Bracket, type CategoryAssessment, type JudgingSettingKey,
+  type LatestVote, type ModelExpectation
 } from "../../domain/categoryClosure";
 import { assignedJudgeIds, expectedVoterIds, type JudgeAssignmentRow } from "../../domain/expectedVoters";
 import { CategoryClosedError, ConflictError, ForbiddenError, IncompleteVotesError, NotFoundError } from "../../domain/errors";
@@ -17,8 +17,8 @@ export interface ClosureStore {
   lockCategory(categoryId: string): Promise<{ id: string; eventId: string; status: string } | null>;
   /** Assignments (regular and stand-in) of every judge of the event. */
   listEventAssignments(eventId: string): Promise<JudgeAssignmentRow[]>;
-  /** Models of the category with their owners. */
-  listCategoryModels(categoryId: string): Promise<{ modelId: string; ownerId: string }[]>;
+  /** Models of the category with their owners and the missing flag (missing models are excluded from judging). */
+  listCategoryModels(categoryId: string): Promise<{ modelId: string; ownerId: string; missing: boolean }[]>;
   listVotedModelIds(judgeId: string, modelIds: string[]): Promise<string[]>;
   /** Newest first: ORDER BY created_at DESC, seq DESC. */
   listVotesNewestFirst(modelIds: string[]): Promise<LatestVote[]>;
@@ -48,7 +48,7 @@ type CategoryRow = { id: string; eventId: string; status: string };
 async function loadExpectations(store: ClosureStore, category: CategoryRow): Promise<{ models: ModelExpectation[]; assigned: string[] }> {
   const ref = { id: category.id, eventId: category.eventId };
   const assignments = await store.listEventAssignments(category.eventId);
-  const models = (await store.listCategoryModels(category.id)).map((m) => ({
+  const models = excludeMissingModels(await store.listCategoryModels(category.id)).map((m) => ({
     modelId: m.modelId,
     expectedJudgeIds: expectedVoterIds(assignments, ref, m.ownerId)
   }));
@@ -189,10 +189,10 @@ export class DrizzleClosureStore implements ClosureStore {
   }
   async listCategoryModels(categoryId: string) {
     const rows = await this.db
-      .select({ modelId: modelsTable.id, ownerId: modelsTable.userId })
+      .select({ modelId: modelsTable.id, ownerId: modelsTable.userId, missing: modelsTable.missing })
       .from(modelsTable)
       .where(eq(modelsTable.categoryId, categoryId as any));
-    return rows.map((r: any) => ({ modelId: r.modelId as string, ownerId: r.ownerId as string }));
+    return rows.map((r: any) => ({ modelId: r.modelId as string, ownerId: r.ownerId as string, missing: Boolean(r.missing) }));
   }
   async listVotedModelIds(judgeId: string, modelIds: string[]) {
     if (!modelIds.length) return [];

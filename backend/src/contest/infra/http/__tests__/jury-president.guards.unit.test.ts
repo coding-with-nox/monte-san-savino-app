@@ -24,11 +24,17 @@ const status = async (app: { handle: (r: Request) => Promise<Response> }, role: 
 };
 
 // Only rejections are asserted: allowed requests would reach the database.
-describe("jury_president is read-only", () => {
-  it("cannot reach manager routes of awards and enrollments", async () => {
-    expect(await status(awardRoutes, "jury_president", "PATCH", `/awards/${ID}`, { medalLabel: "Gold", medalRank: 4 })).toBe(403);
+describe("jury_president guards", () => {
+  it("cannot reach manager routes of awards (ranking) and enrollments", async () => {
     expect(await status(awardRoutes, "jury_president", "GET", `/awards/events/${ID}`)).toBe(403);
     expect(await status(adminEnrollmentRoutes, "jury_president", "PATCH", `/admin/enrollments/${ID}/absent`, { absent: true })).toBe(403);
+  });
+
+  it("head judge: award override and review are open to jury_president, not to judges", async () => {
+    // Body missing medalLabel fails validation (422) before the database is touched: the role gate was passed.
+    expect(await status(awardRoutes, "jury_president", "PATCH", `/awards/${ID}`, { medalRank: 4 })).toBe(422);
+    expect(await status(awardRoutes, "judge", "PATCH", `/awards/${ID}`, { medalLabel: "Gold", medalRank: 4 })).toBe(403);
+    expect(await status(awardRoutes, "judge", "GET", `/awards/categories/${ID}/review`)).toBe(403);
   });
 
   it("judges still cannot read monitoring or enrollments", async () => {

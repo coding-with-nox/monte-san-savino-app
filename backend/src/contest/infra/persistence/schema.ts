@@ -79,7 +79,9 @@ export const modelsTable = pgTable("models", {
   teamId: uuid("team_id"),
   teamCode: text("team_code"), // <participant number>T<n>, team models only
   notes: text("notes"),
-  internalNotes: text("internal_notes")
+  internalNotes: text("internal_notes"),
+  /** Manager flag: the model is absent from the judging. Hidden from judges, not expected to be voted, no award row. */
+  missing: boolean("missing").default(false).notNull()
 }, (t) => ({
   uniqCode: uniqueIndex("ux_models_code").on(t.code),
   uniqTeamCode: uniqueIndex("ux_models_team_code").on(t.teamCode),
@@ -237,6 +239,8 @@ export const awardsTable = pgTable("awards", {
   medalRank: integer("medal_rank").notNull(),
   source: text("source").notNull().default("aggregate"),  // 'aggregate' | 'override'
   issues: text("issues"),  // JSON array of issue codes (PARTIAL_VOTES, DISCORDANT_VOTES); null when none
+  overrideNote: text("override_note"), // head judge note of an override (max 200 chars)
+  overriddenBy: uuid("overridden_by"), // user id of the head judge who overrode the award
   frozenAt: timestamp("frozen_at").defaultNow()
 }, (table) => ({
   uxCategoryModel: uniqueIndex("ux_awards_category_model").on(table.categoryId, table.modelId)

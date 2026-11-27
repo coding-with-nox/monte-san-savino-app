@@ -8,6 +8,8 @@ type State = {
   /** Stand-in judges of category c1. */
   standIns: string[];
   models: string[];
+  /** Models flagged missing (not judged). */
+  missingModels: string[];
   /** Model owner (default "owner", a user who is not a judge). */
   owners: Record<string, string>;
   votes: { judgeId: string; modelId: string; rank: number }[]; // newest first
@@ -20,7 +22,7 @@ type State = {
 function fakeDb(initial: Partial<State> = {}) {
   let state: State = {
     category: { id: "c1", eventId: "e1", status: "open" },
-    assigned: ["j1", "j2"], standIns: [], models: ["m1", "m2"], owners: {}, votes: [], completions: [], awards: [],
+    assigned: ["j1", "j2"], standIns: [], models: ["m1", "m2"], missingModels: [], owners: {}, votes: [], completions: [], awards: [],
     brackets: [{ medalLabel: "Gold", medalRank: 4, lowLimit: 11, highLimit: 12 }],
     settings: {},
     ...initial
@@ -32,7 +34,9 @@ function fakeDb(initial: Partial<State> = {}) {
       ...state.assigned.map((judgeId) => ({ judgeId, eventId: "e1", categoryId: null, standingIn: false })),
       ...state.standIns.map((judgeId) => ({ judgeId, eventId: "e1", categoryId: "c1", standingIn: true }))
     ],
-    listCategoryModels: async () => state.models.map((modelId) => ({ modelId, ownerId: state.owners[modelId] ?? "owner" })),
+    listCategoryModels: async () => state.models.map((modelId) => ({
+      modelId, ownerId: state.owners[modelId] ?? "owner", missing: state.missingModels.includes(modelId)
+    })),
     listVotedModelIds: async (j) => [...new Set(state.votes.filter((v) => v.judgeId === j).map((v) => v.modelId))],
     listVotesNewestFirst: async () => state.votes,
     listBrackets: async () => state.brackets,
@@ -116,6 +120,34 @@ describe("closeCategory - judge path", () => {
     expect(((await closeCategory(closed.db, "c1", { judgeId: "j1" }, makeStore(closed)).catch((e) => e)) as any).code).toBe("CATEGORY_CLOSED");
     const none = fakeDb({ category: null });
     expect(((await closeCategory(none.db, "c1", { judgeId: "j1" }, makeStore(none)).catch((e) => e)) as any).status).toBe(404);
+  });
+});
+
+describe("closeCategory - missing models (Mark Missing)", () => {
+  it("a missing model gets no award row and is not expected: closing ignores it", async () => {
+    const f = fakeDb({ assigned: ["j1"], missingModels: ["m2"], votes: [{ judgeId: "j1", modelId: "m1", rank: 4 }] });
+    const r = await closeCategory(f.db, "c1", { judgeId: "j1" }, makeStore(f));
+    expect(r).toEqual({ outcome: "closed", allDone: true, totalJudges: 1, completedJudges: 1 });
+    expect(f.state.awards.map((a) => a.modelId)).toEqual(["m1"]);
+  });
+
+  it("a judge expected only on missing models is not counted for completion", async () => {
+    // m1 owned by j2 -> expected {j1}; m2 owned by j1 -> expected {j2}. With m2 missing only j1 is counted.
+    const f = fakeDb({
+      owners: { m1: "j2", m2: "j1" }, missingModels: ["m2"], votes: [{ judgeId: "j1", modelId: "m1", rank: 4 }]
+    });
+    const first = await closeCategory(f.db, "c1", { judgeId: "j1" }, makeStore(f));
+    expect(first).toEqual({ outcome: "closed", allDone: true, totalJudges: 1, completedJudges: 1 });
+    expect(f.state.awards.map((a) => a.modelId)).toEqual(["m1"]);
+  });
+
+  it("once no longer missing, the model is expected again (j2 must vote m2 to complete)", async () => {
+    const f = fakeDb({
+      owners: { m1: "j2", m2: "j1" }, votes: [{ judgeId: "j1", modelId: "m1", rank: 4 }]
+    });
+    const err: any = await closeCategory(f.db, "c1", { judgeId: "j2" }, makeStore(f)).catch((e) => e);
+    expect(err.code).toBe("INCOMPLETE_VOTES");
+    expect(err.details.missingModelIds).toEqual(["m2"]);
   });
 });
 

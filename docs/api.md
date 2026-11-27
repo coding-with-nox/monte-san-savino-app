@@ -339,6 +339,7 @@ GET /judge/displays → [{ eventId, displayNumber, votable, currentRank, judged,
 
 ### Own models, stand-ins and reconciliation
 - A judge never sees nor votes a model he owns (excluded from `GET /judge/models` and `GET /judge/displays`; `403 OWN_MODEL` on the vote routes and `GET /judge/models/:modelId`).
+- A missing model (see Mark Missing) is excluded from `GET /judge/models`, `GET /judge/displays`, `GET /judge/participants/:userId`, the display vote and the vote routes (`404`); `GET /judge/models/:modelId` answers `{ model: null }` as for an unknown id.
 - **Stand-in** (`standingIn` on a category assignment): sees and votes only the models of that category owned by regular (non stand-in) judges assigned to it.
 - **Expected voters** of a model owned by `U` in category `C`: regular judges of `C` (directly or event-wide) minus `U`; if `U` is himself a regular judge of `C`, also the stand-ins of `C` minus `U`. Awards rank only from expected voters; `PARTIAL_VOTES` when `0 < v < expected`. A judge's completion needs a vote on every model he is expected to vote; a category waits for the judges who are expected voters of at least one model (`409 NO_JUDGES` when nobody is assigned).
 - **Reconciliation**: when every counted judge completed and discordant votes remain, the category stays open (`phase: "reconciliation"`, `discordantModelIds`). Every vote (single or display) re-evaluates it and closes it as soon as no discordance is left. The manager close works at any time.
@@ -352,7 +353,9 @@ except `/awards/monitoring/:eventId`.
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | `/awards/events/:eventId` | — | ranking: `[{ modelId, modelName, categoryId, averageRank, votes, totalScore, medalLabel, medalRank, issues }]` sorted desc; `issues: string[]` (`[]` when none, always present; live rows always `[]`) |
+| GET | `/awards/events/:eventId` | — | ranking: `[{ id, modelId, modelName, code, displayNumber, categoryId, categoryName, averageRank, votes, totalScore, medalLabel, medalRank, source, issues, overrideNote }]` sorted desc. `source`: `aggregate` (frozen at closing), `override` (changed by the head judge), `live` (open class preview: `id` null, `votes`/`averageRank` set). `issues: string[]` (`[]` when none, always present; live rows always `[]`). Missing models are left out |
+| PATCH | `/awards/:awardId` | `{ medalLabel, medalRank, note? }` (`note` max 200) | `{ "updated": true }`. Min role `jury_president` (head judge). The medal must be `None`/0 or a bracket of the event with the same label **and** rank, else `422 INVALID_MEDAL`. Open class: `409 CATEGORY_NOT_CLOSED`. Sets `source: "override"`, clears `issues`, stores `overrideNote` and `overriddenBy` |
+| GET | `/awards/categories/:categoryId/review` | — | Min role `jury_president`. Closed class only (`409 CATEGORY_NOT_CLOSED`): `{ categoryId, categoryName, eventId, brackets: [{ medalLabel, medalRank, lowLimit, highLimit }], rows: [{ modelId, name, code, displayNumber, totalScore, issues, source, overrideNote, award: { id, medalLabel, medalRank } \| null, votes: [{ judgeName, rank }] }] }`. `votes` are the latest vote of each judge (`judgeName` = profile name, else `Giudice <n>`). Missing models are left out |
 | GET | `/awards/monitoring/:eventId` | — | live judging progress per category. Min role `jury_president`; `403 SECTION_HIDDEN` if `dashboard` is hidden |
 | GET | `/awards/mentions` | — | all special mentions |
 | GET | `/awards/mentions/events/:eventId` | — | mentions for event |
@@ -364,6 +367,8 @@ except `/awards/monitoring/:eventId`.
 - Only the latest vote of each expected voter of the model counts. With `v` voters: `totalScore = round(sum(ranks) * N / v)`; no votes => `0` (`None`).
 - Issues: `PARTIAL_VOTES` when `0 < v < expected voters of the model`; `DISCORDANT_VOTES` when `v > 1` and `max(ranks) * v - sum(ranks) > D`. Stored in `awards.issues` (JSON array, null when none).
 - Manager close (`PATCH /categories/:id/status`) no longer requires every judge to vote every model. The judge completion path (`POST /judge/categories/:categoryId/complete`) still does.
+- **Missing models** (`models.missing`, see Admin models) are not judged: no expected voters, no completion weight, and **no award row** (choice: they are left out of the awards lists, the review and the ranking; they still appear in the manager's admin lists and printouts).
+- The head judge may override a frozen award (`PATCH /awards/:awardId`) and reviews a closed class with `GET /awards/categories/:categoryId/review`; a reopen deletes the awards (and the overrides with them).
 
 ### Award brackets (`/admin/award-brackets`) — min role `manager` — `award-brackets.routes.ts`
 | Method | Path | Body | Response |
@@ -400,10 +405,14 @@ Participants a model can be enrolled for. Min role `user` **plus** the
   active users only, ordered by last name, first name, email.
 
 ### Admin models (`/admin/models`) — min role `manager` — `admin-models.routes.ts`
-GET `/?eventId=<id>`, PUT `/:modelId`
+GET `/?eventId=<id>` (every model carries `missing: boolean`), PUT `/:modelId`
 `{ name?, categoryId?, description?, code?, imageUrl?, notes?, internalNotes? }`,
 DELETE `/:modelId` (does not remove the model's coauthors and images;
 `DELETE /models/:modelId` by the owner does).
+- **Mark Missing**: `PATCH /:modelId/missing` `{ missing: boolean }` → `{ updated: true, missing }`. A missing model
+  leaves the judging (judge lists and displays, expected votes, completion, awards; its votes are kept). Changing the
+  flag clears the judge completions of its class (they must complete again). `404` unknown model, `409 CATEGORY_CLOSED` when
+  its class is closed (reopen it first).
 
 ### Judge assignments (`/admin/judges`) — min role `manager` — `judge-admin.routes.ts`
 | Method | Path | Body |
@@ -529,5 +538,7 @@ XLSX content is shaped by tenant settings (`exportIncludeModelCode`,
 | `CATEGORY_CLOSED` | 409 | `POST /events/:eventId/enroll`, `POST /judge/displays/vote` |
 | `OWN_MODEL` | 403 | `POST /judge/vote`, `POST /judge/displays/vote` (only own models left), `GET /judge/models/:modelId` |
 | `INCOMPLETE_VOTES` | 409 | `POST /judge/categories/:categoryId/complete` (`missingModelIds`) |
+| `CATEGORY_NOT_CLOSED` | 409 | `PATCH /awards/:awardId`, `GET /awards/categories/:categoryId/review` |
+| `INVALID_MEDAL` | 422 | `PATCH /awards/:awardId` (medal is neither `None`/0 nor a bracket of the event) |
 | `INVALID_CATEGORY`, `CATEGORY_EVENT_MISMATCH`, `CATEGORY_MODEL_MISMATCH` | 422 | `POST /events/:eventId/enroll` |
 | `SECTION_HIDDEN` | 403 | `jury_president` on a hidden section |

@@ -51,7 +51,8 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     }
   })
   .get("/models", async ({ tenantDb, query, user }) => {
-    const conditions: any[] = [];
+    // Missing models (manager flag) are not part of the judging.
+    const conditions: any[] = [eq(modelsTable.missing, false)];
     if (query?.eventId) conditions.push(eq(categoriesTable.eventId, query.eventId as any));
     if (query?.categoryId) conditions.push(eq(modelsTable.categoryId, query.categoryId as any));
     const queryBuilder = tenantDb
@@ -161,12 +162,14 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
         displayNumber: modelsTable.displayNumber,
         notes: modelsTable.notes,
         teamCode: modelsTable.teamCode,
-        categorySeqId: categoriesTable.seqId
+        categorySeqId: categoriesTable.seqId,
+        missing: modelsTable.missing
       })
       .from(modelsTable)
       .leftJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
       .where(eq(modelsTable.id, params.modelId as any));
-    if (!rows.length) {
+    // A missing model is unknown to the judge (same answer as a missing id).
+    if (!rows.length || rows[0].missing) {
       return { model: null, images: [] };
     }
     if (rows[0].userId === user!.id) throw new OwnModelError();
@@ -176,7 +179,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     }
     const images = await tenantDb.select().from(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
-    const { categorySeqId: catSeqId, eventId: _eventId, userId: _owner, ...modelRow } = rows[0] as any;
+    const { categorySeqId: catSeqId, eventId: _eventId, userId: _owner, missing: _missing, ...modelRow } = rows[0] as any;
     return {
       model: {
         ...modelRow,
@@ -202,7 +205,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .where(eq(modelsTable.userId, params.userId as any));
+      .where(and(eq(modelsTable.userId, params.userId as any), eq(modelsTable.missing, false)));
     const scope = await loadJudgeScope(tenantDb, user!);
     // Privacy: no email, no registrations; only name + exhibitor number.
     // Cheap pre-check first so we do not even read the profile of unrelated users.
@@ -225,7 +228,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     }
   })
   .get("/displays", async ({ tenantDb, query, user }) => {
-    const conditions: any[] = [isNotNull(modelsTable.displayNumber)];
+    const conditions: any[] = [isNotNull(modelsTable.displayNumber), eq(modelsTable.missing, false)];
     if (query.eventId) conditions.push(eq(categoriesTable.eventId, query.eventId as any));
     if (query.categoryId) conditions.push(eq(modelsTable.categoryId, query.categoryId as any));
     const allRows = await tenantDb
@@ -305,7 +308,11 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       .select({ id: modelsTable.id, categoryId: modelsTable.categoryId, eventId: categoriesTable.eventId, userId: modelsTable.userId })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .where(and(eq(categoriesTable.eventId, body.eventId as any), eq(modelsTable.displayNumber, body.displayNumber)));
+      .where(and(
+        eq(categoriesTable.eventId, body.eventId as any),
+        eq(modelsTable.displayNumber, body.displayNumber),
+        eq(modelsTable.missing, false)
+      ));
     if (!rows.length) throw new NotFoundError("Display not found");
     // Own models are skipped; 403 only when nothing else remains.
     const others = rows.filter((r: any) => r.userId !== user!.id);
