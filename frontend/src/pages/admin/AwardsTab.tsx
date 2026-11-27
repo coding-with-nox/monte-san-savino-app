@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
   Grid,
   InputLabel,
@@ -14,21 +10,14 @@ import {
   MenuItem,
   Select,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
-  Tooltip,
   Typography
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
-import EditIcon from "@mui/icons-material/Edit";
 import { api } from "../../lib/api";
 import { Language, t } from "../../lib/i18n";
 import SectionCard from "../../components/SectionCard";
+import AwardReviewCard from "../../components/AwardReviewCard";
 import PageSkeleton from "../../components/PageSkeleton";
 import { useConfirm } from "../../components/ConfirmDialog";
 import useToast from "../../components/useToast";
@@ -38,32 +27,14 @@ import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
-type CorrectionRow = {
-  id?: string; modelId: string; modelName?: string | null; categoryId: string; totalScore: number | null;
-  medalLabel: string | null; medalRank: number | null;
-  votes: number; source: string; averageRank: number | null;
-  /** Absent means no issues; known values are listed in ISSUE_KEYS. */
-  issues?: string[];
-};
-
-const ISSUE_KEYS: Record<string, { label: "adminIssuePartialVotes" | "adminIssueDiscordantVotes"; tip: "tipIssuePartialVotes" | "tipIssueDiscordantVotes" }> = {
-  PARTIAL_VOTES: { label: "adminIssuePartialVotes", tip: "tipIssuePartialVotes" },
-  DISCORDANT_VOTES: { label: "adminIssueDiscordantVotes", tip: "tipIssueDiscordantVotes" }
-};
 
 export default function AwardsTab({ language, data }: { language: Language; data: AdminData }) {
-  const { events, categoryName, modelName, ensureModels } = data;
+  const { events, modelName, ensureModels } = data;
   const { confirm, node: confirmNode } = useConfirm(language);
   const toast = useToast();
   const [mentions, setMentions] = useState<SpecialMention[]>([]);
   const [modRequests, setModRequests] = useState<ModificationRequest[]>([]);
   const [mentionForm, setMentionForm] = useState({ eventId: "", modelId: "", title: "" });
-  const [correctionsEventId, setCorrectionsEventId] = useState("");
-  const [corrections, setCorrections] = useState<CorrectionRow[]>([]);
-  const [overrideOpen, setOverrideOpen] = useState(false);
-  const [overridingAward, setOverridingAward] = useState<string | null>(null);
-  const [overrideMedalLabel, setOverrideMedalLabel] = useState("");
-  const [overrideMedalRank, setOverrideMedalRank] = useState(0);
 
   const { loading, errors, reload } = useSections(language, () => [
     { titleKey: "adminSpecialMentionsTitle", run: async () => setMentions(await api<SpecialMention[]>("/awards/mentions")) },
@@ -96,28 +67,6 @@ export default function AwardsTab({ language, data }: { language: Language; data
   async function updateModRequestStatus(id: string, status: string) {
     await api(`/admin/modification-requests/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
     await reload();
-  }
-
-  async function loadCorrections(eventId: string) {
-    if (!eventId) { setCorrections([]); return; }
-    try {
-      setCorrections(await api<CorrectionRow[]>(`/awards/events/${encodeURIComponent(eventId)}`));
-    } catch { setCorrections([]); }
-  }
-
-  async function saveOverride() {
-    if (!overridingAward) return;
-    try {
-      await api(`/awards/${overridingAward}`, {
-        method: "PATCH",
-        body: JSON.stringify({ medalLabel: overrideMedalLabel, medalRank: overrideMedalRank })
-      });
-      toast.success(t(language, "profileSaveButton"));
-      setOverrideOpen(false);
-      await loadCorrections(correctionsEventId);
-    } catch (err: any) {
-      toast.error(err?.message ?? String(err));
-    }
   }
 
   return (
@@ -224,92 +173,11 @@ export default function AwardsTab({ language, data }: { language: Language; data
         </>
       )}
 
-      <SectionCard tourId="admin-corrections" title={t(language, "judgeCorrectionsTitle")}>
-        <Stack spacing={2}>
-          <FormControl size="small" fullWidth>
-            <InputLabel>{t(language, "adminJudgeEventPlaceholder")}</InputLabel>
-            <Select
-              value={correctionsEventId}
-              label={t(language, "adminJudgeEventPlaceholder")}
-              onChange={(e) => { setCorrectionsEventId(e.target.value); void loadCorrections(e.target.value); }}
-            >
-              {events.map((ev) => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsModel")}</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsCategory")}</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsScore")}</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsAward")}</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>{t(language, "adminCorrectionsSource")}</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {corrections.map((row) => (
-                  <TableRow key={row.modelId} sx={{ bgcolor: row.source === "frozen" && !row.medalLabel ? "error.light" : undefined }}>
-                    <TableCell>
-                      {row.modelName ?? modelName(row.modelId)}
-                      {(row.issues ?? []).filter((issue) => issue in ISSUE_KEYS).map((issue) => (
-                        <Tooltip key={issue} title={t(language, ISSUE_KEYS[issue].tip)}>
-                          <Chip size="small" color="warning" variant="outlined" sx={{ ml: 1 }} label={t(language, ISSUE_KEYS[issue].label)} />
-                        </Tooltip>
-                      ))}
-                    </TableCell>
-                    <TableCell>{categoryName(row.categoryId)}</TableCell>
-                    <TableCell>{row.totalScore ?? (row.averageRank != null ? row.averageRank.toFixed(2) : "-")}</TableCell>
-                    <TableCell>
-                      {row.medalLabel
-                        ? <Chip size="small" label={row.medalLabel} color={row.source === "override" ? "warning" : "default"} />
-                        : <Chip size="small" label="live" variant="outlined" />
-                      }
-                    </TableCell>
-                    <TableCell>
-                      <Chip size="small" label={t(language, row.source === "frozen" || row.source === "override" ? "judgeFrozenAward" : "judgeMonitorTitle")} variant="outlined" />
-                    </TableCell>
-                    <TableCell align="right">
-                      {(row.source === "frozen" || row.source === "override") && (
-                        <TipIconButton tip={t(language, "tipOverrideOpen")} aria-label={`${t(language, "actionEdit")} ${row.modelName ?? modelName(row.modelId)}`} size="small" color="warning" onClick={() => {
-                          // TODO: needs awardId from backend, using row.id (frozen) or modelId as placeholder
-                          setOverridingAward(row.id ?? row.modelId);
-                          setOverrideMedalLabel(row.medalLabel ?? "");
-                          setOverrideMedalRank(row.medalRank ?? 0);
-                          setOverrideOpen(true);
-                        }}>
-                          <EditIcon fontSize="small" />
-                        </TipIconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {corrections.length === 0 && correctionsEventId && (
-                  <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">{t(language, "adminNoData")}</Typography></TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Stack>
+      <SectionCard tourId="admin-corrections" title={t(language, "reviewTitle")}>
+        <AwardReviewCard language={language} events={events} />
       </SectionCard>
 
       {confirmNode}
-      <Dialog open={overrideOpen} onClose={() => setOverrideOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t(language, "judgeOverrideLabel")}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField size="small" label={t(language, "judgeAwardBracketMedal")} value={overrideMedalLabel}
-              onChange={(e) => setOverrideMedalLabel(e.target.value)} fullWidth />
-            <TextField size="small" label={t(language, "judgeAwardBracketRank")} type="number" value={overrideMedalRank}
-              onChange={(e) => setOverrideMedalRank(Number(e.target.value))} fullWidth />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <ActionButton tip={t(language, "tipOverrideSave")} onClick={saveOverride} variant="contained">{t(language, "profileSaveButton")}</ActionButton>
-          <ActionButton tip={t(language, "tipDialogCancel")} onClick={() => setOverrideOpen(false)}>{t(language, "profileCancelButton")}</ActionButton>
-        </DialogActions>
-      </Dialog>
     </Stack>
   );
 }

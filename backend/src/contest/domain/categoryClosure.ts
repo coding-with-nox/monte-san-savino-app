@@ -111,6 +111,19 @@ export function computeAwards(
   });
 }
 
+/**
+ * Head-judge override: the medal must be "None" (rank 0) or a bracket of the event with the same label AND rank.
+ */
+export function isOverrideMedalAllowed(brackets: Bracket[], medal: { medalLabel: string; medalRank: number }): boolean {
+  if (medal.medalLabel === "None" && medal.medalRank === 0) return true;
+  return brackets.some((b) => b.medalLabel === medal.medalLabel && b.medalRank === medal.medalRank);
+}
+
+/** Missing models (manager flag) take part in no judging: no expected votes, no completion, no award row. */
+export function excludeMissingModels<T extends { missing: boolean }>(models: T[]): T[] {
+  return models.filter((m) => !m.missing);
+}
+
 /** Persisted form of the issues: JSON array, or null when there are none. */
 export function serializeAwardIssues(issues: string[]): string | null {
   return issues.length > 0 ? JSON.stringify(issues) : null;

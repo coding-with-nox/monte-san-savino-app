@@ -8,7 +8,8 @@ export class ModelReadRepositoryDrizzle {
       .select({
         modelId: modelsTable.id,
         categoryId: modelsTable.categoryId,
-        categoryStatus: categoriesTable.status
+        categoryStatus: categoriesTable.status,
+        missing: modelsTable.missing
       })
       .from(modelsTable)
       // inner join: FOR SHARE cannot target the nullable side of an outer join (category_id is NOT NULL anyway)
