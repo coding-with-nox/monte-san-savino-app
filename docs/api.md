@@ -220,6 +220,15 @@ Sources: `enrollment.routes.ts` (staff), `qr.routes.ts`.
 | GET | `/qr/:enrollmentId/png` | none | PNG QR (`image/png`) |
 | GET | `/qr/:enrollmentId/data` | none | `{ enrollmentId, qrPayload: "enrollment:<id>" }` |
 
+### Desk attendance (by participant number) — `desk.routes.ts`
+Participant number = `users.seq_id`. Presence of a participant in an event = at least one of his registrations of the event has `checked_in = true`. `POST /staff/checkin/:enrollmentId` (single enrollment) is unchanged.
+
+| Method | Path | Min role | Response |
+|--------|------|----------|----------|
+| GET | `/staff/events/:eventId/participants/:number` | staff | `{ userId, participantNumber, name, country, present, models: [{ id, name, code, categoryName, displayNumber }] }`. `404` no such participant or no registration in the event; `422` invalid uuid or non-numeric number |
+| POST | `/staff/events/:eventId/participants/:number/presence` | staff | body `{ "present": boolean }`: sets `checked_in = present` and `absent = !present` on all the participant's registrations in the event. `{ userId, participantNumber, present, updated }`; `404` / `422` as above |
+| GET | `/staff/events/:eventId/attendance` | staff | `{ registeredParticipants, presentParticipants }` (distinct participants) |
+
 ---
 
 ## Payments routes (`/payments`)
@@ -340,6 +349,7 @@ GET /judge/displays → [{ eventId, displayNumber, votable, currentRank, judged,
 ### Own models, stand-ins and reconciliation
 - A judge never sees nor votes a model he owns (excluded from `GET /judge/models` and `GET /judge/displays`; `403 OWN_MODEL` on the vote routes and `GET /judge/models/:modelId`).
 - A missing model (see Mark Missing) is excluded from `GET /judge/models`, `GET /judge/displays`, `GET /judge/participants/:userId`, the display vote and the vote routes (`404`); `GET /judge/models/:modelId` answers `{ model: null }` as for an unknown id.
+- **Absence register** (setting `absenceRegisterEnabled` = `"true"`): a model whose owner has no checked-in registration in the event is not visible to judges (`GET /judge/models`, `GET /judge/displays`) and not votable (vote routes and `GET /judge/models/:modelId` answer `403`). It is also ignored by expected voters and completion, like a missing model, so it gets no award row. Managers and admins are not filtered. Default `"false"`: no change.
 - **Stand-in** (`standingIn` on a category assignment): sees and votes only the models of that category owned by regular (non stand-in) judges assigned to it.
 - **Expected voters** of a model owned by `U` in category `C`: regular judges of `C` (directly or event-wide) minus `U`; if `U` is himself a regular judge of `C`, also the stand-ins of `C` minus `U`. Awards rank only from expected voters; `PARTIAL_VOTES` when `0 < v < expected`. A judge's completion needs a vote on every model he is expected to vote; a category waits for the judges who are expected voters of at least one model (`409 NO_JUDGES` when nobody is assigned).
 - **Reconciliation**: when every counted judge completed and discordant votes remain, the category stays open (`phase: "reconciliation"`, `discordantModelIds`). Every vote (single or display) re-evaluates it and closes it as soon as no discordance is left. The manager close works at any time.
@@ -452,8 +462,8 @@ GET `/?modelId=<id>`, PATCH `/:requestId/status` `{ status: pending\|resolved\|r
 ### Settings
 | Method | Path | Min role | Body | Response |
 |--------|------|----------|------|----------|
-| GET | `/settings` | user | — | settings map (defaults merged) incl. `modelImages, printCodePrefix, printCodeDigits, appTheme, themePreset` (default `savino`), `baseFeeCents` (default `"2500"`), `maxVotesPerExhibitor` (default `"3"`), `maxVoteDifferent` (default `"2"`), `export*` |
-| PUT | `/admin/settings` | admin | `Record<string,string>` | `{ "updated": true }`; `422` if `baseFeeCents` is not a non-negative integer, `maxVotesPerExhibitor` is not an integer 1–10, or `maxVoteDifferent` is not an integer 0–40 |
+| GET | `/settings` | user | — | settings map (defaults merged) incl. `modelImages, printCodePrefix, printCodeDigits, appTheme, themePreset` (default `savino`), `baseFeeCents` (default `"2500"`), `maxVotesPerExhibitor` (default `"3"`), `maxVoteDifferent` (default `"2"`), `export*`, `absenceRegisterEnabled` (default `"false"`), `minPhotoMedalRank` (default `"4"`, Gold) |
+| PUT | `/admin/settings` | admin | `Record<string,string>` | `{ "updated": true }`; `422` if `baseFeeCents` is not a non-negative integer, `maxVotesPerExhibitor` is not an integer 1–10, `maxVoteDifferent` is not an integer 0–40, `absenceRegisterEnabled` is not `"true"`/`"false"`, or `minPhotoMedalRank` is not an integer 0–10 |
 | GET | `/settings/section-visibility` | user | — | `{ role, sections: [], permissions: [] }` for the caller |
 | GET | `/admin/settings/section-visibility` | admin | — | `{ sections, roles, visibility: { <role>: [] }, permissions: { <role>: [] }, availablePermissions: [] }` |
 | PUT | `/admin/settings/section-visibility` | admin | `{ visibility: { <role>: [] }, permissions?: { <role>: [] } }` (both partial by role; `visibility` is required, may be `{}`) | `{ updated, visibility, permissions }`; `422` unknown role/section |
@@ -528,12 +538,23 @@ Source: `export.routes.ts`. Manager endpoints need min role `manager`; the
 | GET | `/exports/labels/data?eventId=<id>` | manager | JSON label rows (DYMO) |
 | GET | `/exports/labels/excel?eventId=<id>` | manager | XLSX labels |
 | GET | `/exports/labels/pdf?eventId=<id>` | manager | printable HTML labels |
+| GET | `/exports/events/:eventId/desk/stats?from&to` | manager | JSON `{ participants, models, labels, listPages, envelopes }` for the range |
+| GET | `/exports/events/:eventId/desk/labels?from&to` | manager | printable HTML labels, one per model (QR, model code) |
+| GET | `/exports/events/:eventId/desk/labels/data?from&to` | manager | JSON label rows, same as `/exports/labels/data` (DYMO flow) |
+| GET | `/exports/events/:eventId/desk/lists?from&to` | manager | printable HTML "check your entries": one page per participant (participant no., name, country, models with code, class, display no.) |
+| GET | `/exports/events/:eventId/desk/envelopes?from&to` | manager | printable HTML, one 220×110 mm envelope page per participant (participant no., name, email, country) |
+| GET | `/exports/events/:eventId/photography` | manager | printable HTML: awarded models with medal ≥ `minPhotoMedalRank` in closed classes, in presentation order then display no. (participant no., exhibitor, model or "whole display", code, medal). `422` invalid uuid, `404` unknown event |
+| GET | `/exports/events/:eventId/photography/excel` | manager | XLSX of the same list |
 | GET | `/exports/my-enrollments` | user | XLSX of own enrollments |
 | GET | `/exports/model-card/pdf?eventId=<id>` | user | printable HTML model card, including the registration fee breakdown and total |
 | GET | `/exports/events/:eventId/judge-sheets` | manager | printable HTML, one page per judge of the event: name, login email, app address, assigned classes (class no., `[Stand-in]` marker for stand-in judges) and one QR per class encoding `${PUBLIC_APP_URL}/judge?eventId=<id>&categoryId=<id>`. A whole-event judge gets every class of the event. `422` invalid uuid, `404` unknown event |
 | GET | `/exports/events/:eventId/presentation-medals` | manager | printable HTML of the ceremony medals: one section per awarded class, in presentation order (medal, display no., exhibitor, model or "whole display", code). `422` invalid uuid, `404` unknown event |
 | GET | `/exports/events/:eventId/presentation-honors` | manager | printable HTML of the assigned special awards, in catalogue order (code, award, class, display no., exhibitor, model or "whole display"). `422` invalid uuid, `404` unknown event |
 | GET | `/exports/classes/:categoryId/jury-qr` | manager | printable HTML: the judges of the class with the class QR. The QR encodes the same judge page URL as above (it no longer encodes a `jury:<judgeId>:<categoryId>` payload) |
+
+Desk prints (`/desk/*`): `from` / `to` are participant numbers (`users.seq_id`), inclusive; both optional. `422` if a bound is not a non-negative integer or `from > to`. The participants are the users with a registration in the event; models are the models of those participants. Labels are one per model, lists and envelopes one page per participant, in participant-number order.
+
+Photography list: a display whose models (at least two) all have the same medal is one "whole display" row; otherwise one row per model above the cut-off.
 
 `PUBLIC_APP_URL` (default `http://localhost:5173`, trailing slashes removed) is the base of the judge app URL printed and encoded in the QR codes.
 The judge sheet tells the judge the session length from `JUDGE_SESSION_HOURS` (see `POST /auth/refresh`).

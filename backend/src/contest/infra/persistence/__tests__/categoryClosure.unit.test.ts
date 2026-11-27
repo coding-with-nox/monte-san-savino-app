@@ -16,6 +16,8 @@ type State = {
   completions: string[]; awards: any[];
   brackets: any[];
   settings: Record<string, string>;
+  /** Owners present in the event (absence register on); null = register off. */
+  presentOwners: string[] | null;
 };
 
 /** Fake DB whose transaction() snapshots state and rolls back when the callback throws. */
@@ -25,6 +27,7 @@ function fakeDb(initial: Partial<State> = {}) {
     assigned: ["j1", "j2"], standIns: [], models: ["m1", "m2"], missingModels: [], owners: {}, votes: [], completions: [], awards: [],
     brackets: [{ medalLabel: "Gold", medalRank: 4, lowLimit: 11, highLimit: 12 }],
     settings: {},
+    presentOwners: null,
     ...initial
   };
   const calls: string[] = [];
@@ -37,6 +40,7 @@ function fakeDb(initial: Partial<State> = {}) {
     listCategoryModels: async () => state.models.map((modelId) => ({
       modelId, ownerId: state.owners[modelId] ?? "owner", missing: state.missingModels.includes(modelId)
     })),
+    loadPresentOwnerIds: async () => (state.presentOwners === null ? null : new Set(state.presentOwners)),
     listVotedModelIds: async (j) => [...new Set(state.votes.filter((v) => v.judgeId === j).map((v) => v.modelId))],
     listVotesNewestFirst: async () => state.votes,
     listBrackets: async () => state.brackets,
@@ -59,6 +63,22 @@ function fakeDb(initial: Partial<State> = {}) {
 const makeStore = (f: ReturnType<typeof fakeDb>) => () => f.store;
 const allVotes = (judges: string[], models: string[], rank = 4) =>
   judges.flatMap((judgeId) => models.map((modelId) => ({ judgeId, modelId, rank })));
+
+describe("closeCategory - absence register", () => {
+  it("with the register on, models of absent owners are not expected: no vote needed, no award", async () => {
+    // m2 belongs to "gone", who is not present in the event.
+    const f = fakeDb({ owners: { m2: "gone" }, presentOwners: ["owner"], votes: allVotes(["j1", "j2"], ["m1"]) });
+    expect((await closeCategory(f.db, "c1", { judgeId: "j1" }, makeStore(f))).outcome).toBe("pending");
+    const last = await closeCategory(f.db, "c1", { judgeId: "j2" }, makeStore(f));
+    expect(last.outcome).toBe("closed");
+    expect(f.state.awards.map((a) => a.modelId)).toEqual(["m1"]);
+  });
+
+  it("with the register off, the same model still needs votes", async () => {
+    const f = fakeDb({ owners: { m2: "gone" }, presentOwners: null, votes: allVotes(["j1", "j2"], ["m1"]) });
+    await expect(closeCategory(f.db, "c1", { judgeId: "j1" }, makeStore(f))).rejects.toThrow();
+  });
+});
 
 describe("closeCategory - judge path", () => {
   it("locks the category row first", async () => {
