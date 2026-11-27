@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { and, eq, sql } from "drizzle-orm";
-import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { requireAnyRole } from "../../../identity/infra/http/role.middleware";
+import { DESK_ROLES } from "../../../identity/domain/Role";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, modelsTable, registrationsTable } from "../persistence/schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
@@ -14,7 +15,7 @@ const PARTICIPANT_NUMBER_RE = /^\d+$/;
 /** A participant is present in an event when at least one of his registrations is checked in. */
 export const staffDeskRoutes = new Elysia({ prefix: "/staff" })
   .use(tenantMiddleware)
-  .use(requireRole("staff"))
+  .use(requireAnyRole(DESK_ROLES))
   .get("/events/:eventId/participants/:number", async ({ tenantDb, params, set }) => {
     if (!isUuid(params.eventId) || !PARTICIPANT_NUMBER_RE.test(params.number)) {
       set.status = 422;

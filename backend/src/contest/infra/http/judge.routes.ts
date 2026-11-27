@@ -5,12 +5,11 @@ import { VoteRepositoryDrizzle } from "../persistence/voteRepository.drizzle";
 import { ModelReadRepositoryDrizzle } from "../persistence/modelReadRepository.drizzle";
 import { VoteModel } from "../../application/VoteModel";
 import { categoriesTable, eventsTable, judgeAssignmentsTable, modelsTable, modelImagesTable, votesTable } from "../persistence/schema";
-import { usersTable, userProfilesTable } from "../../../identity/infra/persistence/schema";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { closeCategory, loadCompletionState, reconcileCategory } from "../persistence/categoryClosure";
 import { judgeCanVote, loadCategoryRef, loadJudgeContext, loadJudgeScope, loadModelOwnerId } from "../persistence/judgeAccess";
-import { canAccessCategory, participantView } from "../../domain/judgeScope";
+import { canAccessCategory } from "../../domain/judgeScope";
 import { groupDisplays } from "../../domain/display";
 import { VoteDisplay } from "../../application/VoteDisplay";
 import { ForbiddenError, NotFoundError, OwnModelError } from "../../domain/errors";
@@ -76,7 +75,8 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     const ctx = await loadJudgeContext(tenantDb, user!);
     const rows = allRows
       .filter((row: any) => row.userId !== user!.id && judgeCanVote(ctx, row))
-      .map(({ eventId: _eventId, ...rest }: any) => rest);
+      // Anonymous judging: the owner id is only used for the filter above and never leaves the server.
+      .map(({ eventId: _eventId, userId: _owner, ...rest }: any) => rest);
     if (!rows.length) {
       return [];
     }
@@ -192,37 +192,6 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     detail: {
       summary: "Dettaglio modello giudice",
       description: "403 OWN_MODEL se il modello è del giudice; 403 se fuori scope.",
-      tags: ["Judging"],
-      security: [{ bearerAuth: [] }]
-    }
-  })
-  .get("/participants/:userId", async ({ tenantDb, params, query, user }) => {
-    const models = await tenantDb
-      .select({
-        categoryId: modelsTable.categoryId,
-        eventId: categoriesTable.eventId,
-        displayNumber: modelsTable.displayNumber
-      })
-      .from(modelsTable)
-      .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
-      .where(and(eq(modelsTable.userId, params.userId as any), eq(modelsTable.missing, false)));
-    const scope = await loadJudgeScope(tenantDb, user!);
-    // Privacy: no email, no registrations; only name + exhibitor number.
-    // Cheap pre-check first so we do not even read the profile of unrelated users.
-    if (participantView(scope, models as any, null, query?.categoryId) === null) {
-      throw new NotFoundError("Participant not found");
-    }
-    const [profile] = await tenantDb
-      .select({ firstName: userProfilesTable.firstName, lastName: userProfilesTable.lastName })
-      .from(usersTable)
-      .leftJoin(userProfilesTable, eq(usersTable.id, userProfilesTable.userId))
-      .where(eq(usersTable.id, params.userId as any));
-    return participantView(scope, models as any, profile ?? null, query?.categoryId)!;
-  }, {
-    params: t.Object({ userId: uuid() }),
-    query: t.Object({ categoryId: t.Optional(uuid()) }),
-    detail: {
-      summary: "Dettaglio concorrente (solo nome visualizzato e numero espositore)",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     }

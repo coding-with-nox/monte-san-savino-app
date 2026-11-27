@@ -72,7 +72,7 @@ import { ActionButton, TipIconButton, TipMenuItem } from "./components/ActionBut
 import usePageTour from "./components/usePageTour";
 import { Access, AccessContext, NO_ACCESS } from "./lib/access";
 import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
-import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
+import { getToken, getRole, roleAtLeast, roleReaches, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, LANGUAGES, isLanguage, languageFromBrowser, t } from "./lib/i18n";
 import { buildTheme, DEFAULT_THEME_PRESET, isThemePreset, ThemePreset } from "./lib/theme";
 import { loginPathFor } from "./lib/redirect";
@@ -85,7 +85,7 @@ function RequireRole({ min, children }: { min: any; children: React.ReactNode })
   const location = useLocation();
   const r = getRole();
   if (!r) return <Navigate to={loginPathFor(location.pathname, location.search)} replace />;
-  return roleAtLeast(r, min) ? <>{children}</> : <Navigate to="/" replace />;
+  return roleReaches(r, min) ? <>{children}</> : <Navigate to="/" replace />;
 }
 
 export default function App() {
@@ -251,7 +251,7 @@ export default function App() {
   const navItems = allNavItems.filter((item) => {
     if (!item.minRole) return true; // public pages always visible
     if (!role) return false; // no role = not logged in, hide protected
-    return roleAtLeast(role, item.minRole) && sectionVisible(item.section);
+    return roleReaches(role, item.minRole) && sectionVisible(item.section);
   });
 
   // Mobile bar: at most five destinations, by role.
