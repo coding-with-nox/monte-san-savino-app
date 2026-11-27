@@ -179,12 +179,12 @@ describe("integration CSV imports step 10 (medals, honors, jury)", () => {
     const PATH = "/admin/import/jury";
     const HEADER = "Judge Email,Class Number,Stand-in\n";
 
-    it("replaces the assignments of the event (stand-in, whole-event, jury president accepted)", async () => {
+    it("replaces the assignments of the event (stand-in, whole-event, a manager may judge)", async () => {
       await getTestDb().insert(judgeAssignmentsTable).values([
         { id: crypto.randomUUID(), eventId: event, judgeId: judge.id, categoryId: null, standingIn: false },
         { id: crypto.randomUUID(), eventId: event, judgeId: judge2.id, categoryId: catB, standingIn: false }
       ]);
-      const csv = `${HEADER}${judge.email},12,yes\n${judge2.email},,\n${juryPresident.email},13,0`;
+      const csv = `${HEADER}${judge.email},12,yes\n${judge2.email},,\n${manager.email},13,0`;
       const res = await importCsv(PATH, csv, { token: manager.token, eventId: event });
       expect(res.status).toBe(200);
       expect(res.json).toEqual({ imported: 3, errors: [] });
@@ -192,21 +192,22 @@ describe("integration CSV imports step 10 (medals, honors, jury)", () => {
       expect(rows.map((a) => [a.judgeId, a.categoryId, a.standingIn]).sort()).toEqual([
         [judge.id, catA, true],
         [judge2.id, null, false],
-        [juryPresident.id, catB, false]
+        [manager.id, catB, false]
       ].sort());
     }, LONG);
 
     it("is all-or-nothing: unknown email, wrong role, unknown class or stand-in without class answer 422 and change nothing", async () => {
       await getTestDb().insert(judgeAssignmentsTable).values({ id: crypto.randomUUID(), eventId: event, judgeId: judge2.id, categoryId: null, standingIn: false });
-      const csv = `${HEADER}${judge.email},12,0\nnobody@example.com,12,0\n${plain.email},12,0\n${judge2.email},99,0\n${judge2.email},,1`;
+      const csv = `${HEADER}${judge.email},12,0\nnobody@example.com,12,0\n${plain.email},12,0\n${judge2.email},99,0\n${judge2.email},,1\n${juryPresident.email},12,0`;
       const res = await importCsv(PATH, csv, { token: manager.token, eventId: event });
       expect(res.status).toBe(422);
       expect(res.json.imported).toBe(0);
       expect(res.json.errors).toEqual([
         { line: 3, message: "No user with email nobody@example.com" },
-        { line: 4, message: `${plain.email} is not a judge (role must be judge or higher)` },
+        { line: 4, message: `${plain.email} is not a judge (role must be judge, manager or admin; the jury president does not vote)` },
         { line: 5, message: 'Unknown Class Number "99" in this event' },
-        { line: 6, message: "Stand-in requires a Class Number" }
+        { line: 6, message: "Stand-in requires a Class Number" },
+        { line: 7, message: `${juryPresident.email} is not a judge (role must be judge, manager or admin; the jury president does not vote)` }
       ]);
       const rows = await assignments(event);
       expect(rows.map((a) => [a.judgeId, a.categoryId])).toEqual([[judge2.id, null]]);

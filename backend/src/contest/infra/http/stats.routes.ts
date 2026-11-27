@@ -1,3 +1,4 @@
+import { roleAtLeast, type Role } from "../../../identity/domain/Role";
 import { Elysia, t } from "elysia";
 import { eq, inArray, sql } from "drizzle-orm";
 import { requireRole } from "../../../identity/infra/http/role.middleware";
@@ -28,14 +29,14 @@ export type StatsInput = {
 const byCountDesc = <T extends { count: number }>(a: T, b: T) => b.count - a.count;
 
 function userName(u: StatsInput["users"][number]) {
-  return [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.email;
+  return [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.email || (u.seqId ? `#${u.seqId}` : "");
 }
 
 /** Users without models: count and list (userId for the user card, participantNumber = users.seqId). */
 function zeroModelList(users: StatsInput["users"]) {
   return {
     count: users.length,
-    list: users.map((u) => ({ userId: u.id, participantNumber: u.seqId ?? null, name: userName(u), email: u.email }))
+    list: users.map((u) => ({ userId: u.id, participantNumber: u.seqId ?? null, name: userName(u), email: u.email || null }))
   };
 }
 
@@ -77,7 +78,7 @@ export function buildStatsOverview(input: StatsInput) {
 export const adminStatsRoutes = new Elysia({ prefix: "/admin/stats" })
   .use(tenantMiddleware)
   .use(requireRole("jury_president"))
-  .get("/overview", async ({ tenantDb, query, set }) => {
+  .get("/overview", async ({ tenantDb, query, set, user }) => {
     const eventId = (query as any)?.eventId;
     if (eventId !== undefined && !isUuid(eventId)) {
       set.status = 422;
@@ -135,7 +136,9 @@ export const adminStatsRoutes = new Elysia({ prefix: "/admin/stats" })
       ? [eventId as string]
       : (await tenantDb.selectDistinct({ eventId: honorsTable.eventId }).from(honorsTable)).map((r: any) => r.eventId as string);
     const honorViews = (await Promise.all(honorEventIds.map((id) => loadHonorViews(tenantDb, id)))).flat();
-    return buildStatsOverview({ usersByCountryRaw, users, modelsByUser, modelsByCategory, categories: cats, awardsByMedal, mentionsByTitle, honorViews } as StatsInput);
+    // GDPR minimisation: the jury president supervises the judging and needs no contact data.
+    const visibleUsers = roleAtLeast(user!.role as Role, "manager") ? users : (users as any[]).map((u) => ({ ...u, email: "" }));
+    return buildStatsOverview({ usersByCountryRaw, users: visibleUsers, modelsByUser, modelsByCategory, categories: cats, awardsByMedal, mentionsByTitle, honorViews } as StatsInput);
   }, {
     query: t.Object({ eventId: t.Optional(t.String()) }),
     beforeHandle: requireVisibleSection("stats"),

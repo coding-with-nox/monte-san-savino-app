@@ -25,6 +25,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import PrintIcon from "@mui/icons-material/Print";
 import { api } from "../../lib/api";
+import { VOTING_ROLES, type Role } from "../../lib/auth";
 import { openHtmlExport } from "../../lib/exports";
 import { Language, t } from "../../lib/i18n";
 import SectionCard from "../../components/SectionCard";
@@ -65,7 +66,8 @@ export default function JudgesTab({ language, data }: { language: Language; data
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const userEmail = (uid: string) => usersById.get(uid)?.email ?? uid.slice(0, 8);
   const judgeCandidates = useMemo(
-    () => users.filter((u) => u.role === "judge" || u.role === "jury_president" || u.role === "manager" || u.role === "admin"),
+    // The jury president supervises and never votes: not a judge candidate (backend answers 422 NOT_A_JUDGE).
+    () => users.filter((u) => VOTING_ROLES.includes(u.role as Role)),
     [users]
   );
   const categoryLabel = useCallback(

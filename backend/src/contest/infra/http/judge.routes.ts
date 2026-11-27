@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
-import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { requireAnyRole } from "../../../identity/infra/http/role.middleware";
+import { VOTING_ROLES } from "../../../identity/domain/Role";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { VoteRepositoryDrizzle } from "../persistence/voteRepository.drizzle";
 import { ModelReadRepositoryDrizzle } from "../persistence/modelReadRepository.drizzle";
@@ -28,7 +29,7 @@ const phaseOfOutcome = (outcome: string) =>
 
 export const judgeRoutes = new Elysia({ prefix: "/judge" })
   .use(tenantMiddleware)
-  .use(requireRole("judge"))
+  .use(requireAnyRole(VOTING_ROLES))
   .use(domainErrorHandler)
   .get("/events", async ({ tenantDb, user }) => {
     const isPrivileged = user!.role === "admin" || user!.role === "manager";

@@ -4,7 +4,7 @@ import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { awardBracketsTable, categoriesTable, eventsTable, honorsTable, judgeAssignmentsTable, levelsTable, modelsTable, previousResultsTable, votesTable } from "../persistence/schema";
 import { usersTable } from "../../../identity/infra/persistence/schema";
-import { roleAtLeast, type Role } from "../../../identity/domain/Role";
+import { VOTING_ROLES, type Role } from "../../../identity/domain/Role";
 import { parseClassesCsv, parsePreviousResultsCsv, parseLevelsCsv, parseMedalBracketsCsv, parseHonorsCsv, parseJuryCsv, type ImportError, type JuryImportRow } from "../../../shared/domain/csvImport";
 import { isUuid } from "./class-print.routes";
 import { bracketInputError } from "../../domain/categoryClosure";
@@ -60,8 +60,8 @@ async function applyJuryImport(tx: any, eventId: string, rows: JuryImportRow[], 
   for (const row of rows) {
     const user = userByEmail.get(row.judgeEmail);
     if (!user) { out.push({ line: row.line, message: `No user with email ${row.judgeEmail}` }); continue; }
-    if (!roleAtLeast(user.role as Role, "judge")) {
-      out.push({ line: row.line, message: `${row.judgeEmail} is not a judge (role must be judge or higher)` });
+    if (!VOTING_ROLES.includes(user.role as Role)) {
+      out.push({ line: row.line, message: `${row.judgeEmail} is not a judge (role must be judge, manager or admin; the jury president does not vote)` });
       continue;
     }
     let categoryId: string | null = null;

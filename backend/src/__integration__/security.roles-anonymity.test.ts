@@ -55,6 +55,34 @@ describe("integration security: desk roles and anonymous judging", () => {
     }
   });
 
+  it("the jury president supervises and never votes: no judge API, no assignment", async () => {
+    const president = await createUser("jury_president");
+    for (const path of ["/judge/events", `/judge/models?eventId=${eventId}`, `/judge/displays?eventId=${eventId}`]) {
+      const res = await request("GET", path, president.token);
+      expect({ path, status: res.status }).toEqual({ path, status: 403 });
+    }
+    const vote = await request("POST", "/judge/displays/vote", president.token, { eventId, displayNumber: 1, rank: 3 });
+    expect(vote.status).toBe(403);
+    const manager = await createUser("manager");
+    for (const judgeId of [president.id, ownerId]) {
+      const res = await request("POST", "/admin/judges/assignments", manager.token, { eventId, judgeId });
+      expect({ judgeId, status: res.status, code: res.json.code }).toEqual({ judgeId, status: 422, code: "NOT_A_JUDGE" });
+    }
+    const judge = await createUser("judge");
+    expect((await request("POST", "/admin/judges/assignments", manager.token, { eventId, judgeId: judge.id })).status).toBe(200);
+  });
+
+  it("statistics give the jury president no e-mail addresses (managers keep them)", async () => {
+    await createUser(); // an exhibitor without models: listed in zeroModelUsers
+    const president = await createUser("jury_president");
+    const res = await request("GET", `/admin/stats/overview?eventId=${eventId}`, president.token);
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.json)).not.toContain("@example.com");
+    const manager = await createUser("manager");
+    const own = await request("GET", `/admin/stats/overview?eventId=${eventId}`, manager.token);
+    expect(JSON.stringify(own.json)).toContain("@example.com");
+  });
+
   it("judge APIs never return the owner of a model", async () => {
     const judge = await createUser("judge");
     await getTestDb().insert(judgeAssignmentsTable).values({ id: crypto.randomUUID(), eventId, judgeId: judge.id, categoryId: null });

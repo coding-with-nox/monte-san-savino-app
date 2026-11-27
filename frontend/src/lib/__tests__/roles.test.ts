@@ -21,6 +21,11 @@ describe("front desk access", () => {
     for (const r of ["user", "judge", "jury_president"] as const) expect(roleReaches(r, "staff")).toBe(false);
   });
 
+  it("judge pages are for the voting roles: the jury president supervises, never votes", () => {
+    for (const r of ["judge", "manager", "admin"] as const) expect(roleReaches(r, "judge")).toBe(true);
+    for (const r of ["user", "staff", "jury_president"] as const) expect(roleReaches(r, "judge")).toBe(false);
+  });
+
   it("keeps the rank rule for the other roles", () => {
     expect(roleReaches("admin", "judge")).toBe(true);
     expect(roleReaches("staff", "judge")).toBe(false);
