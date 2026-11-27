@@ -21,7 +21,7 @@ function fakeDb(referenced: boolean) {
 function fakeStorage(fail = false) {
   const deleted: string[] = [];
   return { deleted, storage: {
-    getUploadUrl: async () => ({ uploadUrl: "", publicUrl: "" }),
+    getUploadUrl: async () => ({ uploadUrl: "", publicUrl: "", fields: {} }),
     deleteObjectByUrl: async (u: string) => { deleted.push(u); if (fail) throw new Error("boom"); }
   } };
 }

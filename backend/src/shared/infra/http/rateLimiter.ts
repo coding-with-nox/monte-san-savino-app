@@ -123,13 +123,15 @@ export function ipRateLimiterFromEnv(env: NodeJS.ProcessEnv = process.env, now?:
  * IP plus `keyOf(body)`. Keying by IP too means an attacker cannot lock an account out from their own
  * address. The limiters are built on first use (env read then); `reset` rebuilds them (tests).
  */
-export function createRateLimitGuard(keyOf: (body: any) => string) {
+export function createRateLimitGuard(keyOf: (body: any) => string, limits: { max?: number; ipMax?: number } = {}) {
   let limiter: SlidingWindowRateLimiter | null | undefined;
   let ipLimiter: SlidingWindowRateLimiter | null | undefined;
   let clock: (() => number) | undefined;
   const guard = ({ body, request, server, set }: any) => {
-    if (limiter === undefined) limiter = rateLimiterFromEnv(process.env, clock);
-    if (ipLimiter === undefined) ipLimiter = ipRateLimiterFromEnv(process.env, clock);
+    // Fixed limits of this guard win over the env defaults (still off with RATE_LIMIT_ENABLED=false).
+    const env = { ...process.env, ...(limits.max ? { RATE_LIMIT_MAX: String(limits.max) } : {}), ...(limits.ipMax ? { RATE_LIMIT_IP_MAX: String(limits.ipMax) } : {}) };
+    if (limiter === undefined) limiter = rateLimiterFromEnv(env, clock);
+    if (ipLimiter === undefined) ipLimiter = ipRateLimiterFromEnv(env, clock);
     if (!limiter || !ipLimiter) return;
     const headers = { "x-forwarded-for": request.headers.get("x-forwarded-for") ?? undefined };
     const ip = clientIp(headers, server?.requestIP?.(request)?.address);
