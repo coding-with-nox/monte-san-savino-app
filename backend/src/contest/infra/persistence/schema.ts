@@ -124,9 +124,14 @@ export const judgeAssignmentsTable = pgTable("judge_assignments", {
   id: uuid("id").primaryKey(),
   eventId: uuid("event_id").notNull(),
   judgeId: uuid("judge_id").notNull(),
-  categoryId: uuid("category_id")
+  // null = the whole event; otherwise one row per (judge, category)
+  categoryId: uuid("category_id"),
+  // stand-in judge of categoryId (only meaningful with a category)
+  standingIn: boolean("standing_in").notNull().default(false)
 }, (t) => ({
-  uniq: uniqueIndex("ux_judge_event").on(t.eventId, t.judgeId)
+  uniq: uniqueIndex("ux_judge_assignment").on(
+    t.eventId, t.judgeId, sql`coalesce(${t.categoryId}, '00000000-0000-0000-0000-000000000000'::uuid)`
+  )
 }));
 
 export const paymentsTable = pgTable("payments", {

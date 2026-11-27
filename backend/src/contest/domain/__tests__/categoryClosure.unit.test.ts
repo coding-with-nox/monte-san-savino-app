@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import {
-  bracketInputError, computeAwards, evaluateCompletion, latestVotePerJudgeModel, MSS_AWARD_BRACKET_PRESET, missingVoteModelIds,
-  judgingSettingsError, parseAwardIssues, parseJudgingRules, selectBracket, serializeAwardIssues
+  assessCategory, bracketInputError, categoryPhase, computeAwards, evaluateCompletion, judgeMissingVoteModelIds, latestVotePerJudgeModel,
+  judgingSettingsError, MSS_AWARD_BRACKET_PRESET, parseAwardIssues, parseJudgingRules, readyToClose, selectBracket, serializeAwardIssues
 } from "../categoryClosure";
 
 const brackets = [
@@ -11,6 +11,9 @@ const brackets = [
 ];
 
 const RULES = { votesPerExhibit: 3, maxDelta: 2 };
+
+/** Every model expects the same judges. */
+const all = (modelIds: string[], judgeIds: string[]) => modelIds.map((modelId) => ({ modelId, expectedJudgeIds: judgeIds }));
 
 describe("selectBracket (overlapping brackets: lowest medalRank wins)", () => {
   it("picks the only match", () => {
@@ -50,7 +53,7 @@ describe("computeAwards (Emperor rules)", () => {
       { judgeId: "j1", modelId: "b", rank: 1 },
       { judgeId: "j2", modelId: "b", rank: 1 }
     ];
-    const r = computeAwards(["a", "b"], ["j1", "j2"], votes, brackets, { votesPerExhibit: 2, maxDelta: 2 });
+    const r = computeAwards(all(["a", "b"], ["j1", "j2"]), votes, brackets, { votesPerExhibit: 2, maxDelta: 2 });
     expect(r).toEqual([
       { modelId: "a", totalScore: 8, medalLabel: "Bronze", medalRank: 2, issues: [] },
       { modelId: "b", totalScore: 2, medalLabel: "None", medalRank: 0, issues: [] }
@@ -63,7 +66,7 @@ describe("computeAwards (Emperor rules)", () => {
       { judgeId: "j2", modelId: "a", rank: 4 },
       { judgeId: "j3", modelId: "a", rank: 3 }
     ];
-    const [a] = computeAwards(["a"], ["j1", "j2", "j3"], votes, brackets, RULES);
+    const [a] = computeAwards(all(["a"], ["j1", "j2", "j3"]), votes, brackets, RULES);
     expect(a).toEqual({ modelId: "a", totalScore: 11, medalLabel: "Silver", medalRank: 3, issues: [] });
   });
 
@@ -72,7 +75,7 @@ describe("computeAwards (Emperor rules)", () => {
       { judgeId: "j1", modelId: "a", rank: 4 },
       { judgeId: "j2", modelId: "a", rank: 4 }
     ];
-    const [a] = computeAwards(["a"], ["j1", "j2", "j3"], votes, brackets, RULES);
+    const [a] = computeAwards(all(["a"], ["j1", "j2", "j3"]), votes, brackets, RULES);
     expect(a.totalScore).toBe(12); // round(8 * 3 / 2)
     expect(a.issues).toEqual(["PARTIAL_VOTES"]);
   });
@@ -83,7 +86,7 @@ describe("computeAwards (Emperor rules)", () => {
       { judgeId: "j2", modelId: "a", rank: 4 },
       { judgeId: "j3", modelId: "a", rank: 1 }
     ];
-    const [a] = computeAwards(["a"], ["j1", "j2", "j3"], votes, brackets, RULES);
+    const [a] = computeAwards(all(["a"], ["j1", "j2", "j3"]), votes, brackets, RULES);
     expect(a.totalScore).toBe(9);
     expect(a.issues).toEqual(["DISCORDANT_VOTES"]);
   });
@@ -94,12 +97,12 @@ describe("computeAwards (Emperor rules)", () => {
       { judgeId: "j2", modelId: "a", rank: 3 },
       { judgeId: "j3", modelId: "a", rank: 2 }
     ];
-    const [a] = computeAwards(["a"], ["j1", "j2", "j3"], votes, brackets, RULES);
+    const [a] = computeAwards(all(["a"], ["j1", "j2", "j3"]), votes, brackets, RULES);
     expect(a).toMatchObject({ totalScore: 8, issues: [] });
   });
 
   it("no votes at all: score 0, None, no issue", () => {
-    const [a] = computeAwards(["a"], ["j1", "j2", "j3"], [], brackets, RULES);
+    const [a] = computeAwards(all(["a"], ["j1", "j2", "j3"]), [], brackets, RULES);
     expect(a).toEqual({ modelId: "a", totalScore: 0, medalLabel: "None", medalRank: 0, issues: [] });
   });
 
@@ -108,13 +111,13 @@ describe("computeAwards (Emperor rules)", () => {
       { judgeId: "j1", modelId: "a", rank: 1 },
       { judgeId: "j2", modelId: "a", rank: 2 }
     ];
-    const [a] = computeAwards(["a"], ["j1", "j2"], votes, brackets, RULES);
+    const [a] = computeAwards(all(["a"], ["j1", "j2"]), votes, brackets, RULES);
     expect(a.totalScore).toBe(5);
     expect(a.medalLabel).toBe("Bronze");
   });
 
   it("one judge with N=3 scales the single vote by 3", () => {
-    const [a] = computeAwards(["a"], ["j1", "j2", "j3"], [{ judgeId: "j1", modelId: "a", rank: 2 }], brackets, RULES);
+    const [a] = computeAwards(all(["a"], ["j1", "j2", "j3"]), [{ judgeId: "j1", modelId: "a", rank: 2 }], brackets, RULES);
     expect(a).toMatchObject({ totalScore: 6, issues: ["PARTIAL_VOTES"] });
   });
 
@@ -123,7 +126,7 @@ describe("computeAwards (Emperor rules)", () => {
       { judgeId: "j1", modelId: "a", rank: 4 },
       { judgeId: "j2", modelId: "a", rank: 0 }
     ];
-    const [a] = computeAwards(["a"], ["j1", "j2", "j3"], votes, brackets, RULES);
+    const [a] = computeAwards(all(["a"], ["j1", "j2", "j3"]), votes, brackets, RULES);
     expect(a.issues).toEqual(["PARTIAL_VOTES", "DISCORDANT_VOTES"]);
   });
 });
@@ -215,7 +218,89 @@ describe("evaluateCompletion", () => {
 });
 
 describe("vote coverage helpers", () => {
-  it("missingVoteModelIds", () => {
-    expect(missingVoteModelIds(["a", "b", "c"], ["b"])).toEqual(["a", "c"]);
+  it("judgeMissingVoteModelIds: only models where the judge is expected and has no vote yet", () => {
+    const models = [
+      { modelId: "a", expectedJudgeIds: ["j1", "j2"] },
+      { modelId: "b", expectedJudgeIds: ["j2"] },
+      { modelId: "c", expectedJudgeIds: ["j1"] }
+    ];
+    expect(judgeMissingVoteModelIds(models, "j1", ["c"])).toEqual(["a"]);
+    expect(judgeMissingVoteModelIds(models, "j2", [])).toEqual(["a", "b"]);
+    expect(judgeMissingVoteModelIds(models, "stranger", [])).toEqual([]);
+  });
+});
+
+describe("computeAwards with expected voters", () => {
+  it("ranks only from the expected voters of each model (a stand-in is not counted on other models)", () => {
+    const models = [
+      { modelId: "a", expectedJudgeIds: ["j1", "s"] },
+      { modelId: "b", expectedJudgeIds: ["j1"] }
+    ];
+    const votes = [
+      { judgeId: "j1", modelId: "a", rank: 4 },
+      { judgeId: "s", modelId: "a", rank: 4 },
+      { judgeId: "j1", modelId: "b", rank: 4 },
+      { judgeId: "s", modelId: "b", rank: 0 } // stand-in is not expected on b: ignored
+    ];
+    const [a, b] = computeAwards(models, votes, brackets, RULES);
+    expect(a).toMatchObject({ totalScore: 12, issues: [] }); // 2 of 2 expected: round(8*3/2)
+    expect(b).toMatchObject({ totalScore: 12, issues: [] }); // 1 of 1 expected
+  });
+  it("PARTIAL_VOTES is relative to the expected voters, not to all judges of the category", () => {
+    const models = [{ modelId: "a", expectedJudgeIds: ["j1"] }];
+    const [a] = computeAwards(models, [{ judgeId: "j1", modelId: "a", rank: 4 }], brackets, RULES);
+    expect(a.issues).toEqual([]);
+  });
+});
+
+describe("assessCategory and the reconciliation decision", () => {
+  const models = all(["m1", "m2"], ["j1", "j2", "j3"]);
+  const v = (judgeId: string, modelId: string, rank: number) => ({ judgeId, modelId, rank });
+  const base = { models, brackets, rules: RULES, completedJudgeIds: ["j1", "j2", "j3"] };
+
+  it("all completed and no discordance: ready to close", () => {
+    const votes = ["j1", "j2", "j3"].flatMap((j) => [v(j, "m1", 3), v(j, "m2", 4)]);
+    const a = assessCategory({ ...base, votes });
+    expect(a.completion).toEqual({ totalJudges: 3, completedJudges: 3, allDone: true });
+    expect(a.discordantModelIds).toEqual([]);
+    expect(categoryPhase("open", a)).toBe("judging");
+    expect(readyToClose("open", a)).toBe(true);
+  });
+
+  it("all completed but 4,4,1 on m1: reconciliation, stays open, not ready to close", () => {
+    const votes = [v("j1", "m1", 4), v("j2", "m1", 4), v("j3", "m1", 1), v("j1", "m2", 3), v("j2", "m2", 3), v("j3", "m2", 3)];
+    const a = assessCategory({ ...base, votes });
+    expect(a.discordantModelIds).toEqual(["m1"]);
+    expect(categoryPhase("open", a)).toBe("reconciliation");
+    expect(readyToClose("open", a)).toBe(false);
+  });
+
+  it("fixing the discordant vote lifts the reconciliation", () => {
+    const votes = [v("j1", "m1", 4), v("j2", "m1", 4), v("j3", "m1", 3), v("j1", "m2", 3), v("j2", "m2", 3), v("j3", "m2", 3)];
+    const a = assessCategory({ ...base, votes });
+    expect(a.discordantModelIds).toEqual([]);
+    expect(readyToClose("open", a)).toBe(true);
+  });
+
+  it("discordance without all counted judges completed is still 'judging'", () => {
+    const votes = [v("j1", "m1", 4), v("j2", "m1", 4), v("j3", "m1", 1)];
+    const a = assessCategory({ ...base, completedJudgeIds: ["j1", "j2"], votes });
+    expect(a.completion.allDone).toBe(false);
+    expect(categoryPhase("open", a)).toBe("judging");
+    expect(readyToClose("open", a)).toBe(false);
+  });
+
+  it("a closed category is always phase 'closed' and never ready to close again", () => {
+    const a = assessCategory({ ...base, votes: [] });
+    expect(categoryPhase("closed", a)).toBe("closed");
+    expect(readyToClose("closed", a)).toBe(false);
+  });
+
+  it("only counted judges complete the category: a stand-in with no expected model does not block it", () => {
+    const expectations = [{ modelId: "m1", expectedJudgeIds: ["j1"] }];
+    const votes = [v("j1", "m1", 4)];
+    const a = assessCategory({ models: expectations, votes, completedJudgeIds: ["j1", "standin-idle"], brackets, rules: RULES });
+    expect(a.completion).toEqual({ totalJudges: 1, completedJudges: 1, allDone: true });
+    expect(readyToClose("open", a)).toBe(true);
   });
 });

@@ -8,12 +8,12 @@ import { categoriesTable, eventsTable, judgeAssignmentsTable, modelsTable, model
 import { usersTable, userProfilesTable } from "../../../identity/infra/persistence/schema";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
-import { closeCategory, loadCompletionState } from "../persistence/categoryClosure";
-import { loadCategoryRef, loadJudgeScope } from "../persistence/judgeAccess";
+import { closeCategory, loadCompletionState, reconcileCategory } from "../persistence/categoryClosure";
+import { judgeCanVote, loadCategoryRef, loadJudgeContext, loadJudgeScope, loadModelOwnerId } from "../persistence/judgeAccess";
 import { canAccessCategory, participantView } from "../../domain/judgeScope";
 import { groupDisplays } from "../../domain/display";
 import { VoteDisplay } from "../../application/VoteDisplay";
-import { ForbiddenError, NotFoundError } from "../../domain/errors";
+import { ForbiddenError, NotFoundError, OwnModelError } from "../../domain/errors";
 import { domainErrorHandler } from "../../../shared/infra/http/domainErrorHandler";
 
 const uuid = () => t.String({ format: "uuid" });
@@ -22,6 +22,10 @@ const rankSchema = () => t.Union([t.Literal(0), t.Literal(1), t.Literal(2), t.Li
 /** Transaction runner binding the vote repositories to one DB transaction. */
 const voteTransaction = (db: any) => (fn: any): Promise<any> =>
   db.transaction((tx: any) => fn({ votes: new VoteRepositoryDrizzle(tx), models: new ModelReadRepositoryDrizzle(tx) }));
+
+/** Judge completion phase from the outcome of closeCategory. */
+const phaseOfOutcome = (outcome: string) =>
+  outcome === "closed" ? "closed" : outcome === "reconciliation" ? "reconciliation" : "judging";
 
 export const judgeRoutes = new Elysia({ prefix: "/judge" })
   .use(tenantMiddleware)
@@ -33,8 +37,9 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       const rows = await tenantDb.select({ eventId: eventsTable.id, eventName: eventsTable.name }).from(eventsTable);
       return rows;
     }
+    // One row per event even when the judge has several category assignments in it.
     return await tenantDb
-      .select({ eventId: judgeAssignmentsTable.eventId, eventName: eventsTable.name })
+      .selectDistinct({ eventId: judgeAssignmentsTable.eventId, eventName: eventsTable.name })
       .from(judgeAssignmentsTable)
       .innerJoin(eventsTable, eq(eventsTable.id, judgeAssignmentsTable.eventId))
       .where(eq(judgeAssignmentsTable.judgeId, user!.id as any));
@@ -66,10 +71,10 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId));
     const allRows = conditions.length ? await queryBuilder.where(and(...conditions)) : await queryBuilder;
-    // Judges only see models of categories/events they are assigned to (manager/admin exempt)
-    const scope = await loadJudgeScope(tenantDb, user!);
+    // Judges only see models they may vote: not their own, and within their assignments (stand-ins: regular owners only).
+    const ctx = await loadJudgeContext(tenantDb, user!);
     const rows = allRows
-      .filter((row: any) => canAccessCategory(scope, { id: row.categoryId, eventId: row.eventId }))
+      .filter((row: any) => row.userId !== user!.id && judgeCanVote(ctx, row))
       .map(({ eventId: _eventId, ...rest }: any) => rest);
     if (!rows.length) {
       return [];
@@ -114,7 +119,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     query: t.Object({ eventId: t.Optional(uuid()), categoryId: t.Optional(uuid()) }),
     detail: {
       summary: "Lista modelli giudicabili",
-      description: "Solo modelli di categorie/eventi assegnati al giudice. Filtri opzionali: eventId, categoryId.",
+      description: "Solo modelli di categorie/eventi assegnati al giudice, esclusi quelli di sua proprietà. Filtri opzionali: eventId, categoryId.",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     }
@@ -148,6 +153,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     const rows = await tenantDb
       .select({
         id: modelsTable.id,
+        userId: modelsTable.userId,
         categoryId: modelsTable.categoryId,
         eventId: categoriesTable.eventId,
         code: modelsTable.code,
@@ -163,13 +169,14 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     if (!rows.length) {
       return { model: null, images: [] };
     }
-    const scope = await loadJudgeScope(tenantDb, user!);
-    if (!canAccessCategory(scope, { id: rows[0].categoryId, eventId: rows[0].eventId as string })) {
+    if (rows[0].userId === user!.id) throw new OwnModelError();
+    const ctx = await loadJudgeContext(tenantDb, user!);
+    if (!judgeCanVote(ctx, { categoryId: rows[0].categoryId, eventId: rows[0].eventId as string, userId: rows[0].userId })) {
       throw new ForbiddenError("Judge is not assigned to this category");
     }
     const images = await tenantDb.select().from(modelImagesTable).where(eq(modelImagesTable.modelId, params.modelId as any));
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
-    const { categorySeqId: catSeqId, eventId: _eventId, ...modelRow } = rows[0] as any;
+    const { categorySeqId: catSeqId, eventId: _eventId, userId: _owner, ...modelRow } = rows[0] as any;
     return {
       model: {
         ...modelRow,
@@ -181,6 +188,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     params: t.Object({ modelId: uuid() }),
     detail: {
       summary: "Dettaglio modello giudice",
+      description: "403 OWN_MODEL se il modello è del giudice; 403 se fuori scope.",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     }
@@ -223,6 +231,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     const allRows = await tenantDb
       .select({
         id: modelsTable.id,
+        userId: modelsTable.userId,
         name: modelsTable.name,
         code: modelsTable.code,
         teamCode: modelsTable.teamCode,
@@ -238,8 +247,8 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
       .where(and(...conditions))
       .orderBy(modelsTable.code);
-    const scope = await loadJudgeScope(tenantDb, user!);
-    const rows = allRows.filter((row: any) => canAccessCategory(scope, { id: row.categoryId, eventId: row.eventId }));
+    const ctx = await loadJudgeContext(tenantDb, user!);
+    const rows = allRows.filter((row: any) => row.userId !== user!.id && judgeCanVote(ctx, row));
     if (!rows.length) return [];
 
     const votes = await tenantDb
@@ -249,6 +258,13 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       .orderBy(desc(votesTable.createdAt), desc(votesTable.seq));
     const latest = new Map<string, number>();
     for (const vote of votes) if (!latest.has(vote.modelId)) latest.set(vote.modelId, vote.rank);
+
+    // Discordant models: only in categories in reconciliation (every counted judge completed, votes still discordant).
+    const discordant = new Set<string>();
+    for (const categoryId of new Set<string>(rows.filter((r: any) => r.categoryStatus === "open").map((r: any) => r.categoryId as string))) {
+      const state = await loadCompletionState(tenantDb, categoryId);
+      if (state?.phase === "reconciliation") for (const id of state.discordantModelIds) discordant.add(id);
+    }
 
     const codeFormat = await loadModelCodeFormatSettings(tenantDb);
     const models = rows.map((r: any) => ({
@@ -265,13 +281,20 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     }));
     return groupDisplays(models).map((display) => ({
       ...display,
+      // A display number belongs to one (participant, category, level): the class of its first model.
+      categoryId: display.models[0].categoryId,
+      categoryName: display.models[0].categoryName,
+      categoryStatus: display.models[0].categoryStatus,
+      // The visible models are exactly those this judge is expected to vote: judged = all open ones are voted.
+      judged: display.models.filter((m) => m.categoryStatus === "open").every((m) => latest.has(m.id)),
+      issues: display.models.some((m) => discordant.has(m.id)) ? ["DISCORDANT_VOTES"] : [],
       models: display.models.map(({ eventId: _e, displayNumber: _d, ...model }) => model)
     }));
   }, {
     query: t.Object({ eventId: t.Optional(uuid()), categoryId: t.Optional(uuid()) }),
     detail: {
       summary: "Display votabili con i loro modelli",
-      description: "Raggruppa per (evento, displayNumber) i soli modelli nello scope del giudice.",
+      description: "Raggruppa per (evento, displayNumber) i soli modelli votabili dal giudice (esclusi i propri). judged: tutti i modelli aperti votati. issues: DISCORDANT_VOTES solo in fase di riconciliazione.",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     }
@@ -279,16 +302,19 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
   .post("/displays/vote", async ({ user, tenantDb, body }) => {
     const db = tenantDb as any;
     const rows = await db
-      .select({ id: modelsTable.id, categoryId: modelsTable.categoryId, eventId: categoriesTable.eventId })
+      .select({ id: modelsTable.id, categoryId: modelsTable.categoryId, eventId: categoriesTable.eventId, userId: modelsTable.userId })
       .from(modelsTable)
       .innerJoin(categoriesTable, eq(categoriesTable.id, modelsTable.categoryId))
       .where(and(eq(categoriesTable.eventId, body.eventId as any), eq(modelsTable.displayNumber, body.displayNumber)));
     if (!rows.length) throw new NotFoundError("Display not found");
-    const scope = await loadJudgeScope(db, user!);
-    const modelIds = rows
-      .filter((r: any) => canAccessCategory(scope, { id: r.categoryId, eventId: r.eventId }))
-      .map((r: any) => r.id as string);
-    if (!modelIds.length) throw new ForbiddenError("Judge is not assigned to this display");
+    // Own models are skipped; 403 only when nothing else remains.
+    const others = rows.filter((r: any) => r.userId !== user!.id);
+    const ctx = await loadJudgeContext(db, user!);
+    const modelIds = others.filter((r: any) => judgeCanVote(ctx, r)).map((r: any) => r.id as string);
+    if (!modelIds.length) {
+      if (others.length < rows.length) throw new OwnModelError("Judges cannot vote their own models");
+      throw new ForbiddenError("Judge is not assigned to this display");
+    }
     const result = await new VoteDisplay(voteTransaction(db)).execute({
       judgeId: user!.id,
       modelIds,
@@ -296,15 +322,23 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       // Re-checked inside the transaction: the model may have been moved meanwhile.
       authorize: async (model) => {
         const category = await loadCategoryRef(db, model.categoryId);
-        return Boolean(category) && canAccessCategory(scope, category!);
+        const owner = await loadModelOwnerId(db, model.modelId);
+        if (!category || !owner) return false;
+        if (owner === user!.id) throw new OwnModelError();
+        return judgeCanVote(await loadJudgeContext(db, user!), { categoryId: category.id, eventId: category.eventId, userId: owner });
       }
     });
+    // Reconciliation: a category whose discordance is gone closes now.
+    const categoryOf = new Map<string, string>(rows.map((r: any) => [r.id as string, r.categoryId as string]));
+    for (const categoryId of new Set(result.votes.map((v: any) => categoryOf.get(v.modelId)!))) {
+      await reconcileCategory(db, categoryId);
+    }
     return { eventId: body.eventId, displayNumber: body.displayNumber, rank: body.rank, ...result };
   }, {
     body: t.Object({ eventId: uuid(), displayNumber: t.Integer({ minimum: 0 }), rank: rankSchema() }),
     detail: {
       summary: "Vota un intero display",
-      description: "Applica il voto a tutti i modelli del display nello scope del giudice (categorie chiuse saltate). 404 display inesistente, 403 fuori scope, 409 tutte le categorie chiuse.",
+      description: "Applica il voto a tutti i modelli votabili del display (esclusi i propri e le categorie chiuse). 404 display inesistente, 403 OWN_MODEL se restano solo modelli propri, 403 fuori scope, 409 tutte le categorie chiuse.",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     }
@@ -325,20 +359,22 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     }
   })
   .post("/categories/:categoryId/complete", async ({ user, tenantDb, params }) => {
-    // Judge must be assigned and have voted every model (409 INCOMPLETE_VOTES otherwise).
+    // Judge must be assigned and have voted every model he is expected to vote (409 INCOMPLETE_VOTES otherwise).
     const result = await closeCategory(tenantDb as any, params.categoryId, { judgeId: user!.id });
     if (result.outcome === "already_closed") throw new NotFoundError("Category not found"); // unreachable for judges
-    return {
+    const base = {
       completed: true,
       allDone: result.allDone,
       totalJudges: result.totalJudges,
-      completedJudges: result.completedJudges
+      completedJudges: result.completedJudges,
+      phase: phaseOfOutcome(result.outcome)
     };
+    return result.outcome === "reconciliation" ? { ...base, discordantModelIds: result.discordantModelIds } : base;
   }, {
     params: t.Object({ categoryId: uuid() }),
     detail: {
       summary: "Segna giudizio categoria completato",
-      description: "409 {code:'INCOMPLETE_VOTES', missing, totalModels, missingModelIds} se il giudice non ha votato tutti i modelli.",
+      description: "409 {code:'INCOMPLETE_VOTES', missing, totalModels, missingModelIds} se il giudice non ha votato tutti i modelli per cui è votante atteso. phase 'reconciliation' con discordantModelIds se restano voti discordanti: la categoria resta aperta finché non si risolvono.",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     }
@@ -347,7 +383,7 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     const { categoryId } = params;
     const state = await loadCompletionState(tenantDb, categoryId);
     if (!state) {
-      return { categoryId, status: "open", totalJudges: 0, completedJudges: 0, allDone: false };
+      return { categoryId, status: "open", phase: "judging", totalJudges: 0, completedJudges: 0, allDone: false };
     }
     const scope = await loadJudgeScope(tenantDb, user!);
     if (!canAccessCategory(scope, { id: categoryId, eventId: state.category.eventId })) {
@@ -356,13 +392,15 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
     return {
       categoryId,
       status: state.category.status as "open" | "closed",
+      phase: state.phase,
       totalJudges: state.totalJudges,
       completedJudges: state.completedJudges,
-      allDone: state.category.status === "closed" || state.allDone
+      allDone: state.category.status === "closed" || state.allDone,
+      ...(state.phase === "reconciliation" ? { discordantModelIds: state.discordantModelIds } : {})
     };
   }, {
     params: t.Object({ categoryId: uuid() }),
-    detail: { summary: "Stato completamento giudici per categoria", tags: ["Judging"], security: [{ bearerAuth: [] }] }
+    detail: { summary: "Stato completamento giudici per categoria", description: "phase: judging | reconciliation | closed. discordantModelIds solo in reconciliation.", tags: ["Judging"], security: [{ bearerAuth: [] }] }
   })
   .post("/vote", async ({ user, tenantDb, body }) => {
     const db = tenantDb as any;
@@ -371,22 +409,28 @@ export const judgeRoutes = new Elysia({ prefix: "/judge" })
       new ModelReadRepositoryDrizzle(db),
       voteTransaction(db)
     );
-    return await uc.execute({
+    const result = await uc.execute({
       id: crypto.randomUUID(),
       judgeId: user!.id,
       modelId: body.modelId,
       rank: body.rank,
       authorize: async (model) => {
         const category = await loadCategoryRef(db, model.categoryId);
-        if (!category) return false;
-        return canAccessCategory(await loadJudgeScope(db, user!), category);
+        const owner = await loadModelOwnerId(db, model.modelId);
+        if (!category || !owner) return false;
+        if (owner === user!.id) throw new OwnModelError();
+        return judgeCanVote(await loadJudgeContext(db, user!), { categoryId: category.id, eventId: category.eventId, userId: owner });
       }
     });
+    // Reconciliation: a category whose discordance is gone closes now.
+    const [voted] = await db.select({ categoryId: modelsTable.categoryId }).from(modelsTable).where(eq(modelsTable.id, body.modelId as any));
+    if (voted) await reconcileCategory(db, voted.categoryId);
+    return result;
   }, {
     body: t.Object({ modelId: uuid(), rank: rankSchema() }),
     detail: {
       summary: "Vota un modello",
-      description: "Aggiunge un voto (append-only) del giudice per un modello; vale l'ultimo. 404 modello inesistente, 403 giudice non assegnato, 409 categoria chiusa.",
+      description: "Aggiunge un voto (append-only) del giudice per un modello; vale l'ultimo. 404 modello inesistente, 403 OWN_MODEL se il modello è del giudice, 403 giudice non assegnato o stand-in su modello non di un titolare, 409 categoria chiusa.",
       tags: ["Judging"],
       security: [{ bearerAuth: [] }]
     },

@@ -1,5 +1,5 @@
 import React from "react";
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderWithProviders } from "../../test/renderWithProviders";
@@ -9,60 +9,97 @@ vi.mock("../../lib/api", () => ({ ApiError: class extends Error {}, api: (...a: 
 
 import Judge from "../Judge";
 
-const base = { imageUrl: null, voteCount: 0, description: null };
-let models: any[];
+// Anonymous display shape served by GET /judge/displays (no owner, no display-level vote field).
+const model = (id: string, name: string, code: number, currentRank: number | null = null, extra: Record<string, unknown> = {}) => ({
+  id, name, code, categoryId: "c1", categoryName: "Historical", categoryStatus: "open", imageUrl: null, currentRank, ...extra,
+});
+const display = (displayNumber: number, models: any[], extra: Record<string, unknown> = {}) => ({
+  displayNumber,
+  categoryId: "c1",
+  categoryName: "Historical",
+  categoryStatus: "open",
+  judged: models.every((m) => m.currentRank !== null),
+  issues: [] as string[],
+  models,
+  ...extra,
+});
+
+let displays: any[];
+let phase: string;
+let discordantModelIds: string[];
+
+/** Mirrors the backend: a whole-display vote sets every model and marks the display judged. */
+function applyDisplayVote(body: { displayNumber: number; rank: number }) {
+  const target = displays.find((d) => d.displayNumber === body.displayNumber);
+  if (!target) return;
+  target.models.forEach((m: any) => { m.currentRank = body.rank; });
+  target.judged = true;
+}
 
 function setup() {
   apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === "/judge/events") return [{ eventId: "e1", eventName: "MSS 2026" }];
     if (path.startsWith("/public/categories")) return [{ id: "c1", name: "Historical" }];
-    if (path.startsWith("/judge/models")) return models;
+    if (path === "/judge/displays/vote") {
+      applyDisplayVote(JSON.parse(init!.body as string));
+      return { skippedClosedModelIds: [] };
+    }
+    // copies, like a real response: React must see a new array after each refresh
+    if (path.startsWith("/judge/displays")) return JSON.parse(JSON.stringify(displays));
+    if (path.endsWith("/completion")) return { allDone: false, totalJudges: 2, completedJudges: 1, phase, discordantModelIds };
     if (path === "/judge/vote") return {};
-    if (path === "/judge/displays/vote") return { skippedClosedModelIds: [] };
     return {};
   });
+}
+
+async function pickCategory(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await screen.findByText("MSS 2026");
+  await user.click(screen.getAllByRole("combobox")[1]);
+  await user.click(await screen.findByRole("option", { name }));
 }
 
 describe("Judge", () => {
   beforeEach(() => {
     apiMock.mockReset();
-    models = [
-      { ...base, id: "m1", code: 12, displayNumber: 12, categoryId: "c1", categoryName: "Historical", currentRank: null, userId: "u1", name: "Marine", notes: "painted by hand" },
-      { ...base, id: "m2", code: 15, displayNumber: 12, categoryId: "c1", categoryName: "Historical", currentRank: null, userId: "u1", name: "Dread" },
-      { ...base, id: "m3", code: 7, displayNumber: 7, categoryId: "c1", categoryName: "Historical", currentRank: 3, userId: "u2", name: "Orc" }
+    displays = [
+      display(12, [model("m1", "Marine", 12, null, { notes: "painted by hand" }), model("m2", "Dread", 15)]),
+      display(7, [model("m3", "Orc", 7, 3)]), // already judged by this judge
     ];
+    phase = "judging";
+    discordantModelIds = [];
     setup();
   });
 
-  it("groups models per display and hides fully judged ones", async () => {
+  it("shows one anonymous tile per display and hides judged displays", async () => {
     renderWithProviders(<Judge language="en" />);
-    expect(await screen.findByText("12")).toBeInTheDocument(); // m1 and m2 share display 12
-    expect(screen.queryByText("15")).not.toBeInTheDocument();
-    expect(screen.queryByText("7")).not.toBeInTheDocument(); // u2 already judged
+    expect(await screen.findByRole("button", { name: "Display 12 (2)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Display 7/ })).not.toBeInTheDocument();
+    // no owner or model names on the tiles
+    expect(screen.queryByText("Dread")).not.toBeInTheDocument();
   });
 
-  it("shows already judged exhibitors with the show-all switch", async () => {
+  it("shows judged displays with their vote when 'show all' is on", async () => {
     const user = userEvent.setup();
     renderWithProviders(<Judge language="en" />);
-    await screen.findByText("12");
+    await screen.findByRole("button", { name: "Display 12 (2)" });
     await user.click(screen.getByRole("checkbox"));
-    expect(await screen.findByText("7")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Display 7 (1)" })).toBeInTheDocument();
   });
 
-  it("filters exhibitors by number", async () => {
+  it("filters displays by number", async () => {
     const user = userEvent.setup();
     renderWithProviders(<Judge language="en" />);
-    await screen.findByText("12");
+    await screen.findByRole("button", { name: "Display 12 (2)" });
     await user.click(screen.getByRole("checkbox"));
     await user.type(screen.getByLabelText(/display number/i), "7");
-    await waitFor(() => expect(screen.queryByText("12")).not.toBeInTheDocument());
-    expect(screen.getByText("7")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Display 12/ })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Display 7 (1)" })).toBeInTheDocument();
   });
 
-  it("opens the score screen, shows notes and scores the whole display with one action", async () => {
+  it("opens the score screen, shows notes and votes the whole display, then returns to the tiles", async () => {
     const user = userEvent.setup();
     renderWithProviders(<Judge language="en" />);
-    await user.click(await screen.findByText("12"));
+    await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     expect(screen.getByText(/painted by hand/)).toBeInTheDocument();
     const submit = screen.getByRole("button", { name: "Score whole display (2)" });
     expect(submit).toBeDisabled();
@@ -70,6 +107,8 @@ describe("Judge", () => {
     expect(submit).toBeEnabled();
     await user.click(submit);
     expect(await screen.findByText("Vote recorded.")).toBeInTheDocument();
+    // back on the tiles: the display is now judged and disappears
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Display 12 (2)" })).not.toBeInTheDocument());
     const calls = apiMock.mock.calls.filter((c) => c[0] === "/judge/displays/vote");
     expect(calls.map((c) => JSON.parse(c[1].body))).toEqual([{ eventId: "e1", displayNumber: 12, rank: 4 }]);
     expect(apiMock.mock.calls.some((c) => c[0] === "/judge/vote")).toBe(false);
@@ -78,7 +117,7 @@ describe("Judge", () => {
   it("pluralizes the selection hint in English and Italian", async () => {
     const user = userEvent.setup();
     const view = renderWithProviders(<Judge language="en" />);
-    await user.click(await screen.findByText("12"));
+    await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     expect(screen.getByText("All models (2)")).toBeInTheDocument();
     await user.click(screen.getByText(/15\s+Dread/));
     expect(screen.getByText("1 model selected")).toBeInTheDocument();
@@ -88,7 +127,7 @@ describe("Judge", () => {
     view.unmount();
 
     renderWithProviders(<Judge language="it" />);
-    await user.click(await screen.findByText("12"));
+    await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     expect(screen.getByText("Tutti i modelli (2)")).toBeInTheDocument();
     await user.click(screen.getByText(/15\s+Dread/));
     expect(screen.getByText("1 modello selezionato")).toBeInTheDocument();
@@ -99,7 +138,7 @@ describe("Judge", () => {
   it("votes only for the selected model in individual mode", async () => {
     const user = userEvent.setup();
     renderWithProviders(<Judge language="en" />);
-    await user.click(await screen.findByText("12"));
+    await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     await user.click(screen.getByText(/15\s+Dread/)); // switches to individual mode selecting m2
     await user.click(screen.getByRole("button", { name: /^2/ }));
     await user.click(screen.getByRole("button", { name: "Submit Your Score" }));
@@ -110,13 +149,13 @@ describe("Judge", () => {
   it("shows the error and does not leave the score screen when a vote fails", async () => {
     apiMock.mockImplementation(async (path: string) => {
       if (path === "/judge/events") return [{ eventId: "e1", eventName: "MSS 2026" }];
-      if (path.startsWith("/judge/models")) return models;
       if (path === "/judge/displays/vote") throw new Error("Voting closed");
+      if (path.startsWith("/judge/displays")) return displays;
       return [];
     });
     const user = userEvent.setup();
     renderWithProviders(<Judge language="en" />);
-    await user.click(await screen.findByText("12"));
+    await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     await user.click(screen.getByRole("button", { name: /^1/ }));
     await user.click(screen.getByRole("button", { name: "Score whole display (2)" }));
     expect(await screen.findByText("Voting closed")).toBeInTheDocument();
@@ -124,13 +163,13 @@ describe("Judge", () => {
   });
 
   it("keeps two displays of the same participant apart", async () => {
-    models = [
-      { ...base, id: "a", code: 1, displayNumber: 1, categoryId: "c1", categoryName: "H", currentRank: null, userId: "u1", name: "A" },
-      { ...base, id: "b", code: 2, displayNumber: 2, categoryId: "c1", categoryName: "H", currentRank: null, userId: "u1", name: "B" }
+    displays = [
+      display(1, [model("a", "A", 1)]),
+      display(2, [model("b", "B", 2)]),
     ];
     renderWithProviders(<Judge language="en" />);
-    expect(await screen.findByText("1")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Display 1 (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Display 2 (1)" })).toBeInTheDocument();
   });
 
   it("shows the toast when events fail to load", async () => {
@@ -143,26 +182,85 @@ describe("Judge", () => {
   });
 });
 
+describe("Judge phases", () => {
+  beforeEach(() => {
+    apiMock.mockReset();
+    displays = [
+      display(3, [model("m5", "Ork", 5, 1)], { judged: true, issues: ["DISCORDANT_VOTES"] }),
+      display(5, [model("m6", "Gob", 6, 2)], { judged: true }),
+      display(8, [model("m7", "Elf", 8, 4)], { judged: true }),
+    ];
+    phase = "reconciliation";
+    discordantModelIds = ["m5"];
+    setup();
+  });
+
+  it("in reconciliation shows only the displays with discordant votes, marked with an error", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Judge language="en" />);
+    await pickCategory(user, "Historical");
+    expect(await screen.findByText("Phase 2 · reconciliation")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Display 3 (1)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Display 5 (1)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Display 8 (1)" })).not.toBeInTheDocument();
+    expect(screen.getAllByTitle("The judges' votes on this display are too far apart: compare notes and correct them.").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("checkbox"));
+    expect(await screen.findByRole("button", { name: "Display 5 (1)" })).toBeInTheDocument();
+  });
+
+  it("explains the discordance on the score screen of a display", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Judge language="en" />);
+    await pickCategory(user, "Historical");
+    await user.click(await screen.findByRole("button", { name: "Display 3 (1)" }));
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText(/too far apart/)).toBeInTheDocument();
+  });
+
+  it("closed class is read-only: no vote can be recorded", async () => {
+    phase = "closed";
+    const user = userEvent.setup();
+    renderWithProviders(<Judge language="en" />);
+    await pickCategory(user, "Historical");
+    expect(await screen.findByText("Class closed")).toBeInTheDocument();
+    // closed shows every display, judged or not
+    await user.click(await screen.findByRole("button", { name: "Display 5 (1)" }));
+    expect(screen.getByText(/votes are read-only/)).toBeInTheDocument();
+    for (const score of ["0", "1", "2", "3", "4"]) {
+      expect(screen.getByRole("button", { name: new RegExp(`^${score}`) })).toBeDisabled();
+    }
+    expect(screen.getByRole("button", { name: "Score whole display (1)" })).toBeDisabled();
+    expect(apiMock.mock.calls.some((c) => c[0] === "/judge/displays/vote" || c[0] === "/judge/vote")).toBe(false);
+  });
+});
+
 describe("Judge completion", () => {
-  const judged = (id: string, userId: string, categoryId: string, n: number) =>
-    ({ ...base, id, code: n, displayNumber: n, categoryId, categoryName: categoryId, currentRank: 2, userId, name: id });
+  const judgedDisplay = (n: number, categoryId: string, rank: number | null) => ({
+    displayNumber: n,
+    categoryId,
+    categoryName: categoryId,
+    judged: rank !== null,
+    issues: [],
+    models: [{ id: `m${n}`, name: `M${n}`, code: n, imageUrl: null, currentRank: rank }],
+  });
   let completionCalls: string[];
   let completionImpl: (path: string) => Promise<any>;
   let completeImpl: () => Promise<any>;
-  let allModels: any[];
+  let allDisplays: any[];
 
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     completionCalls = [];
     completionImpl = async () => ({ allDone: false, totalJudges: 2, completedJudges: 1 });
     completeImpl = async () => ({ completed: true, allDone: false, totalJudges: 2, completedJudges: 1 });
-    // c1 fully judged; c2 has an unjudged model. The mock ignores categoryId like an old backend.
-    allModels = [judged("a", "u1", "c1", 1), { ...judged("b", "u2", "c2", 2), currentRank: null }];
+    // c1 fully judged; c2 has an unjudged display. The mock ignores categoryId like an old backend.
+    allDisplays = [judgedDisplay(1, "c1", 2), judgedDisplay(2, "c2", null)];
     apiMock.mockReset();
     apiMock.mockImplementation(async (path: string) => {
       if (path === "/judge/events") return [{ eventId: "e1", eventName: "MSS 2026" }];
       if (path.startsWith("/public/categories")) return [{ id: "c1", name: "Historical" }, { id: "c2", name: "Sci-Fi" }];
-      if (path.startsWith("/judge/models")) return allModels;
+      if (path.startsWith("/judge/displays")) return allDisplays;
       if (path.endsWith("/complete")) return completeImpl();
       if (path.endsWith("/completion")) { completionCalls.push(path); return completionImpl(path); }
       return {};
@@ -185,6 +283,7 @@ describe("Judge completion", () => {
     await selectCategory(user, "Historical");
     await user.click(await screen.findByRole("button", { name: "Judging Complete" }));
     await screen.findByText(/Waiting for other judges/);
+    completionCalls.length = 0; // count only the polls from here on
   }
 
   it("computes 'all judged' on the selected category only", async () => {
@@ -211,13 +310,20 @@ describe("Judge completion", () => {
   it("ignores a late completion response after the category changed", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     let release: (v: any) => void = () => {};
-    completionImpl = () => new Promise((r) => { release = r; });
+    // 1st call: phase on category selection (immediate). 2nd call: the first poll (held open).
+    let calls = 0;
+    completionImpl = () => {
+      calls++;
+      return calls === 2
+        ? new Promise((r) => { release = r; })
+        : Promise.resolve({ allDone: false, totalJudges: 2, completedJudges: 1 });
+    };
     await startPolling(user);
     await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
     expect(completionCalls.length).toBe(1);
     await selectCategory(user, "Sci-Fi");
     await act(async () => { release({ allDone: true, totalJudges: 2, completedJudges: 2 }); });
-    expect(screen.queryByText("All judges have completed")).not.toBeInTheDocument();
+    expect(screen.queryByText("All judges completed")).not.toBeInTheDocument();
     expect(screen.queryByText(/Waiting for other judges/)).not.toBeInTheDocument();
   });
 

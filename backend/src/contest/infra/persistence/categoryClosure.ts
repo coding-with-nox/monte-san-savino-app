@@ -1,22 +1,27 @@
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
-  awardBracketsTable, awardsTable, categoriesTable, judgeAssignmentsTable, judgeCompletionsTable, modelsTable, settingsTable, votesTable
+  awardBracketsTable, awardsTable, categoriesTable, judgeCompletionsTable, modelsTable, settingsTable, votesTable
 } from "./schema";
+import { loadEventAssignments } from "./judgeAccess";
 import {
-  computeAwards, evaluateCompletion, JUDGING_SETTING_KEYS, latestVotePerJudgeModel, missingVoteModelIds, parseJudgingRules,
-  serializeAwardIssues, type AwardRow, type Bracket, type JudgingSettingKey, type LatestVote
+  assessCategory, categoryPhase, judgeMissingVoteModelIds, JUDGING_SETTING_KEYS, latestVotePerJudgeModel, parseJudgingRules,
+  readyToClose, serializeAwardIssues, type AwardRow, type Bracket, type CategoryAssessment, type JudgingSettingKey, type LatestVote,
+  type ModelExpectation
 } from "../../domain/categoryClosure";
+import { assignedJudgeIds, expectedVoterIds, type JudgeAssignmentRow } from "../../domain/expectedVoters";
 import { CategoryClosedError, ConflictError, ForbiddenError, IncompleteVotesError, NotFoundError } from "../../domain/errors";
 
 /** All operations are executed on a transaction-scoped store. */
 export interface ClosureStore {
   /** SELECT ... FOR UPDATE on the category row. */
   lockCategory(categoryId: string): Promise<{ id: string; eventId: string; status: string } | null>;
-  listAssignedJudgeIds(eventId: string, categoryId: string): Promise<string[]>;
-  listCategoryModelIds(categoryId: string): Promise<string[]>;
+  /** Assignments (regular and stand-in) of every judge of the event. */
+  listEventAssignments(eventId: string): Promise<JudgeAssignmentRow[]>;
+  /** Models of the category with their owners. */
+  listCategoryModels(categoryId: string): Promise<{ modelId: string; ownerId: string }[]>;
   listVotedModelIds(judgeId: string, modelIds: string[]): Promise<string[]>;
   /** Newest first: ORDER BY created_at DESC, seq DESC. */
-  listVotesNewestFirst(modelIds: string[], judgeIds: string[]): Promise<LatestVote[]>;
+  listVotesNewestFirst(modelIds: string[]): Promise<LatestVote[]>;
   listBrackets(eventId: string): Promise<Bracket[]>;
   /** Values of the given settings keys (missing keys are absent from the result). */
   listSettingValues(keys: string[]): Promise<Partial<Record<JudgingSettingKey, string>>>;
@@ -29,24 +34,57 @@ export interface ClosureStore {
 }
 
 export type CloseResult =
-  | { outcome: "closed"; allDone: true; totalJudges: number; completedJudges: number }
+  | { outcome: "closed"; allDone: boolean; totalJudges: number; completedJudges: number }
   | { outcome: "pending"; allDone: false; totalJudges: number; completedJudges: number }
+  | { outcome: "reconciliation"; allDone: true; totalJudges: number; completedJudges: number; discordantModelIds: string[] }
   | { outcome: "already_closed" };
 
 type TxRunner = { transaction: <T>(fn: (tx: any) => Promise<T>) => Promise<T> };
 const defaultStore = (tx: any): ClosureStore => new DrizzleClosureStore(tx);
 
+type CategoryRow = { id: string; eventId: string; status: string };
+
+/** Expected voters of every model of the category, from the event assignments and the model owners. */
+async function loadExpectations(store: ClosureStore, category: CategoryRow): Promise<{ models: ModelExpectation[]; assigned: string[] }> {
+  const ref = { id: category.id, eventId: category.eventId };
+  const assignments = await store.listEventAssignments(category.eventId);
+  const models = (await store.listCategoryModels(category.id)).map((m) => ({
+    modelId: m.modelId,
+    expectedJudgeIds: expectedVoterIds(assignments, ref, m.ownerId)
+  }));
+  return { models, assigned: assignedJudgeIds(assignments, ref) };
+}
+
+/** Awards, completion and discordance from the current votes. */
+async function assess(store: ClosureStore, category: CategoryRow, models: ModelExpectation[]): Promise<CategoryAssessment> {
+  const modelIds = models.map((m) => m.modelId);
+  const votes = latestVotePerJudgeModel(await store.listVotesNewestFirst(modelIds));
+  return assessCategory({
+    models,
+    votes,
+    completedJudgeIds: await store.listCompletedJudgeIds(category.id),
+    brackets: await store.listBrackets(category.eventId),
+    rules: parseJudgingRules(await store.listSettingValues([...JUDGING_SETTING_KEYS]))
+  });
+}
+
+/** Freezes the awards and closes the category (the caller holds the transaction). */
+async function freezeAndClose(store: ClosureStore, category: CategoryRow, awards: AwardRow[]): Promise<void> {
+  if (awards.length > 0) await store.upsertAwards(category.id, awards);
+  await store.setStatus(category.id, "closed");
+}
+
 /**
  * Single entry point to close a category. Everything runs in ONE transaction holding a row lock on
  * the category, so concurrent completions/closures serialize and awards are all-or-nothing.
  *
- *  - { judgeId }: judge completion path. The judge must be assigned and must have voted every
- *    model (else 409 INCOMPLETE_VOTES). The completion is recorded, and the category is closed only if
- *    ALL assigned judges (distinct, assigned only) completed and there is at least one.
+ *  - { judgeId }: judge completion path. The judge must be assigned and must have voted every model where he
+ *    is an expected voter (else 409 INCOMPLETE_VOTES). The completion is recorded. When every counted judge
+ *    completed: with no discordant votes the category is closed; otherwise it enters reconciliation and stays open.
  *  - no judgeId: manager's manual close. Requires at least one assigned judge (else 409 NO_JUDGES).
  *    Missing votes are allowed: unvoted models get a score of 0 and the awards flag the issues.
  *
- * Awards use the judging rules stored in settings (maxVotesPerExhibitor, maxVoteDifferent).
+ * Awards use the expected voters of each model and the judging rules stored in settings.
  */
 export async function closeCategory(
   db: TxRunner,
@@ -63,38 +101,57 @@ export async function closeCategory(
       return { outcome: "already_closed" } as CloseResult;
     }
 
-    const assigned = await store.listAssignedJudgeIds(category.eventId, categoryId);
-    const modelIds = await store.listCategoryModelIds(categoryId);
+    const { models, assigned } = await loadExpectations(store, category);
 
     if (opts.judgeId) {
-      if (!assigned.includes(opts.judgeId)) throw new ForbiddenError("Judge is not assigned to this category");
-      const voted = await store.listVotedModelIds(opts.judgeId, modelIds);
-      const missing = missingVoteModelIds(modelIds, voted);
-      if (missing.length > 0) throw new IncompleteVotesError(missing.length, modelIds.length, missing);
-      await store.upsertCompletion(opts.judgeId, categoryId);
-    }
-
-    const completed = await store.listCompletedJudgeIds(categoryId);
-    const state = evaluateCompletion(assigned, completed);
-
-    if (opts.judgeId) {
-      if (!state.allDone) {
-        return { outcome: "pending", allDone: false, totalJudges: state.totalJudges, completedJudges: state.completedJudges } as CloseResult;
+      const judgeId = opts.judgeId;
+      if (!assigned.includes(judgeId)) throw new ForbiddenError("Judge is not assigned to this category");
+      const voted = await store.listVotedModelIds(judgeId, models.map((m) => m.modelId));
+      const missing = judgeMissingVoteModelIds(models, judgeId, voted);
+      if (missing.length > 0) {
+        const expectedCount = models.filter((m) => m.expectedJudgeIds.includes(judgeId)).length;
+        throw new IncompleteVotesError(missing.length, expectedCount, missing);
       }
-    } else if (state.totalJudges === 0) {
+      await store.upsertCompletion(judgeId, categoryId);
+    } else if (assigned.length === 0) {
       throw new ConflictError("Cannot close category: no judges assigned", {}, "NO_JUDGES");
     }
 
-    // Freeze awards (same transaction as the status change: all or nothing)
-    if (modelIds.length > 0) {
-      const votes = await store.listVotesNewestFirst(modelIds, assigned);
-      const brackets = await store.listBrackets(category.eventId);
-      const rules = parseJudgingRules(await store.listSettingValues([...JUDGING_SETTING_KEYS]));
-      const awards = computeAwards(modelIds, assigned, latestVotePerJudgeModel(votes), brackets, rules);
-      await store.upsertAwards(categoryId, awards);
+    const assessment = await assess(store, category, models);
+    const { completion, discordantModelIds } = assessment;
+    const totals = { totalJudges: completion.totalJudges, completedJudges: completion.completedJudges };
+
+    if (opts.judgeId) {
+      if (!completion.allDone) return { outcome: "pending", allDone: false, ...totals } as CloseResult;
+      if (discordantModelIds.length > 0) {
+        return { outcome: "reconciliation", allDone: true, ...totals, discordantModelIds } as CloseResult;
+      }
     }
-    await store.setStatus(categoryId, "closed");
-    return { outcome: "closed", allDone: true, totalJudges: state.totalJudges, completedJudges: state.completedJudges } as CloseResult;
+    await freezeAndClose(store, category, assessment.awards);
+    return { outcome: "closed", allDone: completion.allDone, ...totals } as CloseResult;
+  });
+}
+
+/**
+ * Run after every vote. A category in reconciliation (all counted judges completed) closes as soon as no
+ * discordant votes are left. Returns `closed: true` when this call closed it.
+ */
+export async function reconcileCategory(
+  db: TxRunner,
+  categoryId: string,
+  makeStore: (tx: any) => ClosureStore = defaultStore
+): Promise<{ closed: boolean }> {
+  return await db.transaction(async (tx) => {
+    const store = makeStore(tx);
+    const category = await store.lockCategory(categoryId);
+    if (!category || category.status === "closed") return { closed: false };
+    // Cheap exit: nothing can be complete before the first judge completes.
+    if ((await store.listCompletedJudgeIds(categoryId)).length === 0) return { closed: false };
+    const { models } = await loadExpectations(store, category);
+    const assessment = await assess(store, category, models);
+    if (!readyToClose(category.status, assessment)) return { closed: false };
+    await freezeAndClose(store, category, assessment.awards);
+    return { closed: true };
   });
 }
 
@@ -127,19 +184,15 @@ export class DrizzleClosureStore implements ClosureStore {
       .for("update");
     return rows[0] ?? null;
   }
-  async listAssignedJudgeIds(eventId: string, categoryId: string) {
-    const rows = await this.db
-      .select({ judgeId: judgeAssignmentsTable.judgeId })
-      .from(judgeAssignmentsTable)
-      .where(and(
-        eq(judgeAssignmentsTable.eventId, eventId as any),
-        or(eq(judgeAssignmentsTable.categoryId, categoryId as any), isNull(judgeAssignmentsTable.categoryId))
-      ));
-    return [...new Set<string>(rows.map((r: any) => r.judgeId))];
+  async listEventAssignments(eventId: string) {
+    return await loadEventAssignments(this.db, [eventId]);
   }
-  async listCategoryModelIds(categoryId: string) {
-    const rows = await this.db.select({ id: modelsTable.id }).from(modelsTable).where(eq(modelsTable.categoryId, categoryId as any));
-    return rows.map((r: any) => r.id as string);
+  async listCategoryModels(categoryId: string) {
+    const rows = await this.db
+      .select({ modelId: modelsTable.id, ownerId: modelsTable.userId })
+      .from(modelsTable)
+      .where(eq(modelsTable.categoryId, categoryId as any));
+    return rows.map((r: any) => ({ modelId: r.modelId as string, ownerId: r.ownerId as string }));
   }
   async listVotedModelIds(judgeId: string, modelIds: string[]) {
     if (!modelIds.length) return [];
@@ -149,12 +202,12 @@ export class DrizzleClosureStore implements ClosureStore {
       .where(and(eq(votesTable.judgeId, judgeId as any), inArray(votesTable.modelId, modelIds as any)));
     return rows.map((r: any) => r.modelId as string);
   }
-  async listVotesNewestFirst(modelIds: string[], judgeIds: string[]) {
-    if (!modelIds.length || !judgeIds.length) return [];
+  async listVotesNewestFirst(modelIds: string[]) {
+    if (!modelIds.length) return [];
     return await this.db
       .select({ judgeId: votesTable.judgeId, modelId: votesTable.modelId, rank: votesTable.rank })
       .from(votesTable)
-      .where(and(inArray(votesTable.modelId, modelIds as any), inArray(votesTable.judgeId, judgeIds as any)))
+      .where(inArray(votesTable.modelId, modelIds as any))
       .orderBy(desc(votesTable.createdAt), desc(votesTable.seq));
   }
   async listBrackets(eventId: string) {
@@ -206,16 +259,26 @@ export class DrizzleClosureStore implements ClosureStore {
   }
 }
 
-/** Loads the completion state for read-only endpoints (only assigned judges count). */
+/**
+ * Completion state for read-only endpoints. `phase` is "reconciliation" only when every counted judge
+ * completed and discordant votes remain; `discordantModelIds` are the models with DISCORDANT_VOTES.
+ */
 export async function loadCompletionState(db: any, categoryId: string) {
-  const store = new DrizzleClosureStore(db);
   const rows = await db
     .select({ id: categoriesTable.id, eventId: categoriesTable.eventId, status: categoriesTable.status })
     .from(categoriesTable)
     .where(eq(categoriesTable.id, categoryId as any));
-  const category = rows[0];
+  const category: CategoryRow | undefined = rows[0];
   if (!category) return null;
-  const assigned = await store.listAssignedJudgeIds(category.eventId, categoryId);
-  const completed = await store.listCompletedJudgeIds(categoryId);
-  return { category, ...evaluateCompletion(assigned, completed) };
+  const store = new DrizzleClosureStore(db);
+  const { models } = await loadExpectations(store, category);
+  const assessment = await assess(store, category, models);
+  return {
+    category,
+    phase: categoryPhase(category.status, assessment),
+    totalJudges: assessment.completion.totalJudges,
+    completedJudges: assessment.completion.completedJudges,
+    allDone: assessment.completion.allDone,
+    discordantModelIds: assessment.discordantModelIds
+  };
 }

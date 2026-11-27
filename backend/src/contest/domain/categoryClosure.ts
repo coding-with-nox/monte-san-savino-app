@@ -6,6 +6,8 @@
 export type Bracket = { medalLabel: string; medalRank: number; lowLimit: number; highLimit: number };
 export type LatestVote = { judgeId: string; modelId: string; rank: number };
 export type AwardRow = { modelId: string; totalScore: number; medalLabel: string; medalRank: number; issues: string[] };
+/** Judges expected to vote a model (see expectedVoters.ts). */
+export type ModelExpectation = { modelId: string; expectedJudgeIds: string[] };
 
 /** N = votes per exhibitor (votesPerExhibit), D = max allowed spread between judges (maxDelta). */
 export type JudgingRules = { votesPerExhibit: number; maxDelta: number };
@@ -75,31 +77,26 @@ export function bracketInputError(b: Bracket): string | null {
 
 /**
  * Computes the award of each model. `latestVotes` must contain AT MOST the latest vote per
- * (judge, model); only votes of `judgeIds` (assigned judges) are used.
+ * (judge, model). Only votes of the EXPECTED voters of each model are used.
  *
  * Score (Emperor rule): with `voters` judges who voted the model, totalScore = round(mean(ranks) * N).
  * With exactly N judges this is the plain sum; with fewer voters it is scaled up. No vote => 0.
  *
  * Issues:
- *  - PARTIAL_VOTES: 0 < voters < assigned judges.
+ *  - PARTIAL_VOTES: 0 < voters < expected voters of the model.
  *  - DISCORDANT_VOTES: voters > 1 and (max(ranks) * voters - sum(ranks)) > D.
  */
 export function computeAwards(
-  modelIds: string[],
-  judgeIds: string[],
+  models: ModelExpectation[],
   latestVotes: LatestVote[],
   brackets: Bracket[],
   rules: JudgingRules
 ): AwardRow[] {
-  const judges = new Set(judgeIds);
   const rankByKey = new Map<string, number>();
-  for (const v of latestVotes) {
-    if (!judges.has(v.judgeId)) continue;
-    rankByKey.set(`${v.judgeId}::${v.modelId}`, v.rank);
-  }
-  return modelIds.map((modelId) => {
+  for (const v of latestVotes) rankByKey.set(`${v.judgeId}::${v.modelId}`, v.rank);
+  return models.map(({ modelId, expectedJudgeIds }) => {
     const ranks: number[] = [];
-    for (const judgeId of judges) {
+    for (const judgeId of new Set(expectedJudgeIds)) {
       const rank = rankByKey.get(`${judgeId}::${modelId}`);
       if (rank !== undefined) ranks.push(rank);
     }
@@ -108,7 +105,7 @@ export function computeAwards(
     // Integer arithmetic before the division keeps .5 cases exact.
     const totalScore = voters > 0 ? Math.round((sum * rules.votesPerExhibit) / voters) : 0;
     const issues: string[] = [];
-    if (voters > 0 && voters < judges.size) issues.push("PARTIAL_VOTES");
+    if (voters > 0 && voters < new Set(expectedJudgeIds).size) issues.push("PARTIAL_VOTES");
     if (voters > 1 && Math.max(...ranks) * voters - sum > rules.maxDelta) issues.push("DISCORDANT_VOTES");
     return { modelId, totalScore, ...selectBracket(brackets, totalScore), issues };
   });
@@ -149,21 +146,65 @@ export function latestVotePerJudgeModel<T extends LatestVote>(votesNewestFirst: 
 export type CompletionState = { totalJudges: number; completedJudges: number; allDone: boolean };
 
 /**
- * Only completions by judges ASSIGNED to the category (directly or event-wide) count, counted
- * as distinct judges. With zero assigned judges the category can never be considered done.
+ * `countedJudgeIds` are the judges that count for the category (expected voters of at least one model).
+ * Completions by anybody else are ignored; counted as distinct judges. Zero counted judges => never done.
  */
-export function evaluateCompletion(assignedJudgeIds: string[], completedJudgeIds: string[]): CompletionState {
-  const assigned = new Set(assignedJudgeIds);
-  const completed = new Set(completedJudgeIds.filter((id) => assigned.has(id)));
+export function evaluateCompletion(countedJudgeIds: string[], completedJudgeIds: string[]): CompletionState {
+  const counted = new Set(countedJudgeIds);
+  const completed = new Set(completedJudgeIds.filter((id) => counted.has(id)));
   return {
-    totalJudges: assigned.size,
+    totalJudges: counted.size,
     completedJudges: completed.size,
-    allDone: assigned.size > 0 && completed.size >= assigned.size
+    allDone: counted.size > 0 && completed.size >= counted.size
   };
 }
 
-/** Models of the category the judge has NOT voted at least once. */
-export function missingVoteModelIds(categoryModelIds: string[], votedModelIds: string[]): string[] {
+/** Models where the judge is an expected voter and has NO vote yet. */
+export function judgeMissingVoteModelIds(models: ModelExpectation[], judgeId: string, votedModelIds: string[]): string[] {
   const voted = new Set(votedModelIds);
-  return categoryModelIds.filter((id) => !voted.has(id));
+  return models
+    .filter((m) => m.expectedJudgeIds.includes(judgeId) && !voted.has(m.modelId))
+    .map((m) => m.modelId);
+}
+
+/** Judges counted for the category: expected voters of at least one model. */
+export function countedJudgeIds(models: ModelExpectation[]): string[] {
+  return [...new Set(models.flatMap((m) => m.expectedJudgeIds))];
+}
+
+export type CategoryAssessment = {
+  awards: AwardRow[];
+  completion: CompletionState;
+  discordantModelIds: string[];
+};
+
+/** Awards, completion and discordance of a category, from its current votes. */
+export function assessCategory(input: {
+  models: ModelExpectation[];
+  votes: LatestVote[];
+  completedJudgeIds: string[];
+  brackets: Bracket[];
+  rules: JudgingRules;
+}): CategoryAssessment {
+  const awards = computeAwards(input.models, input.votes, input.brackets, input.rules);
+  return {
+    awards,
+    completion: evaluateCompletion(countedJudgeIds(input.models), input.completedJudgeIds),
+    discordantModelIds: awards.filter((a) => a.issues.includes("DISCORDANT_VOTES")).map((a) => a.modelId)
+  };
+}
+
+/**
+ * Emperor "phase 2": once every counted judge completed, a category with discordant votes stays open
+ * (reconciliation) until the discordance is fixed. Closed categories are always "closed".
+ */
+export type CategoryPhase = "judging" | "reconciliation" | "closed";
+export function categoryPhase(status: string, assessment: CategoryAssessment): CategoryPhase {
+  if (status === "closed") return "closed";
+  return assessment.completion.allDone && assessment.discordantModelIds.length > 0 ? "reconciliation" : "judging";
+}
+
+/** The category can be closed now: open, every counted judge completed and no discordance left. */
+export function readyToClose(status: string, assessment: CategoryAssessment): boolean {
+  return status === "open" && assessment.completion.allDone && assessment.discordantModelIds.length === 0;
 }

@@ -1,9 +1,15 @@
 import { describe, it, expect } from "bun:test";
-import { closeCategory, reopenCategory, type ClosureStore } from "../categoryClosure";
+import { closeCategory, reconcileCategory, reopenCategory, type ClosureStore } from "../categoryClosure";
 
 type State = {
   category: { id: string; eventId: string; status: string } | null;
-  assigned: string[]; models: string[];
+  /** Regular judges (event-wide assignments). */
+  assigned: string[];
+  /** Stand-in judges of category c1. */
+  standIns: string[];
+  models: string[];
+  /** Model owner (default "owner", a user who is not a judge). */
+  owners: Record<string, string>;
   votes: { judgeId: string; modelId: string; rank: number }[]; // newest first
   completions: string[]; awards: any[];
   brackets: any[];
@@ -14,7 +20,7 @@ type State = {
 function fakeDb(initial: Partial<State> = {}) {
   let state: State = {
     category: { id: "c1", eventId: "e1", status: "open" },
-    assigned: ["j1", "j2"], models: ["m1", "m2"], votes: [], completions: [], awards: [],
+    assigned: ["j1", "j2"], standIns: [], models: ["m1", "m2"], owners: {}, votes: [], completions: [], awards: [],
     brackets: [{ medalLabel: "Gold", medalRank: 4, lowLimit: 11, highLimit: 12 }],
     settings: {},
     ...initial
@@ -22,8 +28,11 @@ function fakeDb(initial: Partial<State> = {}) {
   const calls: string[] = [];
   const store: ClosureStore = {
     lockCategory: async () => { calls.push("lock"); return state.category ? { ...state.category } : null; },
-    listAssignedJudgeIds: async () => state.assigned,
-    listCategoryModelIds: async () => state.models,
+    listEventAssignments: async () => [
+      ...state.assigned.map((judgeId) => ({ judgeId, eventId: "e1", categoryId: null, standingIn: false })),
+      ...state.standIns.map((judgeId) => ({ judgeId, eventId: "e1", categoryId: "c1", standingIn: true }))
+    ],
+    listCategoryModels: async () => state.models.map((modelId) => ({ modelId, ownerId: state.owners[modelId] ?? "owner" })),
     listVotedModelIds: async (j) => [...new Set(state.votes.filter((v) => v.judgeId === j).map((v) => v.modelId))],
     listVotesNewestFirst: async () => state.votes,
     listBrackets: async () => state.brackets,
@@ -169,5 +178,61 @@ describe("reopenCategory", () => {
   it("404 on missing category", async () => {
     const f = fakeDb({ category: null });
     expect(((await reopenCategory(f.db, "c1", makeStore(f)).catch((e) => e)) as any).status).toBe(404);
+  });
+});
+
+describe("closeCategory - reconciliation (phase 2)", () => {
+  it("discordant votes after all counted judges completed: stays open, then a fixing vote closes it", async () => {
+    const f = fakeDb({
+      assigned: ["j1", "j2", "j3"], models: ["m1"],
+      votes: [{ judgeId: "j1", modelId: "m1", rank: 4 }, { judgeId: "j2", modelId: "m1", rank: 4 }, { judgeId: "j3", modelId: "m1", rank: 1 }],
+      completions: ["j1", "j2"]
+    });
+    const r = await closeCategory(f.db, "c1", { judgeId: "j3" }, makeStore(f));
+    expect(r).toEqual({ outcome: "reconciliation", allDone: true, totalJudges: 3, completedJudges: 3, discordantModelIds: ["m1"] });
+    expect(f.state.category!.status).toBe("open");
+    expect(f.state.awards).toEqual([]);
+
+    // j3 changes his vote (newest first): the discordance is gone, so the category closes.
+    f.state.votes.unshift({ judgeId: "j3", modelId: "m1", rank: 4 });
+    expect(await reconcileCategory(f.db, "c1", makeStore(f))).toEqual({ closed: true });
+    expect(f.state.category!.status).toBe("closed");
+    expect(f.state.awards).toEqual([{ modelId: "m1", totalScore: 12, medalLabel: "Gold", medalRank: 4, issues: [] }]);
+  });
+
+  it("reconcileCategory keeps the category open while discordance remains, and ignores closed categories", async () => {
+    const f = fakeDb({
+      assigned: ["j1", "j2", "j3"], models: ["m1"],
+      votes: [{ judgeId: "j1", modelId: "m1", rank: 4 }, { judgeId: "j2", modelId: "m1", rank: 4 }, { judgeId: "j3", modelId: "m1", rank: 1 }],
+      completions: ["j1", "j2", "j3"]
+    });
+    expect(await reconcileCategory(f.db, "c1", makeStore(f))).toEqual({ closed: false });
+    expect(f.state.category!.status).toBe("open");
+    const closed = fakeDb({ category: { id: "c1", eventId: "e1", status: "closed" } });
+    expect(await reconcileCategory(closed.db, "c1", makeStore(closed))).toEqual({ closed: false });
+  });
+
+  it("a stand-in covers the model of a regular judge: the owner judge is not expected on it", async () => {
+    const f = fakeDb({
+      assigned: ["j1"], standIns: ["s1"], models: ["m1"], owners: { m1: "j1" },
+      votes: [{ judgeId: "s1", modelId: "m1", rank: 4 }]
+    });
+    // j1 owns m1: he has no expected model, his completion is recorded but the stand-in is the only counted judge.
+    const first = await closeCategory(f.db, "c1", { judgeId: "j1" }, makeStore(f));
+    expect(first).toEqual({ outcome: "pending", allDone: false, totalJudges: 1, completedJudges: 0 });
+    const second = await closeCategory(f.db, "c1", { judgeId: "s1" }, makeStore(f));
+    expect(second.outcome).toBe("closed");
+    expect(f.state.awards).toEqual([{ modelId: "m1", totalScore: 12, medalLabel: "Gold", medalRank: 4, issues: [] }]);
+  });
+
+  it("the owner judge's completion is recorded but the category waits for the counted stand-in", async () => {
+    const f = fakeDb({
+      assigned: ["j1"], standIns: ["s1"], models: ["m1"], owners: { m1: "j1" },
+      votes: [{ judgeId: "j1", modelId: "m1", rank: 4 }]
+    });
+    // j1 has no vote to give (he owns m1), so no 409; the completion is stored and the category stays open.
+    const r = await closeCategory(f.db, "c1", { judgeId: "j1" }, makeStore(f));
+    expect(r.outcome).toBe("pending");
+    expect(f.state.completions).toEqual(["j1"]);
   });
 });

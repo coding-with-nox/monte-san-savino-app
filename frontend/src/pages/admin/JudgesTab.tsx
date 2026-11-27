@@ -1,12 +1,14 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Box,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   Grid,
   InputLabel,
   List,
@@ -15,10 +17,12 @@ import {
   MenuItem,
   Select,
   Stack,
+  Tooltip,
   Typography
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import { api } from "../../lib/api";
 import { Language, t } from "../../lib/i18n";
 import SectionCard from "../../components/SectionCard";
@@ -30,7 +34,7 @@ import type { AdminUser } from "./types";
 import type { AdminData } from "./useAdminData";
 import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
-type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null };
+type JudgeAssignmentEntry = { id: string; eventId: string; judgeId: string; categoryId?: string | null; standingIn?: boolean };
 type MonitoringRow = {
   categoryId: string; categoryName: string; status: string;
   totalModels: number; scoredModels: number; percentComplete: number;
@@ -43,10 +47,10 @@ export default function JudgesTab({ language, data }: { language: Language; data
   const toast = useToast();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [assignments, setAssignments] = useState<JudgeAssignmentEntry[]>([]);
-  const [form, setForm] = useState({ eventId: "", judgeId: "", categoryId: "" });
+  const [form, setForm] = useState({ eventId: "", judgeId: "", categoryIds: [] as string[], standingIn: false });
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<JudgeAssignmentEntry | null>(null);
-  const [editForm, setEditForm] = useState({ eventId: "", judgeId: "", categoryId: "" });
+  const [editForm, setEditForm] = useState({ eventId: "", judgeId: "", categoryId: "", standingIn: false });
   const [monitoringEventId, setMonitoringEventId] = useState("");
   const [monitoringData, setMonitoringData] = useState<MonitoringRow[]>([]);
 
@@ -67,12 +71,19 @@ export default function JudgesTab({ language, data }: { language: Language; data
   );
 
   async function assignJudge() {
-    const body: Record<string, string> = { eventId: form.eventId, judgeId: form.judgeId };
-    if (form.categoryId.trim()) body.categoryId = form.categoryId.trim();
-    await api("/admin/judges/assignments", { method: "POST", body: JSON.stringify(body) });
-    setForm({ eventId: "", judgeId: "", categoryId: "" });
-    toast.success(t(language, "adminJudgeAssigned"));
-    await reload();
+    // One assignment per selected class; no class selected means all classes of the event.
+    const categoryIds = form.categoryIds.length > 0 ? form.categoryIds : [""];
+    try {
+      for (const cid of categoryIds) {
+        const body: Record<string, string | boolean> = { eventId: form.eventId, judgeId: form.judgeId, standingIn: form.standingIn };
+        if (cid) body.categoryId = cid;
+        await api("/admin/judges/assignments", { method: "POST", body: JSON.stringify(body) });
+      }
+      setForm({ eventId: "", judgeId: "", categoryIds: [], standingIn: false });
+      toast.success(t(language, "adminJudgeAssigned"));
+    } finally {
+      await reload();
+    }
   }
 
   async function deleteAssignment(id: string) {
@@ -81,15 +92,31 @@ export default function JudgesTab({ language, data }: { language: Language; data
     await reload();
   }
 
+  async function toggleStandIn(assignment: JudgeAssignmentEntry) {
+    const body: Record<string, string | boolean> = {
+      eventId: assignment.eventId,
+      judgeId: assignment.judgeId,
+      standingIn: !assignment.standingIn,
+    };
+    if (assignment.categoryId) body.categoryId = assignment.categoryId;
+    await api(`/admin/judges/assignments/${assignment.id}`, { method: "PATCH", body: JSON.stringify(body) });
+    await reload();
+  }
+
   function openEdit(assignment: JudgeAssignmentEntry) {
     setEditing(assignment);
-    setEditForm({ eventId: assignment.eventId, judgeId: assignment.judgeId, categoryId: assignment.categoryId ?? "" });
+    setEditForm({
+      eventId: assignment.eventId,
+      judgeId: assignment.judgeId,
+      categoryId: assignment.categoryId ?? "",
+      standingIn: !!assignment.standingIn,
+    });
     setEditOpen(true);
   }
 
   async function saveEdit() {
     if (!editing) return;
-    const body: Record<string, string> = { eventId: editForm.eventId, judgeId: editForm.judgeId };
+    const body: Record<string, string | boolean> = { eventId: editForm.eventId, judgeId: editForm.judgeId, standingIn: editForm.standingIn };
     if (editForm.categoryId.trim()) body.categoryId = editForm.categoryId.trim();
     await api(`/admin/judges/assignments/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) });
     setEditOpen(false);
@@ -117,7 +144,7 @@ export default function JudgesTab({ language, data }: { language: Language; data
                 <Select
                   value={form.eventId}
                   label={t(language, "adminJudgeEventPlaceholder")}
-                  onChange={(e) => setForm({ ...form, eventId: e.target.value })}
+                  onChange={(e) => setForm({ ...form, eventId: e.target.value, categoryIds: [] })}
                 >
                   {events.map((ev) => (
                     <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>
@@ -143,11 +170,12 @@ export default function JudgesTab({ language, data }: { language: Language; data
               <FormControl fullWidth>
                 <InputLabel>{t(language, "adminJudgeCategoryPlaceholder")}</InputLabel>
                 <Select
-                  value={form.categoryId}
+                  multiple
+                  value={form.categoryIds}
                   label={t(language, "adminJudgeCategoryPlaceholder")}
-                  onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                  renderValue={(selected) => (selected.length === 0 ? t(language, "adminJudgeAllCategories") : selected.map(categoryLabel).join(", "))}
+                  onChange={(e) => setForm({ ...form, categoryIds: e.target.value as string[] })}
                 >
-                  <MenuItem value="">{t(language, "adminJudgeAllCategories")}</MenuItem>
                   {categories
                     .filter((c) => !form.eventId || c.eventId === form.eventId)
                     .map((c) => (
@@ -157,9 +185,17 @@ export default function JudgesTab({ language, data }: { language: Language; data
               </FormControl>
             </Grid>
             <Grid item xs={12} md={3}>
-              <ActionButton tip={t(language, "tipJudgeAssign")} variant="contained" onClick={assignJudge} fullWidth disabled={!form.eventId || !form.judgeId}>
-                {t(language, "adminJudgeAssignButton")}
-              </ActionButton>
+              <Stack spacing={0.5}>
+                <Tooltip title={t(language, "tipJudgeStandIn")} describeChild>
+                  <FormControlLabel
+                    control={<Checkbox checked={form.standingIn} onChange={(e) => setForm({ ...form, standingIn: e.target.checked })} />}
+                    label={t(language, "adminJudgeStandIn")}
+                  />
+                </Tooltip>
+                <ActionButton tip={t(language, "tipJudgeAssign")} variant="contained" onClick={assignJudge} fullWidth disabled={!form.eventId || !form.judgeId}>
+                  {t(language, "adminJudgeAssignButton")}
+                </ActionButton>
+              </Stack>
             </Grid>
           </Grid>
           {assignments.length > 0 && (
@@ -174,6 +210,16 @@ export default function JudgesTab({ language, data }: { language: Language; data
                       primary={userEmail(ja.judgeId)}
                       secondary={`${eventName(ja.eventId)} - ${categoryLabel(ja.categoryId)}`}
                     />
+                    {ja.standingIn && <Chip size="small" label={t(language, "adminJudgeStandIn")} sx={{ mr: 1 }} />}
+                    <TipIconButton
+                      tip={t(language, "tipAssignmentStandIn")}
+                      aria-label={`${t(language, "adminJudgeStandIn")} ${userEmail(ja.judgeId)}`}
+                      aria-pressed={!!ja.standingIn}
+                      size="small"
+                      onClick={() => toggleStandIn(ja)}
+                    >
+                      <SwapHorizIcon fontSize="small" />
+                    </TipIconButton>
                     <TipIconButton tip={t(language, "tipAssignmentEdit")} aria-label={`${t(language, "actionEdit")} ${userEmail(ja.judgeId)}`} size="small" onClick={() => openEdit(ja)}>
                       <EditIcon fontSize="small" />
                     </TipIconButton>
@@ -285,6 +331,14 @@ export default function JudgesTab({ language, data }: { language: Language; data
                     ))}
                 </Select>
               </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <Tooltip title={t(language, "tipJudgeStandIn")} describeChild>
+                <FormControlLabel
+                  control={<Checkbox checked={editForm.standingIn} onChange={(e) => setEditForm({ ...editForm, standingIn: e.target.checked })} />}
+                  label={t(language, "adminJudgeStandIn")}
+                />
+              </Tooltip>
             </Grid>
           </Grid>
         </DialogContent>

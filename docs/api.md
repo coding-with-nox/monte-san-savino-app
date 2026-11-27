@@ -297,9 +297,11 @@ Min role: `judge`. Sources: `judge.routes.ts`, `modification-request.routes.ts`.
 | GET | `/judge/models/:modelId/votes` | — | `[{ id, rank, createdAt }]` (this judge's history) |
 | GET | `/judge/participants/:userId` | — | `{ profile, registrations }` |
 | GET | `/judge/categories?eventId=<id>` | — | `[{ id, name }]` |
-| POST | `/judge/vote` | `{ modelId, rank: 0..4 }` | `{ voteId, updated }` |
-| GET | `/judge/displays?eventId=&categoryId=` | — | displays in the judge's scope (see below) |
+| POST | `/judge/vote` | `{ modelId, rank: 0..4 }` | `{ voteId, updated }` (`403 OWN_MODEL` on own models) |
+| GET | `/judge/displays?eventId=&categoryId=` | — | displays the judge may vote (see below) |
 | POST | `/judge/displays/vote` | `{ eventId, displayNumber, rank: 0..4 }` | `{ eventId, displayNumber, rank, votes, skippedClosedModelIds }` |
+| POST | `/judge/categories/:categoryId/complete` | — | `{ completed, allDone, totalJudges, completedJudges, phase, discordantModelIds? }` |
+| GET | `/judge/categories/:categoryId/completion` | — | `{ categoryId, status, phase, totalJudges, completedJudges, allDone, discordantModelIds? }` |
 | GET | `/judge/modification-requests` | — | this judge's category-change requests |
 | POST | `/judge/modification-requests` | `{ modelId, reason, suggestedCategoryId? }` | `{ id }` |
 
@@ -314,17 +316,25 @@ Min role: `judge`. Sources: `judge.routes.ts`, `modification-request.routes.ts`.
 A *display* is the set of models of one event sharing a `displayNumber`.
 
 ```
-GET /judge/displays → [{ eventId, displayNumber, votable, currentRank,
+GET /judge/displays → [{ eventId, displayNumber, votable, currentRank, judged, issues,
   models: [{ id, name, code, categoryId, categoryName, categoryStatus, imageUrl, currentRank }] }]
 ```
 
 - `votable` is false when every category is closed. The display `currentRank` is
   set only when all its models share it, otherwise `null`.
-- `POST /judge/displays/vote` applies the rank to every in-scope model in one
-  transaction. `votes` is `[{ modelId, voteId, updated }]`; models of closed
+- `judged` is true when the judge has voted every model of the display in an open category.
+- `issues` is `["DISCORDANT_VOTES"]` only for a display holding a discordant model of a category in reconciliation; otherwise `[]`. Owner identity is never returned.
+- `POST /judge/displays/vote` applies the rank to every votable model in one
+  transaction (own models are skipped). `votes` is `[{ modelId, voteId, updated }]`; models of closed
   categories are listed in `skippedClosedModelIds`.
-- `404` unknown display · `403` no model in the judge's scope ·
+- `404` unknown display · `403 OWN_MODEL` only own models remain · `403` no model in the judge's scope ·
   `409 CATEGORY_CLOSED` all categories closed.
+
+### Own models, stand-ins and reconciliation
+- A judge never sees nor votes a model he owns (excluded from `GET /judge/models` and `GET /judge/displays`; `403 OWN_MODEL` on the vote routes and `GET /judge/models/:modelId`).
+- **Stand-in** (`standingIn` on a category assignment): sees and votes only the models of that category owned by regular (non stand-in) judges assigned to it.
+- **Expected voters** of a model owned by `U` in category `C`: regular judges of `C` (directly or event-wide) minus `U`; if `U` is himself a regular judge of `C`, also the stand-ins of `C` minus `U`. Awards rank only from expected voters; `PARTIAL_VOTES` when `0 < v < expected`. A judge's completion needs a vote on every model he is expected to vote; a category waits for the judges who are expected voters of at least one model (`409 NO_JUDGES` when nobody is assigned).
+- **Reconciliation**: when every counted judge completed and discordant votes remain, the category stays open (`phase: "reconciliation"`, `discordantModelIds`). Every vote (single or display) re-evaluates it and closes it as soon as no discordance is left. The manager close works at any time.
 
 ---
 
@@ -344,8 +354,8 @@ except `/awards/monitoring/:eventId`.
 
 **Judging rules (applied at closing, `closeCategory`):**
 - Settings `maxVotesPerExhibitor` = N (default `3`) and `maxVoteDifferent` = D (default `2`); invalid or missing values fall back to the defaults.
-- Only the latest vote of each assigned judge counts. With `v` voters: `totalScore = round(sum(ranks) * N / v)`; no votes => `0` (`None`).
-- Issues: `PARTIAL_VOTES` when `0 < v < assigned judges`; `DISCORDANT_VOTES` when `v > 1` and `max(ranks) * v - sum(ranks) > D`. Stored in `awards.issues` (JSON array, null when none).
+- Only the latest vote of each expected voter of the model counts. With `v` voters: `totalScore = round(sum(ranks) * N / v)`; no votes => `0` (`None`).
+- Issues: `PARTIAL_VOTES` when `0 < v < expected voters of the model`; `DISCORDANT_VOTES` when `v > 1` and `max(ranks) * v - sum(ranks) > D`. Stored in `awards.issues` (JSON array, null when none).
 - Manager close (`PATCH /categories/:id/status`) no longer requires every judge to vote every model. The judge completion path (`POST /judge/categories/:categoryId/complete`) still does.
 
 ### Award brackets (`/admin/award-brackets`) — min role `manager` — `award-brackets.routes.ts`
@@ -391,9 +401,9 @@ DELETE `/:modelId` (does not remove the model's coauthors and images;
 ### Judge assignments (`/admin/judges`) — min role `manager` — `judge-admin.routes.ts`
 | Method | Path | Body |
 |--------|------|------|
-| GET | `/admin/judges/assignments?eventId=<id>` | — |
-| POST | `/admin/judges/assignments` | `{ eventId(uuid), judgeId(uuid), categoryId?(uuid) }` |
-| PATCH | `/admin/judges/assignments/:assignmentId` | `{ eventId, judgeId, categoryId? }` |
+| GET | `/admin/judges/assignments?eventId=<id>` | — (rows include `standingIn`) |
+| POST | `/admin/judges/assignments` | `{ eventId(uuid), judgeId(uuid), categoryId?(uuid), standingIn? }` → `{ id, standingIn }`. One row per category (a judge may have several); `409 DUPLICATE` on an exact duplicate; `422` when `standingIn` has no `categoryId` |
+| PATCH | `/admin/judges/assignments/:assignmentId` | `{ eventId, judgeId, categoryId?, standingIn? }`; `standingIn` toggles the stand-in flag (cleared for whole-event rows); `409 DUPLICATE`, `422` as above |
 | DELETE | `/admin/judges/assignments/:assignmentId` | — |
 
 ### Modification requests (`/admin/modification-requests`) — min role `manager`
@@ -505,5 +515,7 @@ XLSX content is shaped by tenant settings (`exportIncludeModelCode`,
 | `NOT_FOUND` | 404 | `POST /events/:eventId/enroll` |
 | `EVENT_CLOSED` | 409 | `POST /events/:eventId/enroll` |
 | `CATEGORY_CLOSED` | 409 | `POST /events/:eventId/enroll`, `POST /judge/displays/vote` |
+| `OWN_MODEL` | 403 | `POST /judge/vote`, `POST /judge/displays/vote` (only own models left), `GET /judge/models/:modelId` |
+| `INCOMPLETE_VOTES` | 409 | `POST /judge/categories/:categoryId/complete` (`missingModelIds`) |
 | `INVALID_CATEGORY`, `CATEGORY_EVENT_MISMATCH`, `CATEGORY_MODEL_MISMATCH` | 422 | `POST /events/:eventId/enroll` |
 | `SECTION_HIDDEN` | 403 | `jury_president` on a hidden section |
