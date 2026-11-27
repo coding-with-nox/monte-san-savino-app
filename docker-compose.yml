@@ -57,6 +57,8 @@ services:
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+      # The backend is reachable only through nginx, which overwrites X-Forwarded-For with the client IP.
+      TRUST_PROXY: "true"
     # Not published: the browser reaches the API through nginx at /api (port 8080).
     expose:
       - "3000"
