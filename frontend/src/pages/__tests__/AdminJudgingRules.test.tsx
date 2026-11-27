@@ -229,6 +229,7 @@ describe("Admin awards: issue chips", () => {
     eventName: () => "Event One",
     ensureModels: vi.fn(),
     categories: [],
+    models: [],
     refresh: vi.fn()
   } as any;
 

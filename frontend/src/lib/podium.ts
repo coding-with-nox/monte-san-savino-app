@@ -1,54 +1,71 @@
-export type AwardRow = {
-  modelId: string;
-  modelName?: string | null;
-  categoryId: string;
-  medalLabel?: string | null;
-  medalRank?: number | null;
-  totalScore?: number | null;
-  averageRank?: number | null;
-};
-
-/** Presentation order of medalLabel values (first = presented first). */
+/** Presentation order of medalLabel values (first = presented first). Edited in the admin Rules tab. */
 export const DEFAULT_PRIZE_ORDER = ["Highly Commended", "Bronze", "Silver", "Gold"];
 
-export type ClassPodium = {
-  categoryId: string;
-  /** Winners in reveal order. */
-  winners: AwardRow[];
+/** Code of the Best of Show special award: always presented last. */
+export const BEST_OF_SHOW_CODE = "bos";
+
+/** GET /awards/events/:eventId/ceremony. Classes and prizes already come in presentation order. */
+export type CeremonyPrize = {
+  medalLabel: string;
+  medalRank?: number | null;
+  displayNumber?: number | null;
+  exhibitor?: string | null;
+  modelName?: string | null;
+  modelCode?: string | null;
+  wholeDisplay?: boolean;
 };
 
+export type CeremonyClass = {
+  categoryId: string;
+  name: string;
+  classNumber?: number | null;
+  presentationOrder?: number | null;
+  prizes: CeremonyPrize[];
+};
+
+export type CeremonyHonor = {
+  code: string;
+  name: string;
+  sortOrder?: number | null;
+  categoryName?: string | null;
+  displayNumber?: number | null;
+  exhibitor?: string | null;
+  modelName?: string | null;
+  wholeDisplay?: boolean;
+};
+
+export type CeremonyData = { classes: CeremonyClass[]; honors: CeremonyHonor[] };
+
 /**
- * Groups awarded rows (medalLabel present) by class. Within a class winners follow `order`;
- * labels not listed come first, by ascending medalRank.
+ * One full-screen step. A class screen shows the class title and its first `revealed` prizes
+ * (revealed 0 = title only); a honor screen shows one special award.
  */
-export function buildPodiums(rows: AwardRow[], order: readonly string[] = DEFAULT_PRIZE_ORDER): ClassPodium[] {
-  const position = (r: AwardRow) => order.indexOf(r.medalLabel ?? "");
-  const byClass = new Map<string, AwardRow[]>();
-  for (const r of rows) {
-    if (!r.medalLabel) continue;
-    const list = byClass.get(r.categoryId) ?? [];
-    list.push(r);
-    byClass.set(r.categoryId, list);
-  }
-  return [...byClass.entries()].map(([categoryId, winners]) => ({
-    categoryId,
-    winners: winners.sort((a, b) => position(a) - position(b) || (a.medalRank ?? 0) - (b.medalRank ?? 0))
-  }));
+export type CeremonyScreen =
+  | { kind: "class"; classIndex: number; revealed: number }
+  | { kind: "honor"; honor: CeremonyHonor };
+
+export type Ceremony = { classes: CeremonyClass[]; screens: CeremonyScreen[] };
+
+/** Special awards in presentation order: the server order, Best of Show moved last. */
+export function orderHonors(honors: CeremonyHonor[]): CeremonyHonor[] {
+  return [
+    ...honors.filter((h) => h.code !== BEST_OF_SHOW_CODE),
+    ...honors.filter((h) => h.code === BEST_OF_SHOW_CODE)
+  ];
 }
 
-/** Total reveal steps: one per winner across all classes. */
-export function totalSteps(podiums: ClassPodium[]): number {
-  return podiums.reduce((s, p) => s + p.winners.length, 0);
-}
-
-/** Maps a global step (0 = nothing shown, N = N winners revealed) to the current class and revealed count. */
-export function locateStep(podiums: ClassPodium[], step: number): { classIndex: number; revealed: number } {
-  let remaining = step;
-  for (let i = 0; i < podiums.length; i++) {
-    const n = podiums[i].winners.length;
-    if (remaining <= n) return { classIndex: i, revealed: remaining };
-    remaining -= n;
-  }
-  const last = Math.max(podiums.length - 1, 0);
-  return { classIndex: last, revealed: podiums[last]?.winners.length ?? 0 };
+/**
+ * Flattens the ceremony into screens: for each class a title screen followed by one screen per prize
+ * (in the given order), then one screen per special award. Classes without prizes are skipped.
+ */
+export function buildCeremony(data: CeremonyData): Ceremony {
+  const classes = data.classes.filter((c) => c.prizes.length > 0);
+  const screens: CeremonyScreen[] = [];
+  classes.forEach((c, classIndex) => {
+    for (let revealed = 0; revealed <= c.prizes.length; revealed++) {
+      screens.push({ kind: "class", classIndex, revealed });
+    }
+  });
+  for (const honor of orderHonors(data.honors)) screens.push({ kind: "honor", honor });
+  return { classes, screens };
 }

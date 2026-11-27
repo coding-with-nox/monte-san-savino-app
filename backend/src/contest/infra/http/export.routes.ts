@@ -8,6 +8,7 @@ import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware"
 import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable } from "../persistence/schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
 import { classPrintRoutes } from "./class-print.routes";
+import { presentationPrintRoutes } from "./presentation-print.routes";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { loadPricingEntries } from "../persistence/pricingRepository";
 import { formatEuro, type PricingSummary } from "../../domain/pricing";
@@ -1209,4 +1210,5 @@ export const exportRoutes = new Elysia({ prefix: "/exports" })
   .use(tenantMiddleware)
   .use(managerExportRoutes)
   .use(classPrintRoutes)
+  .use(presentationPrintRoutes)
   .use(userExportRoutes);

@@ -523,6 +523,35 @@ export async function ensureTenantSchema() {
     await pool.query(`ALTER TABLE IF EXISTS member_roles ADD COLUMN IF NOT EXISTS price integer NOT NULL DEFAULT 1500`);
     await dedupeMemberRoles(pool);
 
+    // Special awards (honors) catalogue per event, and one assignment per honor (modelId null = whole display)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS honors (
+        id uuid PRIMARY KEY,
+        event_id uuid NOT NULL,
+        code text NOT NULL,
+        name text NOT NULL,
+        sort_order integer NOT NULL DEFAULT 0,
+        created_at timestamptz DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_honors_event_code ON honors (event_id, lower(code))
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS honor_assignments (
+        id uuid PRIMARY KEY,
+        honor_id uuid NOT NULL,
+        category_id uuid NOT NULL,
+        display_number integer NOT NULL,
+        model_id uuid,
+        assigned_by uuid NOT NULL,
+        created_at timestamptz DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_honor_assignments_honor ON honor_assignments (honor_id)
+    `);
+
     await ensureRegistrationsUniqueIndex(pool);
 
     for (const stmt of buildPerformanceIndexStatements()) await pool.query(stmt);

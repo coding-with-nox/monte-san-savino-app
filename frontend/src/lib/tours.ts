@@ -149,6 +149,7 @@ export const TOURS: TourDef[] = [
   {
     id: "admin-awards", key: "tourAdminAwards", path: "/admin", scope: "admin-awards", audience: "manager", section: "admin", helpPath: "/admin?tab=awards",
     steps: [
+      { target: "admin-honors", key: "tourAdminAwardsAdminHonors" },
       { target: "admin-mentions", key: "tourAdminAwardsAdminMentions" },
       { target: "admin-modrequests", key: "tourAdminAwardsAdminModrequests" },
       { target: "admin-corrections", key: "tourAdminAwardsAdminCorrections" }

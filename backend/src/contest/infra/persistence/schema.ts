@@ -245,3 +245,28 @@ export const awardsTable = pgTable("awards", {
 }, (table) => ({
   uxCategoryModel: uniqueIndex("ux_awards_category_model").on(table.categoryId, table.modelId)
 }));
+
+/** Special awards catalogue of an event (e.g. "Best Of Show"). */
+export const honorsTable = pgTable("honors", {
+  id: uuid("id").primaryKey(),
+  eventId: uuid("event_id").notNull(),
+  code: text("code").notNull(),   // max 20 chars, validated by the API
+  name: text("name").notNull(),   // max 120 chars, validated by the API
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow()
+}, (table) => ({
+  uxEventCode: uniqueIndex("ux_honors_event_code").on(table.eventId, sql`lower(${table.code})`)
+}));
+
+/** One assignment per honor (honorId unique). modelId null = the whole display. */
+export const honorAssignmentsTable = pgTable("honor_assignments", {
+  id: uuid("id").primaryKey(),
+  honorId: uuid("honor_id").notNull(),
+  categoryId: uuid("category_id").notNull(),
+  displayNumber: integer("display_number").notNull(),
+  modelId: uuid("model_id"),
+  assignedBy: uuid("assigned_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow()
+}, (table) => ({
+  uxHonor: uniqueIndex("ux_honor_assignments_honor").on(table.honorId)
+}));

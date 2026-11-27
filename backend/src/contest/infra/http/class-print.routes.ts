@@ -26,7 +26,7 @@ export function judgeAppUrl(appUrl: string, eventId: string, categoryId: string)
   return `${appUrl}/judge?eventId=${encodeURIComponent(eventId)}&categoryId=${encodeURIComponent(categoryId)}`;
 }
 
-function displayName(firstName?: string | null, lastName?: string | null, fallback?: string | null) {
+export function displayName(firstName?: string | null, lastName?: string | null, fallback?: string | null) {
   return [firstName, lastName].filter(Boolean).join(" ").trim() || fallback || "";
 }
 
@@ -46,7 +46,7 @@ const PRINT_CSS = `
         body { margin: 0; }
       }`;
 
-function page(lang: PrintLang, title: string, body: string) {
+export function page(lang: PrintLang, title: string, body: string) {
   return `<!DOCTYPE html>
 <html lang="${lang}">
   <head>

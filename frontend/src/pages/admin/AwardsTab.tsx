@@ -23,13 +23,14 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import useToast from "../../components/useToast";
 import { SectionErrors, useSections } from "./useSections";
 import type { AdminData } from "./useAdminData";
+import HonorsCard from "./HonorsCard";
 import { ActionButton, TipIconButton } from "../../components/ActionButton";
 
 type SpecialMention = { id: string; eventId: string; modelId: string; title: string };
 type ModificationRequest = { id: string; modelId: string; judgeId: string; reason: string; status: string };
 
 export default function AwardsTab({ language, data }: { language: Language; data: AdminData }) {
-  const { events, modelName, ensureModels } = data;
+  const { events, categories, models, modelName, ensureModels } = data;
   const { confirm, node: confirmNode } = useConfirm(language);
   const toast = useToast();
   const [mentions, setMentions] = useState<SpecialMention[]>([]);
@@ -76,6 +77,8 @@ export default function AwardsTab({ language, data }: { language: Language; data
       {loading && <PageSkeleton variant="table" />}
       {!loading && (
         <>
+          <HonorsCard language={language} events={events} categories={categories} models={models} />
+
           <SectionCard tourId="admin-mentions" title={t(language, "adminSpecialMentionsTitle")}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} md={3}>
