@@ -580,7 +580,7 @@ function ForgotPasswordDialog({ language, open, defaultEmail, onClose }: ForgotP
     setBusy(true);
     setFailed(false);
     try {
-      await api("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email: value }) });
+      await api("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email: value, lang: language }) });
       setSent(true);
     } catch (err) {
       console.error(err);

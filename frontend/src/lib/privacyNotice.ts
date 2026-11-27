@@ -1,4 +1,7 @@
 import type { Language } from "./i18n";
+import { es } from "./privacyNotice.es";
+import { fr } from "./privacyNotice.fr";
+import { de } from "./privacyNotice.de";
 
 /**
  * Privacy notice (GDPR art. 13). Bump the version whenever the text changes in substance:
@@ -7,7 +10,8 @@ import type { Language } from "./i18n";
  * Parts marked TODO depend on the organizer (controller identity, hosting, retention) and must be
  * completed and reviewed before going live.
  */
-export const PRIVACY_POLICY_VERSION = "2026-11-27";
+export { PRIVACY_POLICY_VERSION } from "./privacyVersion";
+import { PRIVACY_POLICY_VERSION } from "./privacyVersion";
 
 export type PrivacySection = { title: string; paragraphs: string[] };
 export type PrivacyNotice = { title: string; intro: string; sections: PrivacySection[]; updated: string };
@@ -163,5 +167,5 @@ const en: PrivacyNotice = {
 };
 
 export function privacyNotice(language: Language): PrivacyNotice {
-  return language === "en" ? en : it;
+  return ({ it, en, es, fr, de } as Record<Language, PrivacyNotice>)[language] ?? en;
 }
