@@ -97,7 +97,7 @@ describe("Forgot password dialog", () => {
 
     expect(await within(dialog).findByText("If the address is registered you will receive an email with the link.")).toBeInTheDocument();
     expect(apiMock).toHaveBeenCalledWith("/auth/forgot-password", expect.objectContaining({ method: "POST" }));
-    expect(JSON.parse(apiMock.mock.calls[0][1].body)).toEqual({ email: "mario@example.it" });
+    expect(JSON.parse(apiMock.mock.calls[0][1].body)).toEqual({ email: "mario@example.it", lang: "en" });
   });
 
   it("does not call the API for an invalid email", async () => {

@@ -1,8 +1,11 @@
+import { ES } from "./printI18n.es";
+import { FR } from "./printI18n.fr";
+import { DE } from "./printI18n.de";
 /**
  * Localization of the server-side print/export pages and spreadsheets.
- * Contract: optional `lang` query param, "it" | "en". Missing or unknown => "it".
+ * Contract: optional `lang` query param, "it" | "en" | "es" | "fr" | "de". Missing or unknown => "it".
  */
-export type PrintLang = "it" | "en";
+export type PrintLang = "it" | "en" | "es" | "fr" | "de";
 
 const IT = {
   "common.noData": "Nessun dato",
@@ -195,10 +198,11 @@ const EN: Record<PrintKey, string> = {
   "sheet.photography": "Photography"
 };
 
-export const PRINT_MESSAGES: Record<PrintLang, Record<PrintKey, string>> = { it: IT, en: EN };
+export const PRINT_MESSAGES: Record<PrintLang, Record<PrintKey, string>> = { it: IT, en: EN, es: ES, fr: FR, de: DE };
 
 export function parsePrintLang(v: unknown): PrintLang {
-  return typeof v === "string" && v.trim().toLowerCase() === "en" ? "en" : "it";
+  const value = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return (Object.keys(PRINT_MESSAGES) as PrintLang[]).includes(value as PrintLang) ? (value as PrintLang) : "it";
 }
 
 /** Localized text by key. `{name}` placeholders are replaced in a single pass, so values are never re-expanded. */

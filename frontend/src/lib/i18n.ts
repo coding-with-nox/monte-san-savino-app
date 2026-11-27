@@ -1,6 +1,27 @@
-export type Language = "it" | "en";
+import { es } from "./locales/es";
+import { fr } from "./locales/fr";
+import { de } from "./locales/de";
 
-export const translations = {
+export type Language = "it" | "en" | "es" | "fr" | "de";
+export const LANGUAGES: { code: Language; flag: string; name: string }[] = [
+  { code: "it", flag: "🇮🇹", name: "Italiano" },
+  { code: "en", flag: "🇬🇧", name: "English" },
+  { code: "es", flag: "🇪🇸", name: "Español" },
+  { code: "fr", flag: "🇫🇷", name: "Français" },
+  { code: "de", flag: "🇩🇪", name: "Deutsch" }
+];
+
+export function isLanguage(value: unknown): value is Language {
+  return typeof value === "string" && LANGUAGES.some((l) => l.code === value);
+}
+
+/** First visit: the browser language if supported, English for every other language. */
+export function languageFromBrowser(browserLanguage: string | undefined | null): Language {
+  const base = (browserLanguage || "").toLowerCase().split("-")[0];
+  return isLanguage(base) ? base : "en";
+}
+
+const base = {
   it: {
     loginEyebrow: "Bentornato",
     loginTitle: "Accedi al contest",
@@ -2429,8 +2450,10 @@ export const translations = {
   }
 } as const;
 
-export type TranslationKey = keyof typeof translations.it;
+export type TranslationKey = keyof typeof base.it;
 
-export function t(lang: Language, key: TranslationKey) {
-  return translations[lang][key];
+export const translations: Record<Language, Record<TranslationKey, string>> = { ...base, es, fr, de };
+
+export function t(lang: Language, key: TranslationKey): string {
+  return (translations[lang] ?? translations.en)[key];
 }

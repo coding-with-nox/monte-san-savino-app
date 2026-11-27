@@ -317,7 +317,7 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
     beforeHandle: authRateLimit,
     body: t.Object({
       email: t.String(),
-      lang: t.Optional(t.Union([t.Literal("it"), t.Literal("en")]))
+      lang: t.Optional(t.Union([t.Literal("it"), t.Literal("en"), t.Literal("es"), t.Literal("fr"), t.Literal("de")]))
     }),
     detail: {
       summary: "Password dimenticata: invia link di reset",

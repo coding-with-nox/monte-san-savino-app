@@ -13,8 +13,14 @@ describe("parsePrintLang", () => {
   });
 
   it("falls back to it for missing or unknown values", () => {
-    for (const v of [undefined, null, "", "fr", "english", 1, ["en"], {}]) {
+    for (const v of [undefined, null, "", "nl", "english", 1, ["en"], {}]) {
       expect(parsePrintLang(v)).toBe("it");
+    }
+  });
+
+  it("accepts the five UI languages, case- and space-insensitive", () => {
+    for (const lang of ["it", "en", "es", "fr", "de"] as const) {
+      expect(parsePrintLang(` ${lang.toUpperCase()} `)).toBe(lang);
     }
   });
 });
