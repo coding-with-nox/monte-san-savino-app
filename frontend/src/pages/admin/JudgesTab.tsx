@@ -23,7 +23,9 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import PrintIcon from "@mui/icons-material/Print";
 import { api } from "../../lib/api";
+import { openHtmlExport } from "../../lib/exports";
 import { Language, t } from "../../lib/i18n";
 import SectionCard from "../../components/SectionCard";
 import PageSkeleton from "../../components/PageSkeleton";
@@ -53,6 +55,7 @@ export default function JudgesTab({ language, data }: { language: Language; data
   const [editForm, setEditForm] = useState({ eventId: "", judgeId: "", categoryId: "", standingIn: false });
   const [monitoringEventId, setMonitoringEventId] = useState("");
   const [monitoringData, setMonitoringData] = useState<MonitoringRow[]>([]);
+  const [sheetsBusy, setSheetsBusy] = useState(false);
 
   const { loading, errors, reload } = useSections(language, () => [
     { titleKey: "usersTitle", run: async () => setUsers(await api<AdminUser[]>("/admin/users")) },
@@ -122,6 +125,18 @@ export default function JudgesTab({ language, data }: { language: Language; data
     setEditOpen(false);
     setEditing(null);
     await reload();
+  }
+
+  /** GET /exports/events/:eventId/judge-sheets: one printable page per judge. */
+  async function printJudgeSheets(eventId: string) {
+    setSheetsBusy(true);
+    try {
+      await openHtmlExport(`/exports/events/${encodeURIComponent(eventId)}/judge-sheets`);
+    } catch (err: any) {
+      toast.error(err?.message ?? String(err));
+    } finally {
+      setSheetsBusy(false);
+    }
   }
 
   async function loadMonitoring(eventId: string) {
@@ -249,6 +264,16 @@ export default function JudgesTab({ language, data }: { language: Language; data
             </FormControl>
             <ActionButton tip={t(language, "tipMonitorRefresh")} size="small" variant="outlined" onClick={() => loadMonitoring(monitoringEventId)} disabled={!monitoringEventId}>
               {t(language, "adminRefreshButton")}
+            </ActionButton>
+            <ActionButton
+              tip={t(language, "tipJudgeSheets")}
+              size="small"
+              variant="outlined"
+              startIcon={<PrintIcon fontSize="small" />}
+              disabled={!monitoringEventId || sheetsBusy}
+              onClick={() => printJudgeSheets(monitoringEventId)}
+            >
+              {t(language, "judgeSheetsButton")}
             </ActionButton>
           </Stack>
 

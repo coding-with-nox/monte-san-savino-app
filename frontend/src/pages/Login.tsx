@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -29,6 +29,7 @@ import { createCodeChallenge, generateCodeVerifier, setSession } from "../lib/au
 import { Language, t } from "../lib/i18n";
 import { countryOptions } from "../lib/countries";
 import { PRIVACY_POLICY_VERSION } from "../lib/privacyNotice";
+import { safeNextPath } from "../lib/redirect";
 import useToast from "../components/useToast";
 import { ActionButton, TipIconButton } from "../components/ActionButton";
 
@@ -66,6 +67,9 @@ type Errors = Partial<Record<keyof SignupForm, string>>;
 
 export default function Login({ language }: LoginProps) {
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Protected pages send the user here with ?next=<original path>; only in-app paths are honoured.
+  const nextPath = safeNextPath(searchParams.get("next")) ?? "/";
   const toast = useToast();
   const tr = (key: string) => t(language, key as any);
   const [tab, setTab] = useState<AuthTab>("login");
@@ -127,7 +131,7 @@ export default function Login({ language }: LoginProps) {
     setBusy(true);
     try {
       await signIn(email, password);
-      nav("/");
+      nav(nextPath);
     } catch (err) {
       handleError(err);
     } finally {
@@ -197,7 +201,7 @@ export default function Login({ language }: LoginProps) {
           emergencyContact: optional(form.emergencyContact)
         })
       });
-      nav("/");
+      nav(nextPath);
     } catch {
       // The account exists and the session is open: let the user finish the profile there.
       toast.error(tr("signupProfileSaveError"));

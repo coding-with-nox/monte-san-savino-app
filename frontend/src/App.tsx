@@ -72,13 +72,16 @@ import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
 import { Language, t } from "./lib/i18n";
 import { buildTheme, DEFAULT_THEME_PRESET, isThemePreset, ThemePreset } from "./lib/theme";
+import { loginPathFor } from "./lib/redirect";
 
 function Protected({ children }: { children: React.ReactNode }) {
-  return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
+  const location = useLocation();
+  return getToken() ? <>{children}</> : <Navigate to={loginPathFor(location.pathname, location.search)} replace />;
 }
 function RequireRole({ min, children }: { min: any; children: React.ReactNode }) {
+  const location = useLocation();
   const r = getRole();
-  if (!r) return <Navigate to="/login" replace />;
+  if (!r) return <Navigate to={loginPathFor(location.pathname, location.search)} replace />;
   return roleAtLeast(r, min) ? <>{children}</> : <Navigate to="/" replace />;
 }
 

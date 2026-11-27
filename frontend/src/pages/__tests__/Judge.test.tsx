@@ -3,6 +3,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderWithProviders } from "../../test/renderWithProviders";
+import { MemoryRouter, useLocation, useNavigationType } from "react-router-dom";
 
 const apiMock = vi.fn();
 vi.mock("../../lib/api", () => ({ ApiError: class extends Error {}, api: (...a: unknown[]) => apiMock(...a) }));
@@ -58,6 +59,27 @@ async function pickCategory(user: ReturnType<typeof userEvent.setup>, name: stri
   await user.click(await screen.findByRole("option", { name }));
 }
 
+/** Exposes the current query string and the last navigation type (REPLACE = no history entry). */
+function LocationProbe() {
+  const location = useLocation();
+  const navType = useNavigationType();
+  return (
+    <>
+      <span data-testid="search">{location.search}</span>
+      <span data-testid="nav-type">{navType}</span>
+    </>
+  );
+}
+
+function renderJudge(language: "it" | "en", url = "/judge") {
+  return renderWithProviders(
+    <MemoryRouter initialEntries={[url]}>
+      <Judge language={language} />
+      <LocationProbe />
+    </MemoryRouter>
+  );
+}
+
 describe("Judge", () => {
   beforeEach(() => {
     apiMock.mockReset();
@@ -71,7 +93,7 @@ describe("Judge", () => {
   });
 
   it("shows one anonymous tile per display and hides judged displays", async () => {
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     expect(await screen.findByRole("button", { name: "Display 12 (2)" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Display 7/ })).not.toBeInTheDocument();
     // no owner or model names on the tiles
@@ -80,7 +102,7 @@ describe("Judge", () => {
 
   it("shows judged displays with their vote when 'show all' is on", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await screen.findByRole("button", { name: "Display 12 (2)" });
     await user.click(screen.getByRole("checkbox"));
     expect(await screen.findByRole("button", { name: "Display 7 (1)" })).toBeInTheDocument();
@@ -88,7 +110,7 @@ describe("Judge", () => {
 
   it("filters displays by number", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await screen.findByRole("button", { name: "Display 12 (2)" });
     await user.click(screen.getByRole("checkbox"));
     await user.type(screen.getByLabelText(/display number/i), "7");
@@ -98,7 +120,7 @@ describe("Judge", () => {
 
   it("opens the score screen, shows notes and votes the whole display, then returns to the tiles", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     expect(screen.getByText(/painted by hand/)).toBeInTheDocument();
     const submit = screen.getByRole("button", { name: "Score whole display (2)" });
@@ -116,7 +138,7 @@ describe("Judge", () => {
 
   it("pluralizes the selection hint in English and Italian", async () => {
     const user = userEvent.setup();
-    const view = renderWithProviders(<Judge language="en" />);
+    const view = renderJudge("en");
     await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     expect(screen.getByText("All models (2)")).toBeInTheDocument();
     await user.click(screen.getByText(/15\s+Dread/));
@@ -126,7 +148,7 @@ describe("Judge", () => {
     expect(screen.getByRole("button", { name: "Deselect all" })).toBeInTheDocument();
     view.unmount();
 
-    renderWithProviders(<Judge language="it" />);
+    renderJudge("it");
     await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     expect(screen.getByText("Tutti i modelli (2)")).toBeInTheDocument();
     await user.click(screen.getByText(/15\s+Dread/));
@@ -137,7 +159,7 @@ describe("Judge", () => {
 
   it("votes only for the selected model in individual mode", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     await user.click(screen.getByText(/15\s+Dread/)); // switches to individual mode selecting m2
     await user.click(screen.getByRole("button", { name: /^2/ }));
@@ -154,7 +176,7 @@ describe("Judge", () => {
       return [];
     });
     const user = userEvent.setup();
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await user.click(await screen.findByRole("button", { name: "Display 12 (2)" }));
     await user.click(screen.getByRole("button", { name: /^1/ }));
     await user.click(screen.getByRole("button", { name: "Score whole display (2)" }));
@@ -167,7 +189,7 @@ describe("Judge", () => {
       display(1, [model("a", "A", 1)]),
       display(2, [model("b", "B", 2)]),
     ];
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     expect(await screen.findByRole("button", { name: "Display 1 (1)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Display 2 (1)" })).toBeInTheDocument();
   });
@@ -177,7 +199,7 @@ describe("Judge", () => {
       if (path === "/judge/events") throw new Error("No judge assignment");
       return [];
     });
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     expect(await screen.findByText("No judge assignment")).toBeInTheDocument();
   });
 });
@@ -197,7 +219,7 @@ describe("Judge phases", () => {
 
   it("in reconciliation shows only the displays with discordant votes, marked with an error", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await pickCategory(user, "Historical");
     expect(await screen.findByText("Phase 2 · reconciliation")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Display 3 (1)" })).toBeInTheDocument();
@@ -211,7 +233,7 @@ describe("Judge phases", () => {
 
   it("explains the discordance on the score screen of a display", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await pickCategory(user, "Historical");
     await user.click(await screen.findByRole("button", { name: "Display 3 (1)" }));
     const alert = await screen.findByRole("alert");
@@ -221,7 +243,7 @@ describe("Judge phases", () => {
   it("closed class is read-only: no vote can be recorded", async () => {
     phase = "closed";
     const user = userEvent.setup();
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await pickCategory(user, "Historical");
     expect(await screen.findByText("Class closed")).toBeInTheDocument();
     // closed shows every display, judged or not
@@ -279,7 +301,7 @@ describe("Judge completion", () => {
   }
 
   async function startPolling(user: ReturnType<typeof userEvent.setup>) {
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await selectCategory(user, "Historical");
     await user.click(await screen.findByRole("button", { name: "Judging Complete" }));
     await screen.findByText(/Waiting for other judges/);
@@ -288,7 +310,7 @@ describe("Judge completion", () => {
 
   it("computes 'all judged' on the selected category only", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await selectCategory(user, "Historical");
     expect(await screen.findByRole("button", { name: "Judging Complete" })).toBeInTheDocument();
     await selectCategory(user, "Sci-Fi");
@@ -344,7 +366,7 @@ describe("Judge completion", () => {
   it("shows the backend message on 409", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     completeImpl = async () => { throw Object.assign(new Error("3 models not voted yet"), { status: 409 }); };
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await selectCategory(user, "Historical");
     await user.click(await screen.findByRole("button", { name: "Judging Complete" }));
     expect(await screen.findByText("3 models not voted yet")).toBeInTheDocument();
@@ -353,9 +375,42 @@ describe("Judge completion", () => {
   it("shows a clear message on 403/404 for unassigned categories", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     completeImpl = async () => { throw Object.assign(new Error("Forbidden"), { status: 403 }); };
-    renderWithProviders(<Judge language="en" />);
+    renderJudge("en");
     await selectCategory(user, "Historical");
     await user.click(await screen.findByRole("button", { name: "Judging Complete" }));
     expect(await screen.findByText(/not assigned to you/)).toBeInTheDocument();
+  });
+});
+
+describe("Judge deep link (?eventId&categoryId)", () => {
+  beforeEach(() => {
+    apiMock.mockReset();
+    displays = [display(12, [model("m1", "Marine", 12)])];
+    phase = "judging";
+    discordantModelIds = [];
+    setup();
+  });
+
+  it("preselects the event and class from the URL", async () => {
+    renderJudge("en", "/judge?eventId=e1&categoryId=c1");
+    expect(await screen.findByRole("button", { name: "Display 12 (1)" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole("combobox")[1]).toHaveTextContent("Historical"));
+    expect(apiMock).toHaveBeenCalledWith("/judge/displays?eventId=e1&categoryId=c1");
+  });
+
+  it("ignores an event and a class the judge is not assigned to", async () => {
+    renderJudge("en", "/judge?eventId=foreign&categoryId=c1");
+    expect(await screen.findByRole("button", { name: "Display 12 (1)" })).toBeInTheDocument();
+    expect(apiMock).toHaveBeenCalledWith("/judge/displays?eventId=e1");
+    expect(apiMock).not.toHaveBeenCalledWith(expect.stringContaining("categoryId=c1"));
+    expect(screen.getAllByRole("combobox")[1]).not.toHaveTextContent("Historical");
+  });
+
+  it("keeps the URL in step with the chosen class, replacing the history entry", async () => {
+    const user = userEvent.setup();
+    renderJudge("en", "/judge");
+    await pickCategory(user, "Historical");
+    await waitFor(() => expect(screen.getByTestId("search")).toHaveTextContent(/^\?eventId=e1&categoryId=c1$/));
+    expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
   });
 });
