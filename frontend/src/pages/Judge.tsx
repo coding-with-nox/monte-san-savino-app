@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { Language, t, TranslationKey } from "../lib/i18n";
 import PageContainer from "../components/PageContainer";
@@ -131,6 +132,12 @@ interface JudgeProps {
 
 export default function Judge({ language }: JudgeProps) {
   // -- global --
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Deep link from the printed judge sheet (?eventId&categoryId): applied once, when the class is loaded.
+  const deepLinkRef = useRef<{ eventId: string; categoryId: string } | null>({
+    eventId: searchParams.get("eventId") ?? "",
+    categoryId: searchParams.get("categoryId") ?? "",
+  });
   const [events, setEvents] = useState<JudgeEvent[]>([]);
   const [eventId, setEventId] = useState("");
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
@@ -176,8 +183,10 @@ export default function Judge({ language }: JudgeProps) {
       const res = await api<JudgeEvent[]>("/judge/events");
       setEvents(res);
       if (res.length > 0) {
+        // Linked event if the judge is assigned to it; otherwise the first one (a foreign id is ignored).
+        const linked = res.find((ev) => ev.eventId === deepLinkRef.current?.eventId);
         setDisplaysLoading(true);
-        setEventId(res[0].eventId);
+        setEventId(linked ? linked.eventId : res[0].eventId);
       }
     } catch (err: any) {
       toast.error(errorMessage(err, language));
@@ -189,10 +198,28 @@ export default function Judge({ language }: JudgeProps) {
   async function loadCategories(eid: string) {
     if (!eid) { setCategories([]); return; }
     try {
-      setCategories(await api<{ id: string; name: string }[]>(`/public/categories?eventId=${encodeURIComponent(eid)}`));
+      const list = await api<{ id: string; name: string }[]>(`/public/categories?eventId=${encodeURIComponent(eid)}`);
+      setCategories(list);
+      applyDeepLinkClass(eid, list);
     } catch {
       setCategories([]);
     }
+  }
+
+  /** Preselects the linked class, once, if it belongs to the event that is now selected. */
+  function applyDeepLinkClass(eid: string, list: { id: string; name: string }[]) {
+    const link = deepLinkRef.current;
+    if (!link || link.eventId !== eid || selectionRef.current.eventId !== eid) return;
+    deepLinkRef.current = null;
+    if (link.categoryId && list.some((c) => c.id === link.categoryId)) setCategoryId(link.categoryId);
+  }
+
+  /** Mirrors the selection in the URL (replace, so the back button is not spammed). */
+  function syncUrl(eid: string, cid: string) {
+    const params = new URLSearchParams();
+    if (eid) params.set("eventId", eid);
+    if (cid) params.set("categoryId", cid);
+    setSearchParams(params, { replace: true });
   }
 
   async function loadDisplays(): Promise<JudgeDisplay[] | null> {
@@ -431,7 +458,7 @@ export default function Judge({ language }: JudgeProps) {
               <Select
                 value={eventId}
                 label={t(language, "judgeSelectEvent")}
-                onChange={(e) => setEventId(e.target.value)}
+                onChange={(e) => { setEventId(e.target.value); syncUrl(e.target.value, ""); }}
               >
                 <MenuItem value="">{t(language, "judgeSelectEvent")}</MenuItem>
                 {events.map((ev) => (
@@ -446,7 +473,7 @@ export default function Judge({ language }: JudgeProps) {
               <Select
                 value={categoryId}
                 label={t(language, "modelsCategoryPlaceholder")}
-                onChange={(e) => setCategoryId(e.target.value)}
+                onChange={(e) => { setCategoryId(e.target.value); syncUrl(eventId, e.target.value); }}
               >
                 <MenuItem value="">{t(language, "adminJudgeAllCategories")}</MenuItem>
                 {categories.map((cat) => (

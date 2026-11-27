@@ -4,6 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderWithProviders } from "../../test/renderWithProviders";
 
+const openMock = vi.fn();
+vi.mock("../../lib/exports", () => ({ openHtmlExport: (...a: unknown[]) => openMock(...a) }));
+
 const apiMock = vi.fn();
 vi.mock("../../lib/api", () => ({ ApiError: class extends Error {}, api: (...a: unknown[]) => apiMock(...a) }));
 
@@ -126,5 +129,30 @@ describe("JudgesTab assignments", () => {
     expect(patch![0]).toBe("/admin/judges/assignments/a1");
     expect(JSON.parse(patch![1].body)).toEqual({ eventId: "e1", judgeId: "u1", categoryId: "c1", standingIn: true });
     expect(await within(row).findByText("Stand-in", { selector: ".MuiChip-label" })).toBeInTheDocument();
+  });
+});
+
+describe("JudgesTab judge sheets", () => {
+  beforeEach(() => {
+    apiMock.mockReset();
+    openMock.mockReset().mockResolvedValue(undefined);
+    assignments = [];
+    setup();
+  });
+
+  it("is enabled only once an event is selected, then prints that event's judge sheets", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<JudgesTab language="en" data={data} />);
+    const button = await screen.findByRole("button", { name: "Print judge sheets" });
+    expect(button).toBeDisabled();
+
+    // The monitoring selector is the last combobox on the page.
+    const selects = screen.getAllByRole("combobox", { hidden: true });
+    await user.click(selects[selects.length - 1]);
+    await user.click(await screen.findByRole("option", { name: "MSS 2026" }));
+
+    expect(button).toBeEnabled();
+    await user.click(button);
+    await waitFor(() => expect(openMock).toHaveBeenCalledWith("/exports/events/e1/judge-sheets"));
   });
 });

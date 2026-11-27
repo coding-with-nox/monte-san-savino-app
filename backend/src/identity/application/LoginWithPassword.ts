@@ -3,9 +3,15 @@ import { InvalidCredentialsError, describeHashFormat } from "../domain/InvalidCr
 import type { UserRepository } from "./ports/UserRepository";
 import type { PasswordHasher } from "./ports/PasswordHasher";
 import type { TokenService } from "./ports/TokenService";
+import { judgeSessionHoursFromEnv, nowSeconds, refreshCapFor } from "../domain/judgeSession";
 
 export class LoginWithPassword {
-  constructor(private readonly users: UserRepository, private readonly hasher: PasswordHasher, private readonly tokens: TokenService) {}
+  constructor(
+    private readonly users: UserRepository,
+    private readonly hasher: PasswordHasher,
+    private readonly tokens: TokenService,
+    private readonly judgeSessionHours = judgeSessionHoursFromEnv()
+  ) {}
   async execute(input: { email: string; password: string }) {
     const email = Email.create(input.email);
     const user = await this.users.findByEmail(email);
@@ -18,7 +24,11 @@ export class LoginWithPassword {
     if (!ok) throw new InvalidCredentialsError("wrong_password", describeHashFormat(user.passwordHash));
     if (!user.canLogin()) throw new InvalidCredentialsError("account_disabled");
     const access = await this.tokens.signAccess({ sub: user.id, email: user.email.value, role: user.role });
-    const refresh = await this.tokens.signRefresh({ sub: user.id, email: user.email.value, role: user.role });
+    const sessionStart = nowSeconds();
+    const refresh = await this.tokens.signRefresh(
+      { sub: user.id, email: user.email.value, role: user.role, sst: sessionStart },
+      refreshCapFor(user.role, sessionStart, this.judgeSessionHours)
+    );
     return {
       accessToken: access.token,
       refreshToken: refresh.token,
