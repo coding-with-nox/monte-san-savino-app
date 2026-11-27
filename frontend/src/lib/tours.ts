@@ -91,9 +91,8 @@ export const TOURS: TourDef[] = [
   {
     id: "checkin", key: "tourCheckin", path: "/staff-checkin", audience: "staff", section: "checkin",
     steps: [
-      { target: "checkin-id", key: "tourCheckinCheckinId" },
-      { target: "checkin-confirm", key: "tourCheckinCheckinConfirm" },
-      { target: "checkin-print", key: "tourCheckinCheckinPrint" }
+      { target: "checkin-number", key: "tourCheckinCheckinNumber" },
+      { target: "checkin-counter", key: "tourCheckinCheckinCounter" }
     ]
   },
   {

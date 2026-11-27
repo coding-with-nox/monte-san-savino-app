@@ -87,7 +87,15 @@ const IT = {
   "col.medal": "Medaglia",
   "col.displayNumber": "N. display",
   "col.classNumber": "N. classe",
-  "col.honor": "Premio"
+  "col.honor": "Premio",
+  "col.participantNumber": "N. partecipante",
+  "desk.lists.title": "Controlla le tue iscrizioni",
+  "desk.lists.heading": "Controlla le tue iscrizioni",
+  "desk.envelopes.title": "Buste partecipanti",
+  "photography.title": "Fotografia: modelli premiati",
+  "photography.heading": "Modelli premiati per la fotografia",
+  "photography.noModels": "Nessun modello premiato",
+  "sheet.photography": "Fotografia"
 };
 
 export type PrintKey = keyof typeof IT;
@@ -176,7 +184,15 @@ const EN: Record<PrintKey, string> = {
   "col.medal": "Medal",
   "col.displayNumber": "Display no.",
   "col.classNumber": "Class no.",
-  "col.honor": "Award"
+  "col.honor": "Award",
+  "col.participantNumber": "Participant no.",
+  "desk.lists.title": "Check your entries",
+  "desk.lists.heading": "Check your entries",
+  "desk.envelopes.title": "Participant envelopes",
+  "photography.title": "Photography: awarded models",
+  "photography.heading": "Awarded models for photography",
+  "photography.noModels": "No awarded models",
+  "sheet.photography": "Photography"
 };
 
 export const PRINT_MESSAGES: Record<PrintLang, Record<PrintKey, string>> = { it: IT, en: EN };

@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import QRCode from "qrcode";
 import { escapeHtml } from "../../../shared/domain/escapeHtml";
 import { parsePrintLang, pt, type PrintLang } from "../../../shared/domain/printI18n";
@@ -7,12 +7,23 @@ import { requireRole } from "../../../identity/infra/http/role.middleware";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { categoriesTable, eventsTable, modelsTable, registrationsTable, settingsTable } from "../persistence/schema";
 import { userProfilesTable, usersTable } from "../../../identity/infra/persistence/schema";
-import { classPrintRoutes } from "./class-print.routes";
+import { classPrintRoutes, displayName } from "./class-print.routes";
 import { presentationPrintRoutes } from "./presentation-print.routes";
 import { formatModelCode, loadModelCodeFormatSettings } from "./model-code";
 import { loadPricingEntries } from "../persistence/pricingRepository";
+import { loadCeremony } from "../persistence/ceremony";
 import { formatEuro, type PricingSummary } from "../../domain/pricing";
 import { exportLimitError, exportMaxRows, mapInChunks, QR_CHUNK_SIZE } from "./exportLimits";
+import { parseParticipantRange, type ParticipantRange } from "../../domain/participantRange";
+import { buildPhotographyRows, MIN_PHOTO_MEDAL_RANK_KEY, parseMinPhotoMedalRank } from "../../domain/photography";
+import {
+  loadDeskModels, loadDeskParticipants, loadParticipantNumberByDisplay, participantRangeConditions
+} from "../persistence/deskPrint";
+import {
+  formatParticipantNumber, renderDeskEnvelopesHtml, renderDeskLabelsHtml, renderDeskListsHtml,
+  type DeskEnvelope, type DeskListModel, type DeskListParticipant
+} from "./desk-print";
+import { photographyClassLabel, renderPhotographyHtml } from "./photography-print";
 
 type ExportSettings = {
   includeModelCode: boolean;
@@ -445,8 +456,8 @@ function filtersFileSuffix(filters: ExportFilters) {
   return [filters.eventId, filters.userId, filters.modelId].filter(Boolean).join("-") || undefined;
 }
 
-async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSettings: ExportSettings) {
-  const conds = buildModelFilterConditions(filters);
+async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSettings: ExportSettings, range: ParticipantRange = {}) {
+  const conds = [...buildModelFilterConditions(filters), ...participantRangeConditions(range)];
   const rows = await tenantDb
     .select({
       modelId: modelsTable.id,
@@ -465,6 +476,7 @@ async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSetting
     .leftJoin(usersTable, eq(usersTable.id, modelsTable.userId))
     .leftJoin(userProfilesTable, eq(userProfilesTable.userId, modelsTable.userId))
     .where(conds.length ? and(...conds) : undefined)
+    .orderBy(asc(usersTable.seqId), asc(modelsTable.displayNumber), asc(modelsTable.code))
     .limit(exportMaxRows() + 1);
 
   // null = over EXPORT_MAX_ROWS (callers answer 413); checked before generating any QR code
@@ -480,6 +492,14 @@ async function getLabelRows(tenantDb: any, filters: ExportFilters, exportSetting
     qr: await modelQrDataUrl(row.modelId)
   }));
 }
+
+const deskRangeQuerySchema = t.Object({
+  from: t.Optional(t.String()),
+  to: t.Optional(t.String()),
+  lang: t.Optional(t.String())
+});
+
+const langQuerySchema = t.Object({ lang: t.Optional(t.String()) });
 
 const managerExportRoutes = new Elysia()
   .use(requireRole("manager"))
@@ -1029,7 +1049,204 @@ const managerExportRoutes = new Elysia()
       tags: ["Exports"],
       security: [{ bearerAuth: [] }]
     }
+  })
+  // Desk batch prints by participant number: from/to inclusive, both optional (422 if invalid or from > to).
+  .get("/events/:eventId/desk/stats", async ({ tenantDb, params, query, set }) => {
+    const parsed = deskRange(params.eventId, query);
+    if (!parsed.ok) { set.status = 422; return { error: parsed.error }; }
+    const participants = await loadDeskParticipants(tenantDb, params.eventId, parsed.range);
+    const models = await loadDeskModels(tenantDb, params.eventId, parsed.range);
+    const tooLarge = exportLimitError(models.length);
+    if (tooLarge) { set.status = 413; return tooLarge; }
+    return {
+      participants: participants.length,
+      models: models.length,
+      labels: models.length,
+      listPages: participants.length,
+      envelopes: participants.length
+    };
+  }, {
+    params: t.Object({ eventId: t.String() }),
+    query: deskRangeQuerySchema,
+    detail: {
+      summary: "Stampe desk: conteggi per range di numeri partecipante",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/events/:eventId/desk/labels", async ({ tenantDb, params, query, set }) => {
+    const parsed = deskRange(params.eventId, query);
+    if (!parsed.ok) { set.status = 422; return { error: parsed.error }; }
+    const event = await findEvent(tenantDb, params.eventId);
+    if (!event) { set.status = 404; return { error: "Event not found" }; }
+    const lang = parsePrintLang(query.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
+    const rows = await getLabelRows(tenantDb, { eventId: params.eventId }, exportSettings, parsed.range);
+    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
+    set.headers["content-type"] = "text/html; charset=utf-8";
+    set.headers["content-disposition"] = `inline; filename="desk-labels.html"`;
+    return renderDeskLabelsHtml(event, rows, lang);
+  }, {
+    params: t.Object({ eventId: t.String() }),
+    query: deskRangeQuerySchema,
+    detail: {
+      summary: "Stampe desk: etichette HTML (una per modello) per range di numeri partecipante",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/events/:eventId/desk/labels/data", async ({ tenantDb, params, query, set }) => {
+    const parsed = deskRange(params.eventId, query);
+    if (!parsed.ok) { set.status = 422; return { error: parsed.error }; }
+    // Same JSON rows as /labels/data (DYMO flow).
+    const exportSettings = await loadExportSettings(tenantDb, parsePrintLang(query.lang));
+    const rows = await getLabelRows(tenantDb, { eventId: params.eventId }, exportSettings, parsed.range);
+    if (!rows) { set.status = 413; return exportLimitError(exportMaxRows() + 1)!; }
+    return rows;
+  }, {
+    params: t.Object({ eventId: t.String() }),
+    query: deskRangeQuerySchema,
+    detail: {
+      summary: "Stampe desk: dati etichette JSON (DYMO) per range di numeri partecipante",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/events/:eventId/desk/lists", async ({ tenantDb, params, query, set }) => {
+    const parsed = deskRange(params.eventId, query);
+    if (!parsed.ok) { set.status = 422; return { error: parsed.error }; }
+    const event = await findEvent(tenantDb, params.eventId);
+    if (!event) { set.status = 404; return { error: "Event not found" }; }
+    const lang = parsePrintLang(query.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
+    const participants = await loadDeskParticipants(tenantDb, params.eventId, parsed.range);
+    const modelRows = await loadDeskModels(tenantDb, params.eventId, parsed.range);
+    const tooLarge = exportLimitError(modelRows.length);
+    if (tooLarge) { set.status = 413; return tooLarge; }
+    const modelsByUser = new Map<string, DeskListModel[]>();
+    for (const m of modelRows) {
+      const list = modelsByUser.get(m.userId) ?? [];
+      list.push({
+        code: formatModelCodeForExport(exportSettings, m.code, m.categorySeqId, m.displayNumber, m.teamCode),
+        className: m.categoryName,
+        displayNumber: m.displayNumber,
+        name: m.name
+      });
+      modelsByUser.set(m.userId, list);
+    }
+    const lists: DeskListParticipant[] = participants.map((p) => ({
+      participantNumber: p.participantNumber,
+      name: displayName(p.firstName, p.lastName, p.email),
+      country: p.country ?? "",
+      models: modelsByUser.get(p.userId) ?? []
+    }));
+    set.headers["content-type"] = "text/html; charset=utf-8";
+    set.headers["content-disposition"] = `inline; filename="desk-lists.html"`;
+    return renderDeskListsHtml(event, lists, lang);
+  }, {
+    params: t.Object({ eventId: t.String() }),
+    query: deskRangeQuerySchema,
+    detail: {
+      summary: "Stampe desk: liste 'controlla le tue iscrizioni' (una pagina per partecipante)",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/events/:eventId/desk/envelopes", async ({ tenantDb, params, query, set }) => {
+    const parsed = deskRange(params.eventId, query);
+    if (!parsed.ok) { set.status = 422; return { error: parsed.error }; }
+    const lang = parsePrintLang(query.lang);
+    const participants = await loadDeskParticipants(tenantDb, params.eventId, parsed.range);
+    const envelopes: DeskEnvelope[] = participants.map((p) => ({
+      participantNumber: p.participantNumber,
+      name: displayName(p.firstName, p.lastName, p.email),
+      email: p.email,
+      country: p.country ?? ""
+    }));
+    set.headers["content-type"] = "text/html; charset=utf-8";
+    set.headers["content-disposition"] = `inline; filename="desk-envelopes.html"`;
+    return renderDeskEnvelopesHtml(envelopes, lang);
+  }, {
+    params: t.Object({ eventId: t.String() }),
+    query: deskRangeQuerySchema,
+    detail: {
+      summary: "Stampe desk: buste 220x110 mm (una per partecipante)",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  // Photography list: awarded models at or above the minimum medal (setting minPhotoMedalRank).
+  .get("/events/:eventId/photography", async ({ tenantDb, params, query, set }) => {
+    if (!UUID_RE.test(params.eventId)) { set.status = 422; return { error: "eventId must be a valid uuid" }; }
+    const event = await findEvent(tenantDb, params.eventId);
+    if (!event) { set.status = 404; return { error: "Event not found" }; }
+    const lang = parsePrintLang(query.lang);
+    const rows = await loadPhotographyRows(tenantDb, event.id);
+    set.headers["content-type"] = "text/html; charset=utf-8";
+    set.headers["content-disposition"] = `inline; filename="photography.html"`;
+    return renderPhotographyHtml(event, rows, lang);
+  }, {
+    params: t.Object({ eventId: t.String() }),
+    query: langQuerySchema,
+    detail: {
+      summary: "Lista fotografia: modelli premiati sopra la medaglia minima (HTML)",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
+  })
+  .get("/events/:eventId/photography/excel", async ({ tenantDb, params, query, set }) => {
+    if (!UUID_RE.test(params.eventId)) { set.status = 422; return { error: "eventId must be a valid uuid" }; }
+    const lang = parsePrintLang(query.lang);
+    const exportSettings = await loadExportSettings(tenantDb, lang);
+    const rows = await loadPhotographyRows(tenantDb, params.eventId);
+    setXlsxHeaders(set, buildFileName(exportSettings, "photography", params.eventId));
+    return toXlsx(buildSheetName(exportSettings, pt(lang, "sheet.photography")), rows.map((r) => ({
+      [pt(lang, "label.class")]: photographyClassLabel(r),
+      [pt(lang, "col.displayNumber")]: String(r.displayNumber ?? ""),
+      [pt(lang, "col.participantNumber")]: r.participantNumber === null ? "" : formatParticipantNumber(r.participantNumber),
+      [pt(lang, "col.exhibitor")]: r.exhibitor,
+      [pt(lang, "col.model")]: r.wholeDisplay ? pt(lang, "presentation.wholeDisplay") : (r.modelName ?? ""),
+      [pt(lang, "col.code")]: r.modelCode ?? "",
+      [pt(lang, "col.medal")]: r.medalLabel
+    })), lang);
+  }, {
+    params: t.Object({ eventId: t.String() }),
+    query: langQuerySchema,
+    detail: {
+      summary: "Lista fotografia Excel (XLSX)",
+      tags: ["Exports"],
+      security: [{ bearerAuth: [] }]
+    }
   });
+
+type DeskRange = { ok: true; range: ParticipantRange } | { ok: false; error: string };
+
+/** eventId must be a uuid; from/to are optional participant numbers (see parseParticipantRange). */
+function deskRange(eventId: string, query: Record<string, unknown> | undefined): DeskRange {
+  if (!UUID_RE.test(eventId)) return { ok: false, error: "eventId must be a valid uuid" };
+  return parseParticipantRange(query);
+}
+
+async function findEvent(tenantDb: any, eventId: string): Promise<{ id: string; name: string } | undefined> {
+  const [event] = await tenantDb
+    .select({ id: eventsTable.id, name: eventsTable.name })
+    .from(eventsTable)
+    .where(eq(eventsTable.id, eventId as any))
+    .limit(1);
+  return event;
+}
+
+/** Awarded models at or above the minimum medal of the photography list, in ceremony order. */
+async function loadPhotographyRows(tenantDb: any, eventId: string) {
+  const [minRow] = await tenantDb
+    .select({ value: settingsTable.value })
+    .from(settingsTable)
+    .where(eq(settingsTable.key, MIN_PHOTO_MEDAL_RANK_KEY))
+    .limit(1);
+  const { classes } = await loadCeremony(tenantDb, eventId);
+  const participantByDisplay = await loadParticipantNumberByDisplay(tenantDb, eventId);
+  return buildPhotographyRows(classes, participantByDisplay, parseMinPhotoMedalRank(minRow?.value));
+}
 
 const userExportRoutes = new Elysia()
   .use(requireRole("user"))

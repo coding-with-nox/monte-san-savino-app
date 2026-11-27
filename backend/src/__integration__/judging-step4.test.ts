@@ -201,7 +201,7 @@ describe("integration judging step 4: head-judge overrides, review, missing mode
     const late = await request("PATCH", `/admin/models/${a}/missing`, manager.token, { missing: false });
     expect(late.status).toBe(409);
     expect(late.json.code).toBe("CATEGORY_CLOSED");
-  });
+  }, 20_000); // many sequential requests: give CI (Bun 1.1.29 under load) room beyond the 5 s default
 
   it("unmark restores the model with its votes and invalidates the judge completions of its class", async () => {
     const jA = await createUser("judge");

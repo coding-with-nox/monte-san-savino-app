@@ -50,7 +50,45 @@ describe("Admin judging rules card", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(calls("/admin/settings", "PUT")).toHaveLength(1));
-    expect(calls("/admin/settings", "PUT")[0][1].body).toBe(JSON.stringify({ maxVotesPerExhibitor: "4", maxVoteDifferent: "5" }));
+    expect(calls("/admin/settings", "PUT")[0][1].body).toBe(
+      JSON.stringify({ maxVotesPerExhibitor: "4", maxVoteDifferent: "5", absenceRegisterEnabled: "false", minPhotoMedalRank: "4" })
+    );
+  });
+
+  it("shows the front desk switch and photographers medal, and saves them with the same flow", async () => {
+    const user = userEvent.setup();
+    apiMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (init?.method === "PUT") return { updated: true };
+      if (path === "/settings")
+        return { maxVotesPerExhibitor: "3", maxVoteDifferent: "2", absenceRegisterEnabled: "true", minPhotoMedalRank: "6" };
+      return [];
+    });
+    renderWithProviders(<JudgingRulesCard language="en" />);
+    const absence = await screen.findByLabelText("Front desk attendance register");
+    await waitFor(() => expect(absence).toBeChecked());
+    expect(screen.getByText("Judges only see the showcases of participants marked present at the front desk.")).toBeInTheDocument();
+    const medal = screen.getByLabelText("Minimum medal for photographers");
+    await waitFor(() => expect(medal).toHaveValue(6));
+
+    await user.click(absence);
+    await user.clear(medal);
+    await user.type(medal, "2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(calls("/admin/settings", "PUT")).toHaveLength(1));
+    expect(calls("/admin/settings", "PUT")[0][1].body).toBe(
+      JSON.stringify({ maxVotesPerExhibitor: "3", maxVoteDifferent: "2", absenceRegisterEnabled: "false", minPhotoMedalRank: "2" })
+    );
+  });
+
+  it("does not save a photographers medal above 10", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<JudgingRulesCard language="en" />);
+    const medal = await screen.findByLabelText("Minimum medal for photographers");
+    await waitFor(() => expect(medal).toHaveValue(4));
+    await user.clear(medal);
+    await user.type(medal, "11");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   it("does not save out-of-range values", async () => {
