@@ -703,6 +703,7 @@ export const de: Record<TranslationKey, string> = {
   tipMenuProfile: "Öffnet deine persönlichen Daten, die du bearbeiten kannst.",
   tipMenuReplayTours: "Sorgt dafür, dass die Seitenrundgänge bei deinem nächsten Besuch wieder von selbst starten.",
   tipLogout: "Beendet deine Sitzung auf diesem Gerät und kehrt zur Anmeldung zurück.",
+  tipGoToLogin: "Öffnet die Seite für Anmeldung und Registrierung.",
   tipMaintenanceRetry: "Lädt die Seite neu, um zu prüfen, ob der Dienst wieder läuft.",
   tipLogin: "Meldet dich mit der eingegebenen E-Mail und dem Passwort an.",
   tipSignup: "Erstellt das Konto mit den eingegebenen Daten und meldet dich an.",

@@ -69,6 +69,9 @@ const Socials = lazy(() => import("./pages/Socials"));
 import PageSkeleton from "./components/PageSkeleton";
 import SideNav from "./components/SideNav";
 import { ActionButton, TipIconButton, TipMenuItem } from "./components/ActionButton";
+import AppLogo from "./components/AppLogo";
+import FlagIcon from "./components/FlagIcon";
+import LoginIcon from "@mui/icons-material/Login";
 import usePageTour from "./components/usePageTour";
 import { Access, AccessContext, NO_ACCESS } from "./lib/access";
 import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
@@ -274,9 +277,10 @@ export default function App() {
 
   const drawerContent = (
     <Box sx={{ width: 280 }} role="presentation" onClick={() => setDrawerOpen(false)}>
-      <Typography variant="h6" sx={{ px: 2, py: 2 }}>
-        {appName}
-      </Typography>
+      <Box sx={{ px: 2, py: 2, display: "flex", alignItems: "center", gap: 1.5 }}>
+        <AppLogo size={28} />
+        <Typography variant="h6" noWrap>{appName}</Typography>
+      </Box>
       <Divider />
       <List>
         {navItems.map((item) => (
@@ -331,20 +335,26 @@ export default function App() {
                 <MenuIcon />
               </TipIconButton>
             )}
-            <Typography variant="h6" sx={{ flexGrow: 1, color: "text.primary" }}>
-              {appName}
-            </Typography>
+            <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+              <AppLogo size={32} />
+              <Typography variant="h6" noWrap sx={{ color: "text.primary" }}>
+                {appName}
+              </Typography>
+            </Box>
             <Stack direction="row" spacing={1} alignItems="center">
               <Select
                 data-tour="topbar-lang"
                 size="small"
                 value={language}
                 onChange={(event) => setLanguage(event.target.value as Language)}
-                renderValue={(val) => LANGUAGES.find((l) => l.code === val)?.flag ?? "🇬🇧"}
-                sx={{ bgcolor: "background.paper", borderRadius: 1, minWidth: 52 }}
+                renderValue={(val) => <FlagIcon code={val as Language} />}
+                inputProps={{ "aria-label": LANGUAGES.find((l) => l.code === language)?.name }}
+                sx={{ bgcolor: "background.paper", borderRadius: 1, minWidth: 52, "& .MuiSelect-select": { display: "flex", alignItems: "center", py: 1.1 } }}
               >
                 {LANGUAGES.map((l) => (
-                  <MenuItem key={l.code} value={l.code}>{l.flag} {l.name}</MenuItem>
+                  <MenuItem key={l.code} value={l.code} sx={{ gap: 1.5 }}>
+                    <FlagIcon code={l.code} /> {l.name}
+                  </MenuItem>
                 ))}
               </Select>
               <TipIconButton
@@ -365,6 +375,11 @@ export default function App() {
               >
                 {themeMode === "light" ? <Brightness4Icon /> : <Brightness7Icon />}
               </TipIconButton>
+              {!role && location.pathname !== "/login" && (
+                <ActionButton tip={t(language, "tipGoToLogin")} variant="contained" size="small" startIcon={<LoginIcon />} onClick={() => navigate(loginPathFor(location.pathname, location.search))}>
+                  {t(language, "loginButton")}
+                </ActionButton>
+              )}
               {role && (
                 <>
                   <TipIconButton tip={t(language, "tipAccountMenu")} data-tour="topbar-account" aria-label={t(language, "navProfile")} onClick={(e) => setAvatarMenuAnchor(e.currentTarget)} sx={{ p: 0 }}>
