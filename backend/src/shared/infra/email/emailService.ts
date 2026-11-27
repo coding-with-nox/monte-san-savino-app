@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { logger } from "../logger/logger";
 import { escapeHtml } from "../../domain/escapeHtml";
 
-export type PasswordResetLinkLang = "it" | "en";
+export type PasswordResetLinkLang = "it" | "en" | "es" | "fr" | "de";
 
 const PASSWORD_RESET_LINK_TEXT: Record<PasswordResetLinkLang, { subject: string; intro: string; button: string; ignore: string }> = {
   it: {
@@ -16,6 +16,24 @@ const PASSWORD_RESET_LINK_TEXT: Record<PasswordResetLinkLang, { subject: string;
     intro: "You asked to reset your password. Open the link below, valid for 60 minutes:",
     button: "Reset password",
     ignore: "If you did not ask for this, ignore this email: your password will not change."
+  },
+  es: {
+    subject: "Restablece tu contraseña - Miniatures Contest",
+    intro: "Has pedido restablecer tu contraseña. Abre el enlace de abajo, válido durante 60 minutos:",
+    button: "Restablecer contraseña",
+    ignore: "Si no lo has pedido tú, ignora este correo: tu contraseña no cambiará."
+  },
+  fr: {
+    subject: "Réinitialisez votre mot de passe - Miniatures Contest",
+    intro: "Vous avez demandé à réinitialiser votre mot de passe. Ouvrez le lien ci-dessous, valable 60 minutes :",
+    button: "Réinitialiser le mot de passe",
+    ignore: "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail : votre mot de passe ne changera pas."
+  },
+  de: {
+    subject: "Passwort zurücksetzen - Miniatures Contest",
+    intro: "Du hast angefordert, dein Passwort zurückzusetzen. Öffne den Link unten, er ist 60 Minuten gültig:",
+    button: "Passwort zurücksetzen",
+    ignore: "Wenn du das nicht warst, ignoriere diese E-Mail: Dein Passwort bleibt unverändert."
   }
 };
 

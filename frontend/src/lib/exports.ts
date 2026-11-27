@@ -1,3 +1,4 @@
+import { isLanguage } from "./i18n";
 import { api } from "./api";
 
 export type ExportParams = Record<string, string | null | undefined>;
@@ -5,7 +6,8 @@ export type ExportParams = Record<string, string | null | undefined>;
 /** UI language, sent as `lang` so server-side prints match the interface (it | en). */
 export function currentLang(): string {
   try {
-    return window.localStorage.getItem("language") === "en" ? "en" : "it";
+    const stored = window.localStorage.getItem("language");
+    return isLanguage(stored) ? stored : "it";
   } catch {
     return "it";
   }

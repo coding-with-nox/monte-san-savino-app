@@ -38,7 +38,7 @@ export type EventPricing = {
 export type PricingResponse = { currency: string; totalCents: number; events: EventPricing[] };
 
 export function formatCents(cents: number, language: Language): string {
-  return new Intl.NumberFormat(language === "it" ? "it-IT" : "en-IE", { style: "currency", currency: "EUR" }).format(cents / 100);
+  return new Intl.NumberFormat(({ it: "it-IT", en: "en-IE", es: "es-ES", fr: "fr-FR", de: "de-DE" } as Record<string, string>)[language] ?? "en-IE", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
 /** "15" / "15,50" -> cents; null when the text is not a non-negative amount. */

@@ -73,7 +73,7 @@ import usePageTour from "./components/usePageTour";
 import { Access, AccessContext, NO_ACCESS } from "./lib/access";
 import { api, API_BASE, AUTH_LOGOUT_EVENT, AuthLogoutDetail } from "./lib/api";
 import { getToken, getRole, roleAtLeast, clearToken, decodeJwt, Role } from "./lib/auth";
-import { Language, t } from "./lib/i18n";
+import { Language, LANGUAGES, isLanguage, languageFromBrowser, t } from "./lib/i18n";
 import { buildTheme, DEFAULT_THEME_PRESET, isThemePreset, ThemePreset } from "./lib/theme";
 import { loginPathFor } from "./lib/redirect";
 
@@ -101,9 +101,9 @@ export default function App() {
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === "undefined") return "it";
     const stored = window.localStorage.getItem("language");
-    if (stored === "it" || stored === "en") return stored;
-    // First visit: international participants get English unless their browser is Italian.
-    return (window.navigator.language || "it").toLowerCase().startsWith("it") ? "it" : "en";
+    if (isLanguage(stored)) return stored;
+    // First visit: the browser language if supported (it, en, es, fr, de), otherwise English.
+    return languageFromBrowser(window.navigator.language);
   });
   const [appName, setAppName] = useState("Miniatures Contest");
   const [backendDown, setBackendDown] = useState(false);
@@ -340,11 +340,12 @@ export default function App() {
                 size="small"
                 value={language}
                 onChange={(event) => setLanguage(event.target.value as Language)}
-                renderValue={(val) => val === "it" ? "🇮🇹" : "🇬🇧"}
+                renderValue={(val) => LANGUAGES.find((l) => l.code === val)?.flag ?? "🇬🇧"}
                 sx={{ bgcolor: "background.paper", borderRadius: 1, minWidth: 52 }}
               >
-                <MenuItem value="it">🇮🇹 Italiano</MenuItem>
-                <MenuItem value="en">🇬🇧 English</MenuItem>
+                {LANGUAGES.map((l) => (
+                  <MenuItem key={l.code} value={l.code}>{l.flag} {l.name}</MenuItem>
+                ))}
               </Select>
               <TipIconButton
                 tip={t(language, "tipHelpPage")}

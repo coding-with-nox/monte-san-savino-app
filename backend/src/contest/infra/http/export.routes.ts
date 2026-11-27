@@ -44,8 +44,16 @@ const textEncoder = new TextEncoder();
 const EN_EURO = new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR" });
 
 /** Italian keeps the app's "€ 25,00" format; English uses en-GB. */
+const LOCALE_EURO: Partial<Record<PrintLang, Intl.NumberFormat>> = {
+  en: EN_EURO,
+  es: new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }),
+  fr: new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }),
+  de: new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" })
+};
+
 function formatMoney(lang: PrintLang, cents: number) {
-  return lang === "en" ? EN_EURO.format(cents / 100) : formatEuro(cents);
+  const fmt = LOCALE_EURO[lang];
+  return fmt ? fmt.format(cents / 100) : formatEuro(cents);
 }
 
 const CRC32_TABLE = (() => {
