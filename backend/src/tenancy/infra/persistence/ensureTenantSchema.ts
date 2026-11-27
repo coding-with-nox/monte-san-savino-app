@@ -513,6 +513,8 @@ export async function ensureTenantSchema() {
     `);
     // Optional login name, unique case-insensitively (NULLs are not considered duplicates).
     await pool.query(`ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS username text`);
+    // Session revocation (SEC-06): refresh sessions started before it are rejected.
+    await pool.query(`ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS sessions_revoked_at timestamptz`);
     await pool.query(`
       DO $$
       BEGIN

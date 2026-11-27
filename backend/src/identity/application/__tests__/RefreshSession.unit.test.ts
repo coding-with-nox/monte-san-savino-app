@@ -27,6 +27,14 @@ describe("RefreshSession", () => {
   it("rejects deleted users", async () => {
     await expect(new RefreshSession(repo(null), tokens(refreshPayload)).execute("x")).rejects.toThrow("Invalid refresh token");
   });
+  it("rejects sessions started before a password reset, keeps later ones (SEC-06)", async () => {
+    const start = Math.floor(Date.now() / 1000) - 600;
+    const revoked = (at: number) => new User("u1", Email.create("a@b.it"), "user", "h", true, null, null, new Date(at * 1000));
+    const payload = { ...refreshPayload, sst: start };
+    await expect(new RefreshSession(repo(revoked(start + 60)), tokens(payload)).execute("x")).rejects.toThrow("Invalid refresh token");
+    await expect(new RefreshSession(repo(revoked(start)), tokens(payload)).execute("x")).rejects.toThrow("Invalid refresh token");
+    expect((await new RefreshSession(repo(revoked(start - 60)), tokens(payload)).execute("x")).role).toBe("user");
+  });
   it("rejects access tokens and unverifiable tokens", async () => {
     await expect(new RefreshSession(repo(user()), tokens({ ...refreshPayload, tokenType: "access" })).execute("x")).rejects.toThrow("Invalid refresh token");
     const bad: TokenService = { ...tokens(refreshPayload), verify: async () => { throw new Error("expired"); } };

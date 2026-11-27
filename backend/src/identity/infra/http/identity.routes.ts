@@ -347,7 +347,8 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
         .where(and(eq(passwordResetsTable.id, row.id), isNull(passwordResetsTable.usedAt)))
         .returning({ id: passwordResetsTable.id });
       if (!claimed) return false;
-      await tx.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, row.userId));
+      // New password: every existing session (stolen refresh tokens included) ends now (SEC-06).
+      await tx.update(usersTable).set({ passwordHash, sessionsRevokedAt: now }).where(eq(usersTable.id, row.userId));
       await tx.update(passwordResetsTable)
         .set({ usedAt: now })
         .where(and(eq(passwordResetsTable.userId, row.userId), isNull(passwordResetsTable.usedAt)));

@@ -296,7 +296,7 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
       return { error: "Email delivery unavailable: password was not reset", emailSent: false };
     }
     const passwordHash = await new BcryptHasher().hash(tempPassword);
-    await tenantDb.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, params.userId as any));
+    await tenantDb.update(usersTable).set({ passwordHash, sessionsRevokedAt: new Date() }).where(eq(usersTable.id, params.userId as any));
     return { emailSent: true };
   }, {
     params: t.Object({ userId: t.String() }),

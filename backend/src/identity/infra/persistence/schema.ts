@@ -11,7 +11,9 @@ export const usersTable = pgTable("users", {
   privacyAcceptedAt: timestamp("privacy_accepted_at", { withTimezone: true }),
   privacyPolicyVersion: text("privacy_policy_version"),
   /** Optional login name (3-30 chars [a-zA-Z0-9._-]); unique case-insensitively. */
-  username: text("username")
+  username: text("username"),
+  /** Refresh sessions started before this instant are rejected (password reset, SEC-06). */
+  sessionsRevokedAt: timestamp("sessions_revoked_at", { withTimezone: true })
 }, (t) => ({
   uxUsername: uniqueIndex("ux_users_username").on(sql`lower(${t.username})`)
 }));
