@@ -7,7 +7,8 @@ import SectionCard from "./SectionCard";
 import useToast from "./useToast";
 import { ActionButton } from "./ActionButton";
 
-export type ImportResult = { created: number; errors: { line: number; message: string }[] };
+/** Classes/levels/previous results answer `created`; the step 10 imports (medals, honors, jury) answer `imported`. */
+export type ImportResult = { created?: number; imported?: number; errors: { line: number; message: string }[] };
 
 export const PREVIEW_LINES = 5;
 export const MAX_CSV_BYTES = 256 * 1024;
@@ -25,19 +26,24 @@ interface CsvImportCardProps {
   /** e.g. /admin/import/levels */
   endpoint: string;
   onImported?: () => void;
-  /** When provided, an event must be chosen first and is sent as ?eventId= (classes import). */
+  /** When provided, the card shows its own event selector and sends the choice as ?eventId= (classes import). */
   events?: { id: string; name: string }[];
+  /** Event chosen by the parent (shared selector): sent as ?eventId=, the card shows no selector. */
+  eventId?: string;
 }
 
 /** Choose a CSV, preview the first rows, POST it as text/csv and list per-line errors. */
-export default function CsvImportCard({ language, title, help, endpoint, onImported, events }: CsvImportCardProps) {
+export default function CsvImportCard({ language, title, help, endpoint, onImported, events, eventId: sharedEventId }: CsvImportCardProps) {
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState("");
   const [text, setText] = useState("");
-  const [eventId, setEventId] = useState("");
+  const [ownEventId, setOwnEventId] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const scoped = events !== undefined || sharedEventId !== undefined;
+  const eventId = sharedEventId ?? ownEventId;
+  const resultCount = result?.imported ?? result?.created ?? 0;
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -63,13 +69,13 @@ export default function CsvImportCard({ language, title, help, endpoint, onImpor
   async function send() {
     setBusy(true);
     try {
-      const res = await api<ImportResult>(events ? `${endpoint}?eventId=${encodeURIComponent(eventId)}` : endpoint, {
+      const res = await api<ImportResult>(scoped ? `${endpoint}?eventId=${encodeURIComponent(eventId)}` : endpoint, {
         method: "POST",
         headers: { "Content-Type": "text/csv" },
         body: text
       });
       setResult(res);
-      if (res.created > 0) onImported?.();
+      if ((res.imported ?? res.created ?? 0) > 0) onImported?.();
     } catch (err: any) {
       toast.error(err?.message ?? String(err));
     } finally {
@@ -87,7 +93,7 @@ export default function CsvImportCard({ language, title, help, endpoint, onImpor
         {events && (
           <FormControl size="small" sx={{ maxWidth: 360 }}>
             <InputLabel id={`${endpoint}-event`}>{t(language, "awardsSelectEvent")}</InputLabel>
-            <Select labelId={`${endpoint}-event`} value={eventId} label={t(language, "awardsSelectEvent")} onChange={(e) => setEventId(e.target.value)}>
+            <Select labelId={`${endpoint}-event`} value={ownEventId} label={t(language, "awardsSelectEvent")} onChange={(e) => setOwnEventId(e.target.value)}>
               {events.map((ev) => <MenuItem key={ev.id} value={ev.id}>{ev.name}</MenuItem>)}
             </Select>
           </FormControl>
@@ -98,7 +104,7 @@ export default function CsvImportCard({ language, title, help, endpoint, onImpor
             <input ref={inputRef} type="file" accept=".csv,text/csv" hidden data-testid="csv-input" aria-label={`${title} - ${t(language, "importChooseFile")}`} onChange={onFile} />
           </ActionButton>
           {fileName && <Typography variant="body2">{fileName}</Typography>}
-          <ActionButton tip={t(language, "tipImportSend")} variant="contained" onClick={send} disabled={!text || busy || (!!events && !eventId)}>
+          <ActionButton tip={t(language, "tipImportSend")} variant="contained" onClick={send} disabled={!text || busy || (scoped && !eventId)}>
             {busy ? "..." : t(language, "importSend")}
           </ActionButton>
         </Stack>
@@ -115,7 +121,7 @@ export default function CsvImportCard({ language, title, help, endpoint, onImpor
         {result && (
           <Stack spacing={1} data-testid="csv-result">
             <Alert severity={result.errors.length > 0 ? "warning" : "success"}>
-              {t(language, "importCreated")}: {result.created} - {t(language, "importErrors")}: {result.errors.length}
+              {result.imported !== undefined ? t(language, "importImported") : t(language, "importCreated")}: {resultCount} - {t(language, "importErrors")}: {result.errors.length}
             </Alert>
             {result.errors.length > 0 && (
               <Table size="small">
