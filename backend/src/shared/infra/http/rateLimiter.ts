@@ -97,3 +97,26 @@ export function rateLimiterFromEnv(env: NodeJS.ProcessEnv = process.env, now?: (
     now
   });
 }
+
+/**
+ * beforeHandle guard factory: one limiter per guard, keyed by client IP plus `keyOf(body)`.
+ * The limiter is built on first use (env read then); `reset` rebuilds it (tests).
+ */
+export function createRateLimitGuard(keyOf: (body: any) => string) {
+  let limiter: SlidingWindowRateLimiter | null | undefined;
+  let clock: (() => number) | undefined;
+  const guard = ({ body, request, server, set }: any) => {
+    if (limiter === undefined) limiter = rateLimiterFromEnv(process.env, clock);
+    if (!limiter) return;
+    const headers = { "x-forwarded-for": request.headers.get("x-forwarded-for") ?? undefined };
+    const ip = clientIp(headers, server?.requestIP?.(request)?.address);
+    const r = limiter.hit(`${ip}|${keyOf(body)}`);
+    if (!r.allowed) {
+      set.status = 429;
+      set.headers["retry-after"] = String(r.retryAfterSeconds);
+      return { error: "Too many attempts, try again later" };
+    }
+  };
+  guard.reset = (now?: () => number) => { limiter = undefined; clock = now; };
+  return guard;
+}

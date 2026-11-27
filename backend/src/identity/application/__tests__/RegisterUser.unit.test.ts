@@ -10,6 +10,7 @@ function stubRepo(existing: User | null): UserRepository & { saved: User[] } {
   return {
     saved,
     findByEmail: async () => existing,
+    findByUsername: async () => null,
     findById: async () => null,
     save: async (user) => { saved.push(user); },
   };

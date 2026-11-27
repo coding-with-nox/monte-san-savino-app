@@ -15,6 +15,7 @@ import { categoryRoutes } from "../contest/infra/http/category.routes";
 import { userEnrollmentRoutes, adminEnrollmentRoutes, staffCheckinRoutes } from "../contest/infra/http/enrollment.routes";
 import { staffDeskRoutes } from "../contest/infra/http/desk.routes";
 import { publicRoutes } from "../contest/infra/http/public.routes";
+import { publicSocialsRoutes } from "../contest/infra/http/public-socials.routes";
 import { exportRoutes } from "../contest/infra/http/export.routes";
 import { awardRoutes } from "../contest/infra/http/award.routes";
 import { ceremonyRoutes } from "../contest/infra/http/ceremony.routes";
@@ -150,6 +151,7 @@ export function buildApp() {
     // event/category fee (never from the client body), (4) a DB transaction for payment + registration update.
     // .use(paymentRoutes)
     .use(publicRoutes)
+    .use(publicSocialsRoutes)
     .use(exportRoutes)
     .use(awardRoutes)
     .use(ceremonyRoutes)

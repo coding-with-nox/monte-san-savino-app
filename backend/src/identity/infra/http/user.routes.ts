@@ -6,6 +6,8 @@ import { getTenantDbFromEnv } from "../../../tenancy/infra/tenantDbFactory";
 import { normalizeSocialPatch } from "../../../shared/domain/socialLinks";
 import { normalizeProfilePatch } from "../../domain/profileFields";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
+import { normalizeUsername, UsernameTakenError } from "../../domain/username";
+import { setUsername } from "../persistence/userRepository.drizzle";
 
 export const userRoutes = new Elysia({ prefix: "/users" })
   .use(tenantMiddleware)
@@ -20,6 +22,7 @@ export const userRoutes = new Elysia({ prefix: "/users" })
       .select({
         id: usersTable.id,
         email: usersTable.email,
+        username: usersTable.username,
         role: usersTable.role,
         firstName: userProfilesTable.firstName,
         lastName: userProfilesTable.lastName,
@@ -54,28 +57,48 @@ export const userRoutes = new Elysia({ prefix: "/users" })
       set.status = 401;
       return { error: "Unauthenticated" };
     }
-    const social = normalizeSocialPatch(body);
+    const { username, ...profileBody } = body;
+    const social = normalizeSocialPatch(profileBody);
     if (!social.ok) {
       set.status = 422;
       return { error: social.error };
     }
-    const profile = normalizeProfilePatch(body);
+    const profile = normalizeProfilePatch(profileBody);
     if (!profile.ok) {
       set.status = 422;
       return { error: profile.error };
     }
-    const values = { ...body, ...social.patch, ...profile.patch };
+    const values = { ...profileBody, ...social.patch, ...profile.patch };
     const db = tenantDb ?? getTenantDbFromEnv();
-    await db
-      .insert(userProfilesTable)
-      .values({ userId: user.id as any, ...values })
-      .onConflictDoUpdate({
-        target: userProfilesTable.userId,
-        set: values
-      });
+    if (username !== undefined) {
+      const name = normalizeUsername(username);
+      if (!name.ok) {
+        set.status = 422;
+        return { error: name.error };
+      }
+      try {
+        await setUsername(db, user.id, name.value);
+      } catch (error) {
+        if (error instanceof UsernameTakenError) {
+          set.status = 409;
+          return { error: "Username already taken", code: "USERNAME_TAKEN" };
+        }
+        throw error;
+      }
+    }
+    if (Object.keys(values).length > 0) {
+      await db
+        .insert(userProfilesTable)
+        .values({ userId: user.id as any, ...values })
+        .onConflictDoUpdate({
+          target: userProfilesTable.userId,
+          set: values
+        });
+    }
     return { updated: true };
   }, {
     body: t.Object({
+      username: t.Optional(t.Union([t.String({ maxLength: 100 }), t.Null()])),
       firstName: t.Optional(t.String()),
       lastName: t.Optional(t.String()),
       phone: t.Optional(t.String()),

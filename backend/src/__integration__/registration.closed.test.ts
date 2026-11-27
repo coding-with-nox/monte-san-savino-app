@@ -125,15 +125,15 @@ describe("integration registration status (registrationStatus)", () => {
     it("GET /public/registration needs no auth and derives defaultPage", async () => {
       const defaults = await request("GET", "/public/registration");
       expect(defaults.status).toBe(200);
-      expect(defaults.json).toEqual({ status: "open", defaultPage: "login" });
+      expect(defaults.json).toEqual({ status: "open", defaultPage: "login", turnstileSiteKey: null });
 
       await setSetting("defaultPublicPage", "register");
-      expect((await request("GET", "/public/registration")).json).toEqual({ status: "open", defaultPage: "register" });
+      expect((await request("GET", "/public/registration")).json).toEqual({ status: "open", defaultPage: "register", turnstileSiteKey: null });
     });
 
     it("openday always opens on the register page", async () => {
       await setSetting("registrationStatus", "openday");
-      expect((await request("GET", "/public/registration")).json).toEqual({ status: "openday", defaultPage: "register" });
+      expect((await request("GET", "/public/registration")).json).toEqual({ status: "openday", defaultPage: "register", turnstileSiteKey: null });
     });
   });
 });

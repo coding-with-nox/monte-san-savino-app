@@ -45,6 +45,7 @@ import PrintActions from "../components/PrintActions";
 import SocialLinks from "../components/SocialLinks";
 import { hasInvalidSocial, socialPayload } from "../lib/social";
 import { countryName, countryOptions } from "../lib/countries";
+import { isValidUsername } from "../lib/username";
 import useToast from "../components/useToast";
 import { roleLabel } from "../lib/roles";
 import { ActionButton, TipIconButton } from "../components/ActionButton";
@@ -55,6 +56,7 @@ type Event = { id: string; name: string; status: string };
 type UserProfile = {
   id: string;
   email: string;
+  username?: string | null;
   role: string;
   isActive: boolean;
   firstName?: string | null;
@@ -190,6 +192,7 @@ export default function Users({ language }: UsersProps) {
     }
     setEditProfile(profile);
     setProfileForm({
+      username: profile.username,
       firstName: profile.firstName,
       lastName: profile.lastName,
       phone: profile.phone,
@@ -279,11 +282,17 @@ export default function Users({ language }: UsersProps) {
       toast.error(t(language, "profileSocialInvalid"));
       return;
     }
+    const username = (profileForm.username ?? "").trim();
+    if (username && !isValidUsername(username)) {
+      toast.error(t(language, "usernameInvalid"));
+      return;
+    }
     try {
       await api(`/admin/users/${editProfile.id}/profile`, {
         method: "PUT",
         body: JSON.stringify({
           ...profileForm,
+          username: username || null,
           ...socialPayload(profileForm),
           country: profileForm.country || null,
           publicProfile: profileForm.publicProfile ?? false
@@ -294,7 +303,8 @@ export default function Users({ language }: UsersProps) {
       setEditProfile(updated);
       toast.success(t(language, "adminProfileSaved"));
     } catch (err: any) {
-      toast.error(err?.message ?? String(err));
+      if (err instanceof ApiError && err.code === "USERNAME_TAKEN") toast.error(t(language, "usernameTaken"));
+      else toast.error(err?.message ?? String(err));
     }
   }
 
@@ -529,6 +539,10 @@ export default function Users({ language }: UsersProps) {
                 {!editingFields && (
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
+                      <Typography variant="caption" color="text.secondary">{t(language, "profileUsername")}</Typography>
+                      <Typography>{editProfile.username || "-"}</Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">{t(language, "profileFirstName")}</Typography>
                       <Typography>{editProfile.firstName || "-"}</Typography>
                     </Grid>
@@ -590,6 +604,7 @@ export default function Users({ language }: UsersProps) {
                     setPhoneError(false);
                     setEmergencyPhoneError(false);
                     setProfileForm({
+                      username: editProfile.username,
                       firstName: editProfile.firstName,
                       lastName: editProfile.lastName,
                       phone: editProfile.phone,

@@ -1,9 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Alert,
   Box,
   Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   FormControlLabel,
   FormHelperText,
@@ -30,8 +34,10 @@ import { Language, t } from "../lib/i18n";
 import { countryOptions } from "../lib/countries";
 import { PRIVACY_POLICY_VERSION } from "../lib/privacyNotice";
 import { safeNextPath } from "../lib/redirect";
+import { isValidUsername } from "../lib/username";
 import useToast from "../components/useToast";
 import { ActionButton, TipIconButton } from "../components/ActionButton";
+import TurnstileWidget, { TurnstileHandle } from "../components/TurnstileWidget";
 
 interface LoginProps {
   language: Language;
@@ -46,6 +52,7 @@ const EMAIL_RE = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0
 
 type SignupForm = {
   email: string;
+  username: string;
   password: string;
   confirm: string;
   firstName: string;
@@ -60,7 +67,7 @@ type SignupForm = {
 };
 
 const EMPTY_SIGNUP: SignupForm = {
-  email: "", password: "", confirm: "", firstName: "", lastName: "", phone: "", country: "IT",
+  email: "", username: "", password: "", confirm: "", firstName: "", lastName: "", phone: "", country: "IT",
   city: "", address: "", emergencyContactName: "", emergencyContact: "", privacy: false
 };
 
@@ -77,6 +84,10 @@ export default function Login({ language }: LoginProps) {
   const [busy, setBusy] = useState(false);
   // Manual opening/closing of registrations (GET /public/registration). Sign in always stays available.
   const [registrationStatus, setRegistrationStatus] = useState<RegistrationStatus>("open");
+  // Cloudflare Turnstile is required on sign-up only when the backend publishes a site key.
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   useEffect(() => {
     void loadRegistration();
@@ -85,19 +96,22 @@ export default function Login({ language }: LoginProps) {
 
   async function loadRegistration() {
     try {
-      const res = await api<{ status?: RegistrationStatus; defaultPage?: string }>("/public/registration");
+      const res = await api<{ status?: RegistrationStatus; defaultPage?: string; turnstileSiteKey?: string | null }>("/public/registration");
       if (res?.status) setRegistrationStatus(res.status);
       if (res?.defaultPage === "register") setTab("signup");
+      setTurnstileSiteKey(res?.turnstileSiteKey || null);
     } catch {
       // Keep the defaults: registrations open, sign-in tab first.
     }
   }
 
   // --- Login ---
+  // The field takes the email or the username: only values with "@" are checked as emails.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   // --- Signup ---
   const [step, setStep] = useState(0);
@@ -110,6 +124,10 @@ export default function Login({ language }: LoginProps) {
     if (value.length > 254) return tr("emailValidationTooLong");
     if (value && !EMAIL_RE.test(value)) return tr("emailValidationInvalid");
     return "";
+  }
+
+  function identifierProblem(value: string): string {
+    return value.includes("@") ? emailProblem(value) : "";
   }
 
   function handleError(error: unknown) {
@@ -143,7 +161,7 @@ export default function Login({ language }: LoginProps) {
 
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
-    const problem = emailProblem(email);
+    const problem = identifierProblem(email.trim());
     setEmailError(problem);
     if (problem) return;
     setBusy(true);
@@ -168,6 +186,7 @@ export default function Login({ language }: LoginProps) {
     if (index === 0) {
       if (!form.email.trim()) next.email = required;
       else if (emailProblem(form.email.trim())) next.email = emailProblem(form.email.trim());
+      if (form.username.trim() && !isValidUsername(form.username.trim())) next.username = tr("usernameInvalid");
       if (form.password.length < MIN_PASSWORD) next.password = tr("signupPasswordShort");
       if (form.confirm !== form.password) next.confirm = tr("signupPasswordMismatch");
     }
@@ -195,12 +214,29 @@ export default function Login({ language }: LoginProps) {
     if (step < steps.length - 1) { goNext(); return; }
     if (!validateStep(step)) return;
     const userEmail = form.email.trim();
+    const username = form.username.trim();
     setBusy(true);
     try {
-      await api("/auth/register", { method: "POST", body: JSON.stringify({ email: userEmail, password: form.password, privacyAccepted: true, privacyVersion: PRIVACY_POLICY_VERSION }) });
+      await api("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          email: userEmail,
+          ...(username ? { username } : {}),
+          password: form.password,
+          privacyAccepted: true,
+          privacyVersion: PRIVACY_POLICY_VERSION,
+          ...(turnstileSiteKey ? { turnstileToken } : {})
+        })
+      });
       await signIn(userEmail, form.password);
     } catch (err) {
+      // Turnstile tokens are single use: any failed attempt needs a fresh challenge.
+      turnstileRef.current?.reset();
       if (errorCode(err) === "REGISTRATION_CLOSED") setRegistrationStatus("closed");
+      else if (errorCode(err) === "USERNAME_TAKEN") {
+        setErrors({ username: tr("usernameTaken") });
+        setStep(0);
+      } else if (errorCode(err) === "CAPTCHA_FAILED") toast.error(tr("captchaFailed"));
       else handleError(err);
       setBusy(false);
       return;
@@ -294,16 +330,16 @@ export default function Login({ language }: LoginProps) {
           {tab === "login" ? (
             <Stack data-tour="login-form" component="form" spacing={2} onSubmit={onLogin} noValidate>
               <TextField
-                label={tr("emailLabel")}
-                type="email"
-                autoComplete="email"
+                label={tr("loginIdentifierLabel")}
+                type="text"
+                autoComplete="username"
                 autoFocus
                 value={email}
                 onChange={(event) => {
                   setEmail(event.target.value);
-                  if (emailError) setEmailError(emailProblem(event.target.value));
+                  if (emailError) setEmailError(identifierProblem(event.target.value.trim()));
                 }}
-                onBlur={() => setEmailError(emailProblem(email))}
+                onBlur={() => setEmailError(identifierProblem(email.trim()))}
                 error={!!emailError}
                 helperText={emailError}
                 fullWidth
@@ -328,6 +364,16 @@ export default function Login({ language }: LoginProps) {
               >
                 {tr("loginButton")}
               </ActionButton>
+              <Box textAlign="center">
+                <ActionButton
+                  tip={tr("tipForgotPassword")}
+                  variant="text"
+                  size="small"
+                  onClick={() => setForgotOpen(true)}
+                >
+                  {tr("forgotPasswordLink")}
+                </ActionButton>
+              </Box>
             </Stack>
           ) : registrationStatus === "closed" ? (
             <Stack spacing={2} data-testid="registration-closed">
@@ -354,6 +400,15 @@ export default function Login({ language }: LoginProps) {
                     onBlur={() => form.email && setErrors((x) => ({ ...x, email: emailProblem(form.email.trim()) || undefined }))}
                     error={!!errors.email}
                     helperText={errors.email ?? tr("signupEmailHelp")}
+                    fullWidth
+                  />
+                  <TextField
+                    label={tr("usernameLabel")}
+                    autoComplete="username"
+                    value={form.username}
+                    onChange={(e) => set("username", e.target.value)}
+                    error={!!errors.username}
+                    helperText={errors.username ?? tr("usernameHelp")}
                     fullWidth
                   />
                   <TextField
@@ -449,6 +504,9 @@ export default function Login({ language }: LoginProps) {
                     </Box>
                     {errors.privacy && <FormHelperText error>{errors.privacy}</FormHelperText>}
                   </Box>
+                  {turnstileSiteKey && (
+                    <TurnstileWidget ref={turnstileRef} siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+                  )}
                 </Stack>
               )}
 
@@ -467,15 +525,107 @@ export default function Login({ language }: LoginProps) {
                     {tr("signupNext")}
                   </ActionButton>
                 ) : (
-                  <ActionButton tip={tr("tipSignup")} type="submit" variant="contained" size="large" disabled={busy} wrapperSx={{ flex: 1 }} fullWidth>
+                  <ActionButton tip={tr("tipSignup")} type="submit" variant="contained" size="large" disabled={busy || (!!turnstileSiteKey && !turnstileToken)} wrapperSx={{ flex: 1 }} fullWidth>
                     {tr("signupButton")}
                   </ActionButton>
                 )}
               </Stack>
             </Stack>
           )}
+          {/* Outside the sign-in form: a dialog's submit would otherwise bubble to the form's onSubmit. */}
+          <ForgotPasswordDialog
+            language={language}
+            open={forgotOpen}
+            defaultEmail={email.includes("@") ? email.trim() : ""}
+            onClose={() => setForgotOpen(false)}
+          />
         </Stack>
       </Paper>
     </Box>
+  );
+}
+
+interface ForgotPasswordDialogProps {
+  language: Language;
+  open: boolean;
+  defaultEmail: string;
+  onClose: () => void;
+}
+
+// Always answers with the same generic confirmation: it does not reveal whether the email is registered.
+function ForgotPasswordDialog({ language, open, defaultEmail, onClose }: ForgotPasswordDialogProps) {
+  const tr = (key: string) => t(language, key as any);
+  const [email, setEmail] = useState("");
+  const [problem, setProblem] = useState("");
+  const [sent, setSent] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setEmail(defaultEmail);
+    setProblem("");
+    setSent(false);
+    setFailed(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const value = email.trim();
+    if (!value || value.length > 254 || !EMAIL_RE.test(value)) {
+      setProblem(tr(value ? "emailValidationInvalid" : "signupRequired"));
+      return;
+    }
+    setBusy(true);
+    setFailed(false);
+    try {
+      await api("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email: value }) });
+      setSent(true);
+    } catch (err) {
+      console.error(err);
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <Box component="form" onSubmit={submit} noValidate>
+        <DialogTitle>{tr("forgotPasswordTitle")}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {sent ? (
+              <Alert severity="info">{tr("forgotPasswordSent")}</Alert>
+            ) : (
+              <>
+                <Typography variant="body2" color="text.secondary">{tr("forgotPasswordHelp")}</Typography>
+                <TextField
+                  label={tr("emailLabel")}
+                  type="email"
+                  autoComplete="email"
+                  autoFocus
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setProblem(""); }}
+                  error={!!problem}
+                  helperText={problem}
+                  fullWidth
+                />
+                {failed && <Alert severity="error">{tr("errorGeneric")}</Alert>}
+              </>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <ActionButton tip={tr("tipForgotPasswordClose")} onClick={onClose}>{tr("forgotPasswordClose")}</ActionButton>
+          {!sent && (
+            <ActionButton tip={tr("tipForgotPasswordSubmit")} type="submit" variant="contained" disabled={busy}>
+              {tr("forgotPasswordSubmit")}
+            </ActionButton>
+          )}
+        </DialogActions>
+      </Box>
+    </Dialog>
   );
 }

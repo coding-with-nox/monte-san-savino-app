@@ -38,14 +38,14 @@ export function renderDeskListsHtml(event: { name: string }, participants: DeskL
   return page(lang, `${pt(lang, "desk.lists.title")} ${event.name}`, sections || `<p>${pt(lang, "common.noData")}</p>`);
 }
 
-export type DeskEnvelope = { participantNumber: number; name: string; email: string | null; country: string };
+export type DeskEnvelope = { participantNumber: number; name: string; email: string | null; username?: string | null; country: string };
 
-/** One envelope per participant: the 220 x 110 mm page size is set on @page. */
+/** One envelope per participant: the 220 x 110 mm page size is set on @page. Shows the username when set, else the email. */
 export function renderDeskEnvelopesHtml(envelopes: DeskEnvelope[], lang: PrintLang = "it") {
   const body = envelopes.map((e) => `<section class="envelope">
       <p class="number">${escapeHtml(formatParticipantNumber(e.participantNumber))}</p>
       <p class="name">${escapeHtml(e.name)}</p>
-      ${e.email ? `<p class="meta">${escapeHtml(e.email)}</p>` : ""}
+      ${e.username || e.email ? `<p class="meta">${escapeHtml(e.username || e.email)}</p>` : ""}
       ${e.country ? `<p class="meta">${escapeHtml(e.country)}</p>` : ""}
     </section>`).join("");
   return `<!DOCTYPE html>
