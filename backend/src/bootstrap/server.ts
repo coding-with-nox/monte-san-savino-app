@@ -1,6 +1,7 @@
 import { buildApp } from "./app";
 import { assertRequiredEnv } from "./assertRequiredEnv";
 import { seedDatabase } from "./seed";
+import { shouldSeedDemo } from "./seedPolicy";
 import { logger } from "../shared/infra/logger/logger";
 import { ensureTenantSchema } from "../tenancy/infra/persistence/ensureTenantSchema";
 import { scheduler } from "../shared/infra/scheduler/scheduler";
@@ -22,8 +23,8 @@ async function start() {
   const app = buildApp();
   const port = Number(process.env.PORT ?? "3000");
 
-  // Seed demo data in dev mode
-  if (process.env.NODE_ENV !== "production") {
+  // Demo data only on explicit request (SEED_DEMO=true), never in production.
+  if (shouldSeedDemo()) {
     seedDatabase().catch((err) => logger.error({ err }, "[seed] Error"));
   }
 
