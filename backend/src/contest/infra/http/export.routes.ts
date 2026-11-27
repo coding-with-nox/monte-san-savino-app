@@ -205,7 +205,7 @@ function buildWorksheetXml(headers: string[], rows: Record<string, any>[], empty
 </worksheet>`;
 }
 
-function toXlsx(sheetName: string, rows: Record<string, any>[], lang: PrintLang) {
+export function toXlsx(sheetName: string, rows: Record<string, any>[], lang: PrintLang) {
   const safeSheetName = sanitizeSheetName(sheetName);
   const headers = rows.length > 0 ? Object.keys(rows[0]) : [pt(lang, "col.info")];
 
@@ -307,7 +307,7 @@ async function loadExportSettings(tenantDb: any, lang: PrintLang): Promise<Expor
   };
 }
 
-function setXlsxHeaders(set: any, filename: string) {
+export function setXlsxHeaders(set: any, filename: string) {
   set.headers["content-type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   set.headers["content-disposition"] = `attachment; filename=\"${filename}.xlsx\"`;
 }

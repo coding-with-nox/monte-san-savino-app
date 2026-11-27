@@ -552,6 +552,20 @@ export async function ensureTenantSchema() {
       CREATE UNIQUE INDEX IF NOT EXISTS ux_honor_assignments_honor ON honor_assignments (honor_id)
     `);
 
+    // Previous contest results (CSV import, replaced as a whole): level-up rules
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS previous_results (
+        id uuid PRIMARY KEY,
+        email text,
+        first_name text,
+        last_name text,
+        level_name text NOT NULL,
+        medal_rank integer NOT NULL,
+        year integer,
+        imported_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+
     await ensureRegistrationsUniqueIndex(pool);
 
     for (const stmt of buildPerformanceIndexStatements()) await pool.query(stmt);

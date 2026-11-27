@@ -159,3 +159,57 @@ export function parseClassesCsv(text: string): ParsedImport<ClassImportRow> {
   }
   return { valid, errors };
 }
+
+const PREVIOUS_RESULTS_HEADER = ["email", "first name", "last name", "level", "medal rank", "year"];
+/** Same upper bound as the medal ranks of the bracket presets (contest/domain/photography MAX_MEDAL_RANK). */
+const PREVIOUS_MEDAL_RANK_MAX = 10;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export type PreviousResultImportRow = {
+  line: number; email: string | null; firstName: string | null; lastName: string | null;
+  levelName: string; medalRank: number; year: number | null;
+};
+
+/**
+ * Previous results: Email,First Name,Last Name,Level,Medal Rank,Year.
+ * A row needs an email or both first and last name; the year is optional (four digits).
+ */
+export function parsePreviousResultsCsv(text: string): ParsedImport<PreviousResultImportRow> {
+  const g = guard(text);
+  if (!g.rows) return { valid: [], errors: g.errors! };
+  const rows = g.rows[0] && isHeader(g.rows[0].cells, PREVIOUS_RESULTS_HEADER) ? g.rows.slice(1) : g.rows;
+  const valid: PreviousResultImportRow[] = [];
+  const errors: ImportError[] = [];
+  for (const r of rows) {
+    if (r.cells.length !== 6) { errors.push({ line: r.line, message: "Expected 6 columns" }); continue; }
+    const email = validateCell(r.cells[0], "Email");
+    const first = validateCell(r.cells[1], "First Name");
+    const last = validateCell(r.cells[2], "Last Name");
+    const level = validateCell(r.cells[3], "Level", { required: true });
+    const bad = [email, first, last, level].find((c) => !c.ok);
+    if (bad && !bad.ok) { errors.push({ line: r.line, message: bad.error }); continue; }
+    const v = (c: any) => c.value as string;
+    if (v(email) && !EMAIL_RE.test(v(email))) { errors.push({ line: r.line, message: "Email is not valid" }); continue; }
+    if (!v(email) && !(v(first) && v(last))) {
+      errors.push({ line: r.line, message: "Email or First Name and Last Name are required" }); continue;
+    }
+    const rankRaw = r.cells[4].trim();
+    if (!/^\d{1,2}$/.test(rankRaw) || Number(rankRaw) > PREVIOUS_MEDAL_RANK_MAX) {
+      errors.push({ line: r.line, message: `Medal Rank must be an integer between 0 and ${PREVIOUS_MEDAL_RANK_MAX}` }); continue;
+    }
+    const yearRaw = r.cells[5].trim();
+    if (yearRaw && !/^(19|20)\d{2}$/.test(yearRaw)) {
+      errors.push({ line: r.line, message: "Year must be a four-digit year" }); continue;
+    }
+    valid.push({
+      line: r.line,
+      email: v(email) ? v(email).toLowerCase() : null,
+      firstName: v(first) || null,
+      lastName: v(last) || null,
+      levelName: v(level),
+      medalRank: Number(rankRaw),
+      year: yearRaw ? Number(yearRaw) : null
+    });
+  }
+  return { valid, errors };
+}

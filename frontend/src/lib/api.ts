@@ -2,12 +2,23 @@ import { clearToken, getRefreshToken, getToken, getTokenExpiresAt, setSession } 
 
 export class ApiError extends Error {
   status: number;
+  /** Machine-readable code of the error body, e.g. REGISTRATION_CLOSED or LEVEL_LOCKED. */
+  code?: string;
+  /** The whole JSON error body, for extra fields such as lockedLevelId. */
+  details?: Record<string, unknown>;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
+    this.details = details;
   }
+}
+
+/** Backend error code of a failed call, if any. */
+export function errorCode(err: unknown): string | undefined {
+  return (err as ApiError | undefined)?.code;
 }
 
 const rawApiBase = import.meta.env.VITE_API_BASE;
@@ -104,7 +115,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
         if (ct.includes("application/json")) {
           const payload = await retry.json().catch(() => null);
           const message = payload?.error ?? payload?.message;
-          if (message) throw new ApiError(retry.status, String(message));
+          if (message || payload?.code) throw new ApiError(retry.status, String(message ?? payload.code), payload?.code, payload ?? undefined);
         }
         const message = await retry.text();
         throw new ApiError(retry.status, message || retry.statusText);
@@ -120,7 +131,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     if (ct.includes("application/json")) {
       const payload = await res.json().catch(() => null);
       const message = payload?.error ?? payload?.message;
-      if (message) throw new ApiError(res.status, String(message));
+      if (message || payload?.code) throw new ApiError(res.status, String(message ?? payload.code), payload?.code, payload ?? undefined);
     }
     const message = await res.text();
     throw new ApiError(res.status, message || res.statusText);

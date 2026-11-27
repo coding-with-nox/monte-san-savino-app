@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Alert,
@@ -24,7 +24,7 @@ import {
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { MuiTelInput, matchIsValidTel } from "mui-tel-input";
-import { ApiError, api } from "../lib/api";
+import { ApiError, api, errorCode } from "../lib/api";
 import { createCodeChallenge, generateCodeVerifier, setSession } from "../lib/auth";
 import { Language, t } from "../lib/i18n";
 import { countryOptions } from "../lib/countries";
@@ -38,6 +38,7 @@ interface LoginProps {
 }
 
 type AuthTab = "login" | "signup";
+type RegistrationStatus = "open" | "openday" | "closed";
 type TokenResponse = { accessToken: string; refreshToken: string; expiresIn: number; expires_in?: number };
 
 const MIN_PASSWORD = 8;
@@ -74,6 +75,23 @@ export default function Login({ language }: LoginProps) {
   const tr = (key: string) => t(language, key as any);
   const [tab, setTab] = useState<AuthTab>("login");
   const [busy, setBusy] = useState(false);
+  // Manual opening/closing of registrations (GET /public/registration). Sign in always stays available.
+  const [registrationStatus, setRegistrationStatus] = useState<RegistrationStatus>("open");
+
+  useEffect(() => {
+    void loadRegistration();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadRegistration() {
+    try {
+      const res = await api<{ status?: RegistrationStatus; defaultPage?: string }>("/public/registration");
+      if (res?.status) setRegistrationStatus(res.status);
+      if (res?.defaultPage === "register") setTab("signup");
+    } catch {
+      // Keep the defaults: registrations open, sign-in tab first.
+    }
+  }
 
   // --- Login ---
   const [email, setEmail] = useState("");
@@ -182,7 +200,8 @@ export default function Login({ language }: LoginProps) {
       await api("/auth/register", { method: "POST", body: JSON.stringify({ email: userEmail, password: form.password, privacyAccepted: true, privacyVersion: PRIVACY_POLICY_VERSION }) });
       await signIn(userEmail, form.password);
     } catch (err) {
-      handleError(err);
+      if (errorCode(err) === "REGISTRATION_CLOSED") setRegistrationStatus("closed");
+      else handleError(err);
       setBusy(false);
       return;
     }
@@ -309,6 +328,11 @@ export default function Login({ language }: LoginProps) {
               >
                 {tr("loginButton")}
               </ActionButton>
+            </Stack>
+          ) : registrationStatus === "closed" ? (
+            <Stack spacing={2} data-testid="registration-closed">
+              <Alert severity="info">{tr("registrationClosed")}</Alert>
+              <Typography variant="body2" color="text.secondary" textAlign="center">{tr("authRegistrationClosedHelp")}</Typography>
             </Stack>
           ) : (
             <Stack component="form" spacing={3} onSubmit={onSignup} noValidate data-tour="signup-form">

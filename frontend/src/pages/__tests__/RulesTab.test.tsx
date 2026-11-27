@@ -76,3 +76,46 @@ describe("Admin rules tab: permissions matrix", () => {
     });
   });
 });
+
+describe("Admin rules tab: registrations card", () => {
+  beforeEach(() => {
+    apiMock.mockReset().mockImplementation(async (path: string, init?: RequestInit) => {
+      if (init?.method === "PUT") return { updated: true };
+      if (path === "/settings")
+        return { registrationStatus: "closed", defaultPublicPage: "register", lockLevelToFirstSelection: "false", levelUpWarning: "true" };
+      if (path === "/admin/settings/section-visibility")
+        return { sections: ["stats"], roles: ["admin"], visibility: { admin: ["stats"] } };
+      return {};
+    });
+  });
+
+  it("shows the current registration settings and explains the closed status", async () => {
+    renderWithProviders(<RulesTab language="en" />);
+    expect(await screen.findByRole("combobox", { name: /registration status/i })).toHaveTextContent("Closed");
+    expect(screen.getByText("No new sign-ups or model entries from users.")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /default sign-in page tab/i })).toHaveTextContent("Sign up");
+    expect(screen.getByRole("checkbox", { name: "Lock level to first selection" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Move-up to Masters warning" })).toBeChecked();
+  });
+
+  it("saves status, default page and both level rules in one PUT", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<RulesTab language="en" />);
+    await user.click(await screen.findByRole("combobox", { name: /registration status/i }));
+    await user.click(await screen.findByRole("option", { name: "Event day" }));
+    await user.click(screen.getByRole("combobox", { name: /default sign-in page tab/i }));
+    await user.click(await screen.findByRole("option", { name: "Sign in" }));
+    await user.click(screen.getByRole("checkbox", { name: "Lock level to first selection" }));
+    await user.click(screen.getByRole("checkbox", { name: "Move-up to Masters warning" }));
+    await user.click(screen.getAllByRole("button", { name: "Save" }).at(-1)!);
+
+    const puts = apiMock.mock.calls.filter((c) => c[0] === "/admin/settings" && c[1]?.method === "PUT");
+    expect(puts).toHaveLength(1);
+    expect(JSON.parse(puts[0][1].body)).toEqual({
+      registrationStatus: "openday",
+      defaultPublicPage: "login",
+      lockLevelToFirstSelection: "true",
+      levelUpWarning: "false"
+    });
+  });
+});
