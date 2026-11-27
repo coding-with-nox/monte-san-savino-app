@@ -7,11 +7,10 @@ import { findInvalidVisibilityEntry, parseSectionVisibility, SECTIONS } from "..
 import { PERMISSIONS, parseRolePermissions } from "../../../identity/domain/permissions";
 import { loadRolePermissions, ROLE_PERMISSIONS_KEY } from "../../../identity/infra/http/permission.middleware";
 import { ROLES, type Role } from "../../../identity/domain/Role";
-import { parsePrizeOrder } from "../../domain/prizeOrder";
+import { parsePrizeOrder, PRIZE_ORDER_KEY } from "../../domain/prizeOrder";
 import { DEFAULT_BASE_FEE_CENTS } from "../../domain/pricing";
 import { judgingSettingsError } from "../../domain/categoryClosure";
 
-const PRIZE_ORDER_KEY = "prizeOrder";
 const BASE_FEE_KEY = "baseFeeCents";
 
 async function saveSetting(tenantDb: any, key: string, value: string) {

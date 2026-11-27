@@ -1,3 +1,6 @@
+/** Settings key of the prize order (JSON array of medal labels). */
+export const PRIZE_ORDER_KEY = "prizeOrder";
+
 /** Order in which medals are presented at the award ceremony (first = presented first). */
 export const DEFAULT_PRIZE_ORDER: readonly string[] = ["Highly Commended", "Bronze", "Silver", "Gold"];
 

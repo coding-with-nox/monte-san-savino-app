@@ -348,7 +348,7 @@ GET /judge/displays → [{ eventId, displayNumber, votable, currentRank, judged,
 
 ## Awards routes
 
-Sources: `award.routes.ts`, `special-mention.routes.ts`. Min role: `manager`,
+Sources: `award.routes.ts`, `ceremony.routes.ts`, `special-mention.routes.ts`. Min role: `manager`,
 except `/awards/monitoring/:eventId`.
 
 | Method | Path | Body | Response |
@@ -357,6 +357,7 @@ except `/awards/monitoring/:eventId`.
 | PATCH | `/awards/:awardId` | `{ medalLabel, medalRank, note? }` (`note` max 200) | `{ "updated": true }`. Min role `jury_president` (head judge). The medal must be `None`/0 or a bracket of the event with the same label **and** rank, else `422 INVALID_MEDAL`. Open class: `409 CATEGORY_NOT_CLOSED`. Sets `source: "override"`, clears `issues`, stores `overrideNote` and `overriddenBy` |
 | GET | `/awards/categories/:categoryId/review` | — | Min role `jury_president`. Closed class only (`409 CATEGORY_NOT_CLOSED`): `{ categoryId, categoryName, eventId, brackets: [{ medalLabel, medalRank, lowLimit, highLimit }], rows: [{ modelId, name, code, displayNumber, totalScore, issues, source, overrideNote, award: { id, medalLabel, medalRank } \| null, votes: [{ judgeName, rank }] }] }`. `votes` are the latest vote of each judge (`judgeName` = profile name, else `Giudice <n>`). Missing models are left out |
 | GET | `/awards/monitoring/:eventId` | — | live judging progress per category. Min role `jury_president`; `403 SECTION_HIDDEN` if `dashboard` is hidden |
+| GET | `/awards/events/:eventId/ceremony` | — | ceremony data. `{ classes, honors }`. `classes`: only **closed** classes with at least one medal above None, ordered by `presentationOrder`, then `classNumber` (numeric), then name: `[{ categoryId, name, classNumber, presentationOrder, prizes }]`. `prizes` ordered by the prize-order setting (`GET /settings/prize-order`), then `medalRank`, then display: `[{ medalLabel, medalRank, displayNumber, exhibitor, modelName, modelCode, wholeDisplay }]`. A display whose models (at least two) all got the same medal is one prize with `wholeDisplay: true` (`modelName`/`modelCode` null). `honors`: only assigned special awards, in catalogue order: `[{ code, name, sortOrder, categoryName, displayNumber, exhibitor, modelName, wholeDisplay }]`. Manager only |
 | GET | `/awards/mentions` | — | all special mentions |
 | GET | `/awards/mentions/events/:eventId` | — | mentions for event |
 | POST | `/awards/mentions` | `{ eventId, modelId, title, description? }` | `{ id }` |
@@ -378,6 +379,25 @@ except `/awards/monitoring/:eventId`.
 | POST | `/admin/award-brackets` | `{ eventId, medalLabel, medalRank, lowLimit, highLimit }` | `{ id }` |
 
 Validation (POST and PUT, after merging): `medalLabel` 1–40 chars; `medalRank` integer 0–10; `lowLimit`/`highLimit` integers >= 0 with `lowLimit <= highLimit`; otherwise `422`.
+
+---
+
+### Special awards (`/admin/honors`) — min role `manager` — `honors.routes.ts`
+Catalogue of special awards per event (e.g. "Best Of Show"). Each honor is assigned at most once, to a whole display or to one of its models. `code` 1–20 characters, `name` 1–120, unique per event (case-insensitive).
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/admin/honors?eventId=<id>` | — | `[{ id, code, name, sortOrder, assignment }]` in catalogue order. `assignment`: `{ categoryId, categoryName, displayNumber, modelId, modelName, modelCode, wholeDisplay, exhibitor }`, or `null` when not assigned. `422` without a valid `eventId` |
+| POST | `/admin/honors` | `{ eventId, code, name, sortOrder? }` | `{ id }`. `sortOrder` defaults to last + 1. `409 DUPLICATE_CODE`; `404` unknown event |
+| PUT | `/admin/honors/:id` | `{ code?, name?, sortOrder? }` | updated row (merged with stored values). `404`; `409 DUPLICATE_CODE` |
+| DELETE | `/admin/honors/:id` | — | `{ "deleted": true }`. `409 HONOR_ASSIGNED` while assigned |
+| POST | `/admin/honors/preset` | `{ eventId }` | adds the MSS catalogue (28 entries, in catalogue order), skipping codes already present: `{ inserted, honors }`. Idempotent. `404` unknown event |
+| POST | `/admin/honors/:id/assign` | `{ categoryId, displayNumber, modelId? }` | the honor with its `assignment`. No `modelId` = whole display. `409 ALREADY_ASSIGNED`; `422 CATEGORY_NOT_IN_EVENT`; `422 DISPLAY_NOT_FOUND` (no model with that display number in the class); `404 MODEL_NOT_FOUND`; `422 MODEL_NOT_IN_DISPLAY`; `404` unknown honor |
+| DELETE | `/admin/honors/:id/assignment` | — | `{ "deleted": true }`. `404` when not assigned |
+
+MSS catalogue (code — name): bop Best Of Painter, bos Best Of Show, bs Best Of Sculpture, boss Best Of Standard, bomm Best Of Military Modelling, bosf Best Of Sci-Fi, bot Best Of Time Chronicles, boc Best Of Creativity, bof Best Of Fantasy, boh Best Of Historical, ph Platinum Historical, pf Platinum Fantasy, pt Platinum Time Chronicles, hst Handmade Sculpture Trophy, mm72 Military Modelling 1/72 Trophy, mm35 Military Modelling 1/35 Trophy, act Ancient Trophy, mt Medieval Trophy, cup35 1:35 Cup Trophy, rcm Roma Caput Mundi Trophy, jmt Joachim Murat Trophy, acw American Civil War Trophy, aag Aldo & Giorgio Taucer Trophy, lp Legio Pictorum Trophy, vvw Verkos Vault Wargame Trophy, vvc Verkos Vault Cinema Trophy, vvfs Verkos Vault Fantasy Scene, ap Andrea Pivato.
+
+Tables: `honors` (unique `(event_id, lower(code))`) and `honor_assignments` (unique `honor_id`, `model_id` null = whole display). Both are created idempotently by `ensureTenantSchema.ts`.
 
 ---
 
@@ -511,6 +531,8 @@ Source: `export.routes.ts`. Manager endpoints need min role `manager`; the
 | GET | `/exports/my-enrollments` | user | XLSX of own enrollments |
 | GET | `/exports/model-card/pdf?eventId=<id>` | user | printable HTML model card, including the registration fee breakdown and total |
 | GET | `/exports/events/:eventId/judge-sheets` | manager | printable HTML, one page per judge of the event: name, login email, app address, assigned classes (class no., `[Stand-in]` marker for stand-in judges) and one QR per class encoding `${PUBLIC_APP_URL}/judge?eventId=<id>&categoryId=<id>`. A whole-event judge gets every class of the event. `422` invalid uuid, `404` unknown event |
+| GET | `/exports/events/:eventId/presentation-medals` | manager | printable HTML of the ceremony medals: one section per awarded class, in presentation order (medal, display no., exhibitor, model or "whole display", code). `422` invalid uuid, `404` unknown event |
+| GET | `/exports/events/:eventId/presentation-honors` | manager | printable HTML of the assigned special awards, in catalogue order (code, award, class, display no., exhibitor, model or "whole display"). `422` invalid uuid, `404` unknown event |
 | GET | `/exports/classes/:categoryId/jury-qr` | manager | printable HTML: the judges of the class with the class QR. The QR encodes the same judge page URL as above (it no longer encodes a `jury:<judgeId>:<categoryId>` payload) |
 
 `PUBLIC_APP_URL` (default `http://localhost:5173`, trailing slashes removed) is the base of the judge app URL printed and encoded in the QR codes.

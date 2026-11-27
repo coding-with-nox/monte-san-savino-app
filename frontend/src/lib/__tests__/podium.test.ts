@@ -1,33 +1,56 @@
 import { describe, it, expect } from "vitest";
-import { buildPodiums, locateStep, totalSteps } from "../podium";
+import { buildCeremony, orderHonors } from "../podium";
 import { countryName, countryOptions } from "../countries";
 
-const rows = [
-  { modelId: "a", categoryId: "c1", medalLabel: "Gold", medalRank: 4 },
-  { modelId: "b", categoryId: "c1", medalLabel: "Bronze", medalRank: 2 },
-  { modelId: "c", categoryId: "c1", medalLabel: null, medalRank: null },
-  { modelId: "d", categoryId: "c2", medalLabel: "Silver", medalRank: 3 }
-];
+const honor = (code: string, sortOrder = 1) => ({ code, name: code.toUpperCase(), sortOrder });
 
-describe("podium helpers", () => {
-  it("groups winners per class, lowest medal first, ignoring unawarded rows", () => {
-    const p = buildPodiums(rows);
-    expect(p).toHaveLength(2);
-    expect(p[0].winners.map((w) => w.modelId)).toEqual(["b", "a"]);
-    expect(totalSteps(p)).toBe(3);
+const data = {
+  classes: [
+    {
+      categoryId: "c1",
+      name: "Armor",
+      prizes: [
+        { medalLabel: "Bronze", medalRank: 2, modelName: "Bronze Tank" },
+        { medalLabel: "Gold", medalRank: 4, modelName: "Gold Tank" }
+      ]
+    },
+    { categoryId: "c2", name: "Empty", prizes: [] },
+    { categoryId: "c3", name: "Figures", prizes: [{ medalLabel: "Silver", medalRank: 3, wholeDisplay: true }] }
+  ],
+  honors: [honor("bos"), honor("trophy-a", 2)]
+};
+
+describe("ceremony screens", () => {
+  it("shows each class title before its prizes, in the given order, and skips classes without prizes", () => {
+    const { classes, screens } = buildCeremony(data);
+    expect(classes.map((c) => c.name)).toEqual(["Armor", "Figures"]);
+    expect(screens.slice(0, 3)).toEqual([
+      { kind: "class", classIndex: 0, revealed: 0 },
+      { kind: "class", classIndex: 0, revealed: 1 },
+      { kind: "class", classIndex: 0, revealed: 2 }
+    ]);
+    expect(screens.slice(3, 5)).toEqual([
+      { kind: "class", classIndex: 1, revealed: 0 },
+      { kind: "class", classIndex: 1, revealed: 1 }
+    ]);
   });
 
-  it("follows the configured order, unlisted labels first", () => {
-    const withMention = [...rows, { modelId: "e", categoryId: "c1", medalLabel: "Best of show", medalRank: 9 }];
-    const p = buildPodiums(withMention, ["Gold", "Bronze"]);
-    expect(p[0].winners.map((w) => w.modelId)).toEqual(["e", "a", "b"]);
+  it("presents the special awards after all classes, Best of Show last", () => {
+    const { screens } = buildCeremony(data);
+    const honors = screens.slice(5);
+    expect(honors).toEqual([
+      { kind: "honor", honor: honor("trophy-a", 2) },
+      { kind: "honor", honor: honor("bos") }
+    ]);
   });
 
-  it("maps global steps to class and revealed count", () => {
-    const p = buildPodiums(rows);
-    expect(locateStep(p, 0)).toEqual({ classIndex: 0, revealed: 0 });
-    expect(locateStep(p, 2)).toEqual({ classIndex: 0, revealed: 2 });
-    expect(locateStep(p, 3)).toEqual({ classIndex: 1, revealed: 1 });
+  it("keeps the given order of honors and moves only bos to the end", () => {
+    const list = [honor("bos"), honor("x"), honor("y")];
+    expect(orderHonors(list).map((h) => h.code)).toEqual(["x", "y", "bos"]);
+  });
+
+  it("returns no screens for an empty ceremony", () => {
+    expect(buildCeremony({ classes: [], honors: [] }).screens).toEqual([]);
   });
 });
 
