@@ -6,11 +6,10 @@ import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { Language, t } from "../lib/i18n";
-import { AwardRow, buildPodiums, DEFAULT_PRIZE_ORDER, locateStep, totalSteps } from "../lib/podium";
+import { buildCeremony, CeremonyData } from "../lib/podium";
 import { ActionButton, TipIconButton } from "../components/ActionButton";
 
 type Event = { id: string; name: string };
-type Category = { id: string; name: string };
 
 interface PodiumProps {
   language: Language;
@@ -18,30 +17,42 @@ interface PodiumProps {
 
 const reduceMotion = { "@media (prefers-reduced-motion: reduce)": { transition: "none", transform: "none" } };
 
-/** Full-screen awards ceremony: winners of each class revealed one at a time, in the configured order. */
+/**
+ * Full-screen awards ceremony: each class (title, then its prizes one by one, in the server order),
+ * then the special awards, Best of Show last.
+ */
+/** Second line under the winner: display number and what was awarded (the model or the whole display). */
+function useWinnerDetail(language: Language) {
+  return (w: { displayNumber?: number | null; wholeDisplay?: boolean; modelName?: string | null; modelCode?: string | null }) =>
+    [
+      w.displayNumber != null ? t(language, "podiumDisplayNumber").replace("{n}", String(w.displayNumber)) : null,
+      w.wholeDisplay ? t(language, "wholeDisplayLabel") : (w.modelName ?? w.modelCode ?? null)
+    ].filter(Boolean).join(" · ");
+}
+
+/** Standard MSS medal names are shown in the UI language; custom labels are shown as typed. */
+const STANDARD_MEDALS: Record<string, number> = { none: 0, "highly commended": 1, commended: 1, bronze: 2, silver: 3, gold: 4 };
+
 export default function Podium({ language }: PodiumProps) {
   const navigate = useNavigate();
+  const winnerDetail = useWinnerDetail(language);
+  const medalName = (label: string, rank: number | null | undefined) =>
+    rank != null && STANDARD_MEDALS[label.trim().toLowerCase()] === rank ? t(language, `rankName${rank}` as any) : label;
   const [events, setEvents] = useState<Event[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [eventId, setEventId] = useState("");
-  const [rows, setRows] = useState<AwardRow[]>([]);
   const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [prizeOrder, setPrizeOrder] = useState<string[]>(DEFAULT_PRIZE_ORDER);
+  const [ceremonyData, setCeremonyData] = useState<CeremonyData | null>(null);
 
   useEffect(() => {
     api<Event[]>("/events").then(setEvents).catch((e) => setError(e?.message ?? t(language, "awardsLoadError")));
-    api<Category[]>("/categories").then(setCategories).catch(() => undefined);
-    api<{ order?: string[] }>("/settings/prize-order")
-      .then((res) => { if (res?.order?.length) setPrizeOrder(res.order); })
-      .catch(() => undefined);
   }, [language]);
 
   async function start() {
     if (!eventId) return;
     try {
-      setRows(await api<AwardRow[]>(`/awards/events/${encodeURIComponent(eventId)}`));
+      setCeremonyData(await api<CeremonyData>(`/awards/events/${encodeURIComponent(eventId)}/ceremony`));
       setError(null);
       setStep(0);
       setStarted(true);
@@ -50,12 +61,12 @@ export default function Podium({ language }: PodiumProps) {
     }
   }
 
-  const podiums = useMemo(() => buildPodiums(rows, prizeOrder), [rows, prizeOrder]);
-  const total = totalSteps(podiums);
-  const { classIndex, revealed } = locateStep(podiums, step);
-  const current = podiums[classIndex];
+  const ceremony = useMemo(() => buildCeremony(ceremonyData ?? { classes: [], honors: [] }), [ceremonyData]);
+  const total = ceremony.screens.length;
+  const last = Math.max(total - 1, 0);
+  const screen = ceremony.screens[step];
 
-  const next = useCallback(() => setStep((s) => Math.min(s + 1, total)), [total]);
+  const next = useCallback(() => setStep((s) => Math.min(s + 1, last)), [last]);
   const prev = useCallback(() => setStep((s) => Math.max(s - 1, 0)), []);
   const exit = useCallback(() => navigate("/"), [navigate]);
 
@@ -74,8 +85,6 @@ export default function Podium({ language }: PodiumProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [started, next, prev, exit]);
-
-  const className = (id: string) => categories.find((c) => c.id === id)?.name ?? id.slice(0, 8);
 
   return (
     <Box
@@ -125,45 +134,67 @@ export default function Podium({ language }: PodiumProps) {
         <Typography variant="h4" onClick={(e) => e.stopPropagation()}>{t(language, "awardsNoResults")}</Typography>
       )}
 
-      {started && current && (
-        <Stack spacing={4} alignItems="center" sx={{ width: "100%", maxWidth: 900 }}>
-          <Typography variant="overline" color="text.secondary">
-            {t(language, "awardsClass")} {classIndex + 1} / {podiums.length}
-          </Typography>
-          <Typography variant="h2" align="center" data-testid="podium-class">{className(current.categoryId)}</Typography>
-          <Stack spacing={2} sx={{ width: "100%" }}>
-            {current.winners.map((w, i) => {
-              const shown = i < revealed;
-              return (
-                <Box
-                  key={w.modelId}
-                  data-testid="podium-winner"
-                  data-revealed={shown ? "true" : "false"}
-                  aria-hidden={!shown}
-                  sx={{
-                    p: 3,
-                    borderRadius: 3,
-                    border: 2,
-                    borderColor: shown ? "primary.main" : "divider",
-                    textAlign: "center",
-                    opacity: shown ? 1 : 0.15,
-                    transform: shown ? "scale(1)" : "scale(0.92)",
-                    transition: "opacity 600ms ease, transform 600ms ease",
-                    ...reduceMotion
-                  }}
-                >
-                  {shown ? (
-                    <>
-                      <Typography variant="h5" color="primary">{w.medalLabel}</Typography>
-                      <Typography variant="h3" fontWeight={700}>{w.modelName ?? w.modelId.slice(0, 8)}</Typography>
-                    </>
-                  ) : (
-                    <Typography variant="h5" color="text.secondary">{t(language, "awardsPlaceholder")}</Typography>
-                  )}
-                </Box>
-              );
-            })}
+      {started && screen?.kind === "class" && (() => {
+        const cls = ceremony.classes[screen.classIndex];
+        return (
+          <Stack spacing={4} alignItems="center" sx={{ width: "100%", maxWidth: 900 }}>
+            <Typography variant="overline" color="text.secondary">
+              {t(language, "awardsClass")} {screen.classIndex + 1} / {ceremony.classes.length}
+            </Typography>
+            <Typography variant="h2" align="center" data-testid="podium-class">{cls.name}</Typography>
+            <Stack spacing={2} sx={{ width: "100%" }}>
+              {cls.prizes.map((p, i) => {
+                const shown = i < screen.revealed;
+                return (
+                  <Box
+                    key={`${p.medalLabel}-${p.medalRank ?? ""}-${i}`}
+                    data-testid="podium-winner"
+                    data-revealed={shown ? "true" : "false"}
+                    aria-hidden={!shown}
+                    sx={{
+                      p: 3,
+                      borderRadius: 3,
+                      border: 2,
+                      borderColor: shown ? "primary.main" : "divider",
+                      textAlign: "center",
+                      opacity: shown ? 1 : 0.15,
+                      transform: shown ? "scale(1)" : "scale(0.92)",
+                      transition: "opacity 600ms ease, transform 600ms ease",
+                      ...reduceMotion
+                    }}
+                  >
+                    {shown ? (
+                      <>
+                        <Typography variant="h5" color="primary">{medalName(p.medalLabel, p.medalRank)}</Typography>
+                        <Typography variant="h3" fontWeight={700}>
+                          {p.exhibitor || (p.wholeDisplay ? t(language, "wholeDisplayLabel") : (p.modelName ?? p.modelCode ?? ""))}
+                        </Typography>
+                        <Typography variant="h6" color="text.secondary">
+                          {winnerDetail(p)}
+                        </Typography>
+                      </>
+                    ) : (
+                      <Typography variant="h5" color="text.secondary">{t(language, "awardsPlaceholder")}</Typography>
+                    )}
+                  </Box>
+                );
+              })}
+            </Stack>
           </Stack>
+        );
+      })()}
+
+      {started && screen?.kind === "honor" && (
+        <Stack spacing={4} alignItems="center" sx={{ width: "100%", maxWidth: 900 }}>
+          <Typography variant="overline" color="text.secondary">{t(language, "awardsHonor")}</Typography>
+          <Typography variant="h2" align="center" data-testid="podium-honor">{screen.honor.name}</Typography>
+          <Box sx={{ p: 3, borderRadius: 3, border: 2, borderColor: "primary.main", textAlign: "center", width: "100%" }}>
+            {screen.honor.categoryName && <Typography variant="h5" color="text.secondary">{screen.honor.categoryName}</Typography>}
+            <Typography variant="h3" fontWeight={700}>
+              {screen.honor.exhibitor || (screen.honor.wholeDisplay ? t(language, "wholeDisplayLabel") : (screen.honor.modelName ?? ""))}
+            </Typography>
+            <Typography variant="h6" color="text.secondary">{winnerDetail(screen.honor)}</Typography>
+          </Box>
         </Stack>
       )}
 
@@ -176,8 +207,8 @@ export default function Podium({ language }: PodiumProps) {
           sx={{ position: "absolute", bottom: 16, left: 0, right: 0, justifyContent: "center" }}
         >
           <ActionButton tip={t(language, "tipPodiumPrev")} startIcon={<NavigateBeforeIcon />} onClick={prev} disabled={step === 0}>{t(language, "awardsPrev")}</ActionButton>
-          <Typography variant="body2" color="text.secondary">{t(language, "awardsStep")} {step} / {total}</Typography>
-          <ActionButton tip={t(language, "tipPodiumNext")} endIcon={<NavigateNextIcon />} onClick={next} disabled={step >= total} variant="contained">{t(language, "awardsNext")}</ActionButton>
+          <Typography variant="body2" color="text.secondary">{t(language, "awardsStep")} {step + 1} / {total}</Typography>
+          <ActionButton tip={t(language, "tipPodiumNext")} endIcon={<NavigateNextIcon />} onClick={next} disabled={step >= last} variant="contained">{t(language, "awardsNext")}</ActionButton>
           <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", md: "block" } }}>
             {t(language, "awardsHint")}
           </Typography>

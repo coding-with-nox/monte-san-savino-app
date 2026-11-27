@@ -76,7 +76,18 @@ const IT = {
   "judgeSheet.classNumber": "N. classe",
   "judgeSheet.standIn": "Sostituto",
   "judgeSheet.scan": "Scansiona per aprire",
-  "judgeSheet.noClasses": "Nessuna classe assegnata"
+  "judgeSheet.noClasses": "Nessuna classe assegnata",
+  "presentation.medals.title": "Premiazione: medaglie",
+  "presentation.medals.heading": "Premiazione: medaglie",
+  "presentation.honors.title": "Premiazione: premi speciali",
+  "presentation.honors.heading": "Premi speciali",
+  "presentation.wholeDisplay": "Intero display",
+  "presentation.noClasses": "Nessuna classe premiata",
+  "presentation.noHonors": "Nessun premio speciale assegnato",
+  "col.medal": "Medaglia",
+  "col.displayNumber": "N. display",
+  "col.classNumber": "N. classe",
+  "col.honor": "Premio"
 };
 
 export type PrintKey = keyof typeof IT;
@@ -154,7 +165,18 @@ const EN: Record<PrintKey, string> = {
   "judgeSheet.classNumber": "Class no.",
   "judgeSheet.standIn": "Stand-in",
   "judgeSheet.scan": "Scan to open",
-  "judgeSheet.noClasses": "No class assigned"
+  "judgeSheet.noClasses": "No class assigned",
+  "presentation.medals.title": "Ceremony: medals",
+  "presentation.medals.heading": "Ceremony: medals",
+  "presentation.honors.title": "Ceremony: special awards",
+  "presentation.honors.heading": "Special awards",
+  "presentation.wholeDisplay": "Whole display",
+  "presentation.noClasses": "No awarded classes",
+  "presentation.noHonors": "No special awards assigned",
+  "col.medal": "Medal",
+  "col.displayNumber": "Display no.",
+  "col.classNumber": "Class no.",
+  "col.honor": "Award"
 };
 
 export const PRINT_MESSAGES: Record<PrintLang, Record<PrintKey, string>> = { it: IT, en: EN };

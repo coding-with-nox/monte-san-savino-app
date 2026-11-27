@@ -16,6 +16,8 @@ import { userEnrollmentRoutes, adminEnrollmentRoutes, staffCheckinRoutes } from 
 import { publicRoutes } from "../contest/infra/http/public.routes";
 import { exportRoutes } from "../contest/infra/http/export.routes";
 import { awardRoutes } from "../contest/infra/http/award.routes";
+import { ceremonyRoutes } from "../contest/infra/http/ceremony.routes";
+import { adminHonorRoutes } from "../contest/infra/http/honors.routes";
 import { judgeAdminRoutes } from "../contest/infra/http/judge-admin.routes";
 import { adminModelsRoutes } from "../contest/infra/http/admin-models.routes";
 import { adminLevelsRoutes, publicLevelsRoutes } from "../contest/infra/http/levels.routes";
@@ -147,6 +149,8 @@ export function buildApp() {
     .use(publicRoutes)
     .use(exportRoutes)
     .use(awardRoutes)
+    .use(ceremonyRoutes)
+    .use(adminHonorRoutes)
     .use(judgeAdminRoutes)
     .use(adminModelsRoutes)
     .use(adminLevelsRoutes)
