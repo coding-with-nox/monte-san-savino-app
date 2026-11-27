@@ -36,13 +36,17 @@ export class JwtTokenService {
     return { token, expiresIn: this.accessTtlSeconds };
   }
 
-  async signRefresh(payload: { sub: string; email: string; role: string; tenantId?: string }) {
+  /** `expiresAt` (epoch seconds) can only shorten the expiry: exp = min(now + refresh TTL, expiresAt). */
+  async signRefresh(payload: { sub: string; email: string; role: string; tenantId?: string; sst?: number }, options: { expiresAt?: number } = {}) {
+    const now = Math.floor(Date.now() / 1000);
+    const normalExp = now + this.refreshTtlSeconds;
+    const exp = options.expiresAt === undefined ? normalExp : Math.min(normalExp, options.expiresAt);
     const token = await new SignJWT({ ...payload, tokenType: "refresh" })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
-      .setExpirationTime(Math.floor(Date.now() / 1000) + this.refreshTtlSeconds)
+      .setExpirationTime(exp)
       .sign(secret());
-    return { token, expiresIn: this.refreshTtlSeconds };
+    return { token, expiresIn: exp - now };
   }
 
   async verify(token: string) {

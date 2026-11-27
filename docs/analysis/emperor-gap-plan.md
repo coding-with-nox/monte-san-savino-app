@@ -83,3 +83,4 @@ Ogni passo: ramo dedicato → sviluppo con gli agenti → test automatici → mi
 - Username: sì (passo 9).
 - Pagamenti online (Mollie/PayPal): tema registrato, **in pausa**.
 - Export PowerPoint: scartato, la premiazione si fa con l'app (podio).
+- Dopo l'ultimo passo, senza bug aperti: revisione di sicurezza completa (l'app è esposta su internet) e, se emergono problemi, piano di correzione.

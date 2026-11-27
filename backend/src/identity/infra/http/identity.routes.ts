@@ -9,6 +9,7 @@ import { getTenantDbFromEnv } from "../../../tenancy/infra/tenantDbFactory";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { consumeAuthCode, createAuthCode } from "../tokens/pkceStore";
 import { RefreshSession } from "../../application/RefreshSession";
+import { judgeSessionHoursFromEnv, refreshCapFor } from "../../domain/judgeSession";
 import { clientIp, rateLimiterFromEnv, type SlidingWindowRateLimiter } from "../../../shared/infra/http/rateLimiter";
 import crypto from "node:crypto";
 import { logger } from "../../../shared/infra/logger/logger";
@@ -197,12 +198,14 @@ export const identityRoutes = new Elysia({ prefix: "/auth" })
       role: record.user.role,
       tenantId: record.user.tenantId ?? undefined
     });
+    const judgeSessionHours = judgeSessionHoursFromEnv();
     const refresh = await tokenService.signRefresh({
       sub: record.user.id,
       email: record.user.email,
       role: record.user.role,
-      tenantId: record.user.tenantId ?? undefined
-    });
+      tenantId: record.user.tenantId ?? undefined,
+      sst: record.sessionStart
+    }, refreshCapFor(record.user.role, record.sessionStart, judgeSessionHours));
     return buildTokenResponse(access.token, refresh.token, access.expiresIn, record.user.role);
   }, {
     beforeHandle: authRateLimit,

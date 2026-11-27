@@ -203,3 +203,28 @@ describe("Signup flow", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 });
+
+describe("Login redirect back to the requested page", () => {
+  async function signInFrom(url: string) {
+    apiMock.mockReset();
+    setSessionMock.mockReset();
+    navigateMock.mockReset();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    apiMock.mockResolvedValueOnce({ accessToken: "a", refreshToken: "r", expiresIn: 3600 });
+    const user = userEvent.setup();
+    renderWithProviders(<MemoryRouter initialEntries={[url]}><Login language="en" /></MemoryRouter>);
+    await user.type(screen.getByLabelText(/email/i), "a@b.it");
+    await user.type(screen.getByLabelText(/password/i), "secret123");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+  }
+
+  it("returns to the judge link the user was sent from", async () => {
+    await signInFrom(`/login?next=${encodeURIComponent("/judge?eventId=e1&categoryId=c1")}`);
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/judge?eventId=e1&categoryId=c1"));
+  });
+
+  it.each(["//evil.com", "/\\evil.com", "https://evil.com", "/login"])("ignores the unsafe next value %s", async (next) => {
+    await signInFrom(`/login?next=${encodeURIComponent(next)}`);
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/"));
+  });
+});

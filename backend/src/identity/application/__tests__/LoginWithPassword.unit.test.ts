@@ -76,6 +76,26 @@ describe("LoginWithPassword.unit", () => {
     }
   });
 
+  it("login stamps the session start; only judge refresh tokens get the session cap", async () => {
+    const refreshes: Array<{ payload: any; options?: { expiresAt?: number } }> = [];
+    const capturingTokens: TokenService = {
+      signAccess: async () => ({ token: "tok", expiresIn: 1 }),
+      signRefresh: async (payload, options) => { refreshes.push({ payload, options }); return { token: "ref", expiresIn: 1 }; },
+      verify: async () => ({}),
+    };
+    const before = Math.floor(Date.now() / 1000);
+    await new LoginWithPassword(stubRepo(makeActiveUser()), stubHasher(true), capturingTokens, 24)
+      .execute({ email: "alice@example.com", password: "pw" });
+    const judge = refreshes[0];
+    expect(judge.payload.sst).toBeGreaterThanOrEqual(before);
+    expect(judge.options).toEqual({ expiresAt: judge.payload.sst + 24 * 3600 });
+
+    const user = new User("uid-5", Email.create("eve@example.com"), "user", "hashed-pw", true);
+    await new LoginWithPassword(stubRepo(user), stubHasher(true), capturingTokens, 24).execute({ email: "eve@example.com", password: "pw" });
+    expect(typeof refreshes[1].payload.sst).toBe("number");
+    expect(refreshes[1].options).toBeUndefined();
+  });
+
   it("disabled user gets the same error as wrong credentials", async () => {
     const disabled = new User("uid-2", Email.create("bob@example.com"), "user", "hashed-pw", false);
     const uc = new LoginWithPassword(stubRepo(disabled), stubHasher(true), stubTokens());

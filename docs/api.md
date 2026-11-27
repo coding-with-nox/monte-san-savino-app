@@ -76,6 +76,13 @@ Exchange a valid refresh token for a fresh access + refresh pair.
 - `200`: same shape as `/auth/login`.
 - `401`: `{ "error": "Invalid refresh token" }`
 
+**Judge sessions (`JUDGE_SESSION_HOURS`, integer 1..72, default 24).** Login (password, or PKCE `/auth/authorize`)
+stamps the session start in the refresh token claim `sst` (epoch seconds); refreshes carry it unchanged.
+For a user whose current DB role is `judge`, the refresh token expires at `sst + JUDGE_SESSION_HOURS` and a refresh
+after that answers `401 Invalid refresh token`: the judge logs in again. Other roles keep the normal 30-day sliding
+refresh. Refresh tokens issued before `sst` existed count from their `iat`. Access tokens (15 min) are not changed:
+a judge's access token can outlive the session by at most its own TTL.
+
 ### `POST /auth/authorize` (PKCE step 1)
 - Body: `{ "email": string, "password": string, "code_challenge": string, "code_challenge_method": "S256" }`
 - `200`: `{ "code": string }` · `400` unsupported method/invalid · `401` bad credentials.
@@ -494,6 +501,11 @@ Source: `export.routes.ts`. Manager endpoints need min role `manager`; the
 | GET | `/exports/labels/pdf?eventId=<id>` | manager | printable HTML labels |
 | GET | `/exports/my-enrollments` | user | XLSX of own enrollments |
 | GET | `/exports/model-card/pdf?eventId=<id>` | user | printable HTML model card, including the registration fee breakdown and total |
+| GET | `/exports/events/:eventId/judge-sheets` | manager | printable HTML, one page per judge of the event: name, login email, app address, assigned classes (class no., `[Stand-in]` marker for stand-in judges) and one QR per class encoding `${PUBLIC_APP_URL}/judge?eventId=<id>&categoryId=<id>`. A whole-event judge gets every class of the event. `422` invalid uuid, `404` unknown event |
+| GET | `/exports/classes/:categoryId/jury-qr` | manager | printable HTML: the judges of the class with the class QR. The QR encodes the same judge page URL as above (it no longer encodes a `jury:<judgeId>:<categoryId>` payload) |
+
+`PUBLIC_APP_URL` (default `http://localhost:5173`, trailing slashes removed) is the base of the judge app URL printed and encoded in the QR codes.
+The judge sheet tells the judge the session length from `JUDGE_SESSION_HOURS` (see `POST /auth/refresh`).
 
 XLSX content is shaped by tenant settings (`exportIncludeModelCode`,
 `exportIncludeModelDescription`, `exportIncludeParticipantEmail`,

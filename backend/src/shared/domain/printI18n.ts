@@ -68,7 +68,15 @@ const IT = {
   "pricing.coauthor": "Coautore {name} {surname} ({role}) - {models}",
   "pricing.freeEntry": "Ingresso gratuito - {model}",
   "pricing.total": "Totale",
-  "pricing.grandTotal": "Totale complessivo"
+  "pricing.grandTotal": "Totale complessivo",
+  "judgeSheet.title": "Scheda giudice",
+  "judgeSheet.appUrl": "Indirizzo app",
+  "judgeSheet.instruction": "Accedi con la tua email e password: la sessione resta valida per {hours} ore.",
+  "judgeSheet.classes": "Classi assegnate",
+  "judgeSheet.classNumber": "N. classe",
+  "judgeSheet.standIn": "Sostituto",
+  "judgeSheet.scan": "Scansiona per aprire",
+  "judgeSheet.noClasses": "Nessuna classe assegnata"
 };
 
 export type PrintKey = keyof typeof IT;
@@ -138,7 +146,15 @@ const EN: Record<PrintKey, string> = {
   "pricing.coauthor": "Co-author {name} {surname} ({role}) - {models}",
   "pricing.freeEntry": "Free entry - {model}",
   "pricing.total": "Total",
-  "pricing.grandTotal": "Grand total"
+  "pricing.grandTotal": "Grand total",
+  "judgeSheet.title": "Judge sheet",
+  "judgeSheet.appUrl": "App address",
+  "judgeSheet.instruction": "Log in with your email and password: the session stays valid for {hours} hours.",
+  "judgeSheet.classes": "Assigned classes",
+  "judgeSheet.classNumber": "Class no.",
+  "judgeSheet.standIn": "Stand-in",
+  "judgeSheet.scan": "Scan to open",
+  "judgeSheet.noClasses": "No class assigned"
 };
 
 export const PRINT_MESSAGES: Record<PrintLang, Record<PrintKey, string>> = { it: IT, en: EN };

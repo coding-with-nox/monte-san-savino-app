@@ -85,6 +85,19 @@ describe("hardening", () => {
       .sign(new TextEncoder().encode(TEST_SECRET));
     await expect(new JwtTokenService().verify(hs512)).rejects.toThrow();
   });
+  it("refresh expiry can be capped (expiresAt) but never extended", async () => {
+    const svc = new JwtTokenService();
+    const now = Math.floor(Date.now() / 1000);
+    const capped = await svc.signRefresh({ ...p, sst: now }, { expiresAt: now + 3600 });
+    const payload = await svc.verify(capped.token);
+    expect(payload.sst).toBe(now);
+    expect(payload.exp).toBeGreaterThanOrEqual(now + 3599);
+    expect(payload.exp).toBeLessThanOrEqual(now + 3600);
+    expect(capped.expiresIn).toBeLessThanOrEqual(3600);
+
+    const longer = await svc.signRefresh(p, { expiresAt: now + 10 * 365 * 24 * 3600 });
+    expect(longer.expiresIn).toBe(60 * 60 * 24 * 30);
+  });
   it("access token default TTL is 15 minutes, refresh 30 days", async () => {
     const svc = new JwtTokenService();
     expect((await svc.signAccess(p)).expiresIn).toBe(900);

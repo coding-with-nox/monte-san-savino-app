@@ -59,6 +59,8 @@ Each bounded context follows the same `domain / application / infra` layering.
 | `PORT`            | `3000`         | optional        | HTTP listen port.                                            |
 | `NODE_ENV`        | —              | optional        | Set to `production` to disable dev seeding.                 |
 | `JWT_SECRET`      | — (none)       | **yes**         | HMAC secret for signing/verifying JWTs. Required, no default: the server refuses to start if missing or blank. Must be stable across restarts. |
+| `JUDGE_SESSION_HOURS` | `24`       | optional        | Judge login lasts this many hours (integer 1..72); afterwards the judge must log in again. Invalid values stop the server at startup. |
+| `PUBLIC_APP_URL`  | `http://localhost:5173` | optional | Base URL of the judge app; printed on judge sheets and encoded in the class QR codes. |
 | `PG_HOST`         | `localhost`    | optional        | PostgreSQL host. `localhost` for local dev, `postgres` inside Docker. |
 | `PG_PORT`         | `5432`         | optional        | PostgreSQL port.                                            |
 | `PG_USER`         | `postgres`     | optional        | PostgreSQL user.                                            |
