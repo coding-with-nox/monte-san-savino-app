@@ -1,3 +1,4 @@
+import { PRINT_HTML_HEADERS } from "../../../shared/infra/http/printHeaders";
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import { escapeHtml } from "../../../shared/domain/escapeHtml";
@@ -66,7 +67,7 @@ export const presentationPrintRoutes = new Elysia()
     }
     const lang = parsePrintLang(query?.lang);
     const { classes } = await loadCeremony(tenantDb, event.id);
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="presentation-medals.html"`;
     return renderPresentationMedalsHtml(event, classes, lang);
   }, {
@@ -86,7 +87,7 @@ export const presentationPrintRoutes = new Elysia()
     }
     const lang = parsePrintLang(query?.lang);
     const { honors } = await loadCeremony(tenantDb, event.id);
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="presentation-honors.html"`;
     return renderPresentationHonorsHtml(event, honors, lang);
   }, {

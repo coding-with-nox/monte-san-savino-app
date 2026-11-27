@@ -75,7 +75,11 @@ function judgeDisplayName(u: { seqId: number | null; firstName: string | null; l
 const managerAwardRoutes = new Elysia({ prefix: "/awards" })
   .use(tenantMiddleware)
   .use(requireRole("manager"))
-  .get("/events/:eventId", async ({ tenantDb, params }) => {
+  .get("/events/:eventId", async ({ tenantDb, params, set }) => {
+    if (!isUuid(params.eventId)) {
+      set.status = 422;
+      return { error: "eventId must be a valid uuid" };
+    }
     // Load all categories for this event
     const cats = await tenantDb
       .select()
@@ -216,6 +220,10 @@ const headJudgeAwardRoutes = new Elysia({ prefix: "/awards" })
   .use(tenantMiddleware)
   .use(requireRole("jury_president"))
   .patch("/:awardId", async ({ tenantDb, params, body, set, user }) => {
+    if (!isUuid(params.awardId)) {
+      set.status = 422;
+      return { error: "awardId must be a valid uuid" };
+    }
     const [award] = await tenantDb
       .select()
       .from(awardsTable)
@@ -278,6 +286,10 @@ const headJudgeAwardRoutes = new Elysia({ prefix: "/awards" })
     }
   })
   .get("/categories/:categoryId/review", async ({ tenantDb, params, set }) => {
+    if (!isUuid(params.categoryId)) {
+      set.status = 422;
+      return { error: "categoryId must be a valid uuid" };
+    }
     const [cat] = await tenantDb
       .select({ id: categoriesTable.id, eventId: categoriesTable.eventId, name: categoriesTable.name, status: categoriesTable.status, seqId: categoriesTable.seqId })
       .from(categoriesTable)
@@ -364,7 +376,11 @@ const headJudgeAwardRoutes = new Elysia({ prefix: "/awards" })
 const monitoringRoutes = new Elysia({ prefix: "/awards" })
   .use(tenantMiddleware)
   .use(requireRole("jury_president"))
-  .get("/monitoring/:eventId", async ({ tenantDb, params }) => {
+  .get("/monitoring/:eventId", async ({ tenantDb, params, set }) => {
+    if (!isUuid(params.eventId)) {
+      set.status = 422;
+      return { error: "eventId must be a valid uuid" };
+    }
     const cats = await tenantDb
       .select()
       .from(categoriesTable)

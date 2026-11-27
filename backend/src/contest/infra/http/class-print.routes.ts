@@ -1,3 +1,4 @@
+import { PRINT_HTML_HEADERS, PRINT_SCRIPT } from "../../../shared/infra/http/printHeaders";
 import { Elysia, t } from "elysia";
 import { and, eq, isNull, or } from "drizzle-orm";
 import QRCode from "qrcode";
@@ -57,7 +58,7 @@ export function page(lang: PrintLang, title: string, body: string) {
   </head>
   <body>
     ${body}
-    <script>window.onload = () => window.print();</script>
+    <script>${PRINT_SCRIPT}</script>
   </body>
 </html>`;
 }
@@ -243,7 +244,7 @@ export const classPrintRoutes = new Elysia()
         code: formatModelCode(r.code, (cls as any).seqId, r.displayNumber, fmt, r.teamCode)
       }))
       .sort((a, b) => a.exhibitor.localeCompare(b.exhibitor) || a.modelName.localeCompare(b.modelName));
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="class-exhibitors.html"`;
     return renderExhibitorsHtml(cls, list, lang);
   }, {
@@ -262,7 +263,7 @@ export const classPrintRoutes = new Elysia()
     }
     const lang = parsePrintLang(query?.lang);
     const judges = await loadClassJudges(tenantDb, cls);
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="class-jury-list.html"`;
     return renderJuryListHtml(cls, judges, lang);
   }, {
@@ -284,7 +285,7 @@ export const classPrintRoutes = new Elysia()
     const judgeUrl = judgeAppUrl(publicAppUrl(), cls.eventId, cls.id);
     const qrDataUrl = await QRCode.toDataURL(judgeUrl, { margin: 1, width: 200, errorCorrectionLevel: "M" });
     const withQr: JuryQrRow[] = judges.map((j) => ({ ...j, qrDataUrl }));
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="class-jury-qr.html"`;
     return renderJuryQrHtml(cls, judgeUrl, withQr, lang);
   }, {
@@ -336,7 +337,7 @@ export const classPrintRoutes = new Elysia()
         qrByCategory[c.categoryId] = await QRCode.toDataURL(judgeAppUrl(appUrl, event.id, c.categoryId), { margin: 1, width: 140, errorCorrectionLevel: "M" });
       }
     }
-    set.headers["content-type"] = "text/html; charset=utf-8";
+    Object.assign(set.headers, PRINT_HTML_HEADERS);
     set.headers["content-disposition"] = `inline; filename="judge-sheets.html"`;
     return renderJudgeSheetsHtml(event, sheets, { lang, appUrl, sessionHours: judgeSessionHoursFromEnv(), qrByCategory });
   }, {
