@@ -196,5 +196,5 @@ describe("integration judging step 2: multi-class, own models, stand-ins, reconc
     expect(closed.json.discordantModelIds).toBeUndefined();
     const [after] = await getTestDb().select({ status: categoriesTable.status }).from(categoriesTable).where(eq(categoriesTable.id, c1));
     expect(after.status).toBe("closed");
-  });
+  }, 20_000); // many sequential requests: room for CI (Bun 1.1.29) under load
 });

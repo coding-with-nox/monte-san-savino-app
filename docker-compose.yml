@@ -53,6 +53,10 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
       JUDGE_SESSION_HOURS: ${JUDGE_SESSION_HOURS:-24}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:8080}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
     # Not published: the browser reaches the API through nginx at /api (port 8080).
     expose:
       - "3000"

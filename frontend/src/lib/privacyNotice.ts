@@ -7,7 +7,7 @@ import type { Language } from "./i18n";
  * Parts marked TODO depend on the organizer (controller identity, hosting, retention) and must be
  * completed and reviewed before going live.
  */
-export const PRIVACY_POLICY_VERSION = "2026-11-26";
+export const PRIVACY_POLICY_VERSION = "2026-11-27";
 
 export type PrivacySection = { title: string; paragraphs: string[] };
 export type PrivacyNotice = { title: string; intro: string; sections: PrivacySection[]; updated: string };
@@ -73,6 +73,7 @@ const it: PrivacyNotice = {
       paragraphs: [
         "Non usiamo cookie di profilazione, pubblicità o statistiche di terze parti.",
         "Il browser conserva solo dati tecnici necessari: la sessione di accesso, la lingua, il tema, lo stato del menu e le guide già viste. Per questo non serve un banner dei cookie.",
+        "Quando la verifica anti-bot è attiva, il modulo di iscrizione usa Cloudflare Turnstile, che riceve dati tecnici come l'indirizzo IP e il browser.",
         "I caratteri tipografici sono serviti dal nostro server. Solo le pagine dello staff con la mappa caricano dati da OpenStreetMap."
       ]
     },
@@ -147,6 +148,7 @@ const en: PrivacyNotice = {
       paragraphs: [
         "We use no profiling, advertising or third-party analytics cookies.",
         "Your browser stores only technical data that is needed: your sign-in session, language, theme, menu state and the guides you have already seen. This is why no cookie banner is needed.",
+        "When the anti-bot check is enabled, the sign-up form uses Cloudflare Turnstile, which receives technical data such as your IP address and browser.",
         "Fonts are served from our own server. Only the staff pages with a map load data from OpenStreetMap."
       ]
     },

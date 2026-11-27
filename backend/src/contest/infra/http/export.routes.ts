@@ -1161,6 +1161,7 @@ const managerExportRoutes = new Elysia()
       participantNumber: p.participantNumber,
       name: displayName(p.firstName, p.lastName, p.email),
       email: p.email,
+      username: p.username,
       country: p.country ?? ""
     }));
     set.headers["content-type"] = "text/html; charset=utf-8";

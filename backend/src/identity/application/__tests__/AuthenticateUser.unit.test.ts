@@ -16,6 +16,7 @@ function makeDisabledUser(): User {
 function stubRepo(user: User | null): UserRepository {
   return {
     findByEmail: async () => user,
+    findByUsername: async () => null,
     findById: async () => null,
     save: async () => {},
   };

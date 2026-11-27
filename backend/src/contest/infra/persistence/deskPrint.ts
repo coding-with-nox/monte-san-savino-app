@@ -16,6 +16,7 @@ export type DeskParticipant = {
   userId: string;
   participantNumber: number;
   email: string | null;
+  username: string | null;
   firstName: string | null;
   lastName: string | null;
   country: string | null;
@@ -28,6 +29,7 @@ export async function loadDeskParticipants(tenantDb: any, eventId: string, range
       userId: registrationsTable.userId,
       participantNumber: usersTable.seqId,
       email: usersTable.email,
+      username: usersTable.username,
       firstName: userProfilesTable.firstName,
       lastName: userProfilesTable.lastName,
       country: userProfilesTable.country

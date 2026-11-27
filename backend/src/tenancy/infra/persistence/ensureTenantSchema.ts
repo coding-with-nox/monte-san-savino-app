@@ -511,6 +511,28 @@ export async function ensureTenantSchema() {
         ADD COLUMN IF NOT EXISTS privacy_accepted_at timestamptz,
         ADD COLUMN IF NOT EXISTS privacy_policy_version text;
     `);
+    // Optional login name, unique case-insensitively (NULLs are not considered duplicates).
+    await pool.query(`ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS username text`);
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.users') IS NOT NULL THEN
+          CREATE UNIQUE INDEX IF NOT EXISTS ux_users_username ON users (lower(username));
+        END IF;
+      END $$;
+    `);
+    // Forgotten-password tokens (sha256 of the token only), single use, 60 minutes.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id uuid PRIMARY KEY,
+        user_id uuid NOT NULL,
+        token_hash text NOT NULL UNIQUE,
+        expires_at timestamptz NOT NULL,
+        used_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ix_password_resets_user_id ON password_resets (user_id)`);
     await pool.query(`
       DO $$
       BEGIN

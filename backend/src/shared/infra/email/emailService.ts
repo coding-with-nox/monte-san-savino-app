@@ -1,8 +1,27 @@
 import { Resend } from "resend";
 import { logger } from "../logger/logger";
+import { escapeHtml } from "../../domain/escapeHtml";
+
+export type PasswordResetLinkLang = "it" | "en";
+
+const PASSWORD_RESET_LINK_TEXT: Record<PasswordResetLinkLang, { subject: string; intro: string; button: string; ignore: string }> = {
+  it: {
+    subject: "Reimposta la password - Miniatures Contest",
+    intro: "Hai chiesto di reimpostare la password. Apri il link qui sotto, valido per 60 minuti:",
+    button: "Reimposta password",
+    ignore: "Se non sei stato tu, ignora questa email: la password non cambia."
+  },
+  en: {
+    subject: "Reset your password - Miniatures Contest",
+    intro: "You asked to reset your password. Open the link below, valid for 60 minutes:",
+    button: "Reset password",
+    ignore: "If you did not ask for this, ignore this email: your password will not change."
+  }
+};
 
 export class EmailService {
-  private resend: Resend;
+  /** Null when RESEND_API_KEY is not set: Resend throws on an empty key, so the client is built only when configured. */
+  private resend: Resend | null;
   private fromEmail: string;
 
   constructor() {
@@ -10,12 +29,12 @@ export class EmailService {
     if (!apiKey) {
       logger.warn("RESEND_API_KEY not set. Email sending will be disabled.");
     }
-    this.resend = new Resend(apiKey || "");
+    this.resend = apiKey ? new Resend(apiKey) : null;
     this.fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@example.com";
   }
 
   async sendPasswordReset(params: { to: string; temporaryPassword: string }): Promise<boolean> {
-    if (!process.env.RESEND_API_KEY) {
+    if (!this.resend) {
       logger.warn({ to: params.to }, "Email sending skipped (no API key)");
       return false;
     }
@@ -46,6 +65,38 @@ export class EmailService {
     }
   }
 
+  /** Self-service reset link (token in the URL, valid 60 minutes). Returns false, never throws, when not sent. */
+  async sendPasswordResetLink(params: { to: string; link: string; lang?: PasswordResetLinkLang }): Promise<boolean> {
+    if (!this.resend) {
+      logger.warn("Password reset link not sent: RESEND_API_KEY is not set");
+      return false;
+    }
+    const text = PASSWORD_RESET_LINK_TEXT[params.lang ?? "it"];
+    const link = escapeHtml(params.link);
+    try {
+      await this.resend.emails.send({
+        from: this.fromEmail,
+        to: params.to,
+        subject: text.subject,
+        html: `
+          <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+            <p>${escapeHtml(text.intro)}</p>
+            <p style="text-align: center;"><a href="${link}" style="display: inline-block; padding: 12px 20px; border-radius: 6px; background: #1f2937; color: #fff; text-decoration: none;">${escapeHtml(text.button)}</a></p>
+            <p style="word-break: break-all; font-size: 0.85em;">${link}</p>
+            <p style="color: #888; font-size: 0.85em;">${escapeHtml(text.ignore)}</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+            <p style="color: #888; font-size: 0.85em;">Miniatures Contest</p>
+          </div>
+        `
+      });
+      logger.info("Password reset link email sent");
+      return true;
+    } catch (err) {
+      logger.error({ err }, "Failed to send password reset link email");
+      return false;
+    }
+  }
+
   // TODO: called by scheduler or admin endpoint, 7 days before enrollment close date
   async sendIncompleteRegistrationReminder(params: {
     to: string;
@@ -53,7 +104,7 @@ export class EmailService {
     enrollmentCloseDate: string;
     frontendUrl: string;
   }): Promise<boolean> {
-    if (!process.env.RESEND_API_KEY) {
+    if (!this.resend) {
       logger.warn({ to: params.to }, "Reminder email skipped (no API key)");
       return false;
     }

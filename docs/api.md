@@ -39,13 +39,18 @@ No auth required (these issue/refresh tokens). Source: `identity.routes.ts`.
 ### `POST /auth/register`
 Create a new account with default role `user`.
 
-- Body: `{ "email": string, "password": string, "privacyAccepted": boolean, "privacyVersion": string }`
+- Body: `{ "email": string, "password": string, "privacyAccepted": boolean, "privacyVersion": string, "username"?: string, "turnstileToken"?: string }`
   (password min length 8; `privacyAccepted` must be `true`; `privacyVersion` 1–32 chars, the version of the
   privacy notice shown to the user). The server stores `users.privacy_accepted_at` and
   `users.privacy_policy_version` (GDPR accountability).
+- `username` (optional): 3–30 characters from `[a-zA-Z0-9._-]`, no `@`; unique case-insensitively. Blank or omitted = no username.
+- `turnstileToken` (required when `TURNSTILE_SECRET_KEY` is set): the Cloudflare Turnstile token of the widget. The server
+  verifies it with `https://challenges.cloudflare.com/turnstile/v0/siteverify` (10 s timeout, `remoteip` = client IP).
 - `200`: `{ "id": string, "email": string, "role": "user" }`
-- `400`: `{ "error": "The privacy notice must be accepted" }`, `{ "error": "Password must be at least 8 characters long" }` or
-  `{ "error": "Email already registered" }` or `{ "error": "Invalid email" }`
+- `400`: `{ "error": "The privacy notice must be accepted" }`, `{ "error": "Password must be at least 8 characters long" }`,
+  an invalid username message, `{ "error": "Email already registered" }` or `{ "error": "Invalid email" }`,
+  `{ "error": "Captcha verification failed", "code": "CAPTCHA_FAILED" }` (missing, rejected or unverifiable token)
+- `409`: `{ "error": "Username already taken", "code": "USERNAME_TAKEN" }` (no account is created)
 - `403`: `{ "error": "Registration is closed", "code": "REGISTRATION_CLOSED" }` when setting `registrationStatus` is `"closed"`
   (`"open"` and `"openday"` accept registrations). No account is created.
 
@@ -59,7 +64,8 @@ Create a new account with default role `user`.
 ### `POST /auth/login`
 Authenticate with password, receive tokens.
 
-- Body: `{ "email": string, "password": string }`
+- Body: `{ "email": string, "password": string }`. The `email` field also accepts the **username** (any value without `@` is
+  looked up as username, case-insensitive). Wrong password, unknown username and unknown email all answer the same `401`.
 - `200`: `{ "accessToken": string, "refreshToken": string, "expiresIn": number, "expires_in": number, "role": string }`
 - `401`: `{ "error": "Invalid credentials" }` (wrong/unknown credentials)
 - `400`: `{ "error": "User disabled" }`
@@ -86,12 +92,29 @@ refresh. Refresh tokens issued before `sst` existed count from their `iat`. Acce
 a judge's access token can outlive the session by at most its own TTL.
 
 ### `POST /auth/authorize` (PKCE step 1)
-- Body: `{ "email": string, "password": string, "code_challenge": string, "code_challenge_method": "S256" }`
+- Body: `{ "email": string, "password": string, "code_challenge": string, "code_challenge_method": "S256" }` (`email` also accepts the username, as on `/auth/login`)
 - `200`: `{ "code": string }` · `400` unsupported method/invalid · `401` bad credentials.
 
 ### `POST /auth/token` (PKCE step 2)
 - Body: `{ "code": string, "code_verifier": string }` (verifier length 43–128).
 - `200`: token bundle (same shape as `/auth/login`) · `400` invalid/expired code or verifier.
+
+### `POST /auth/forgot-password`
+Self-service password reset, step 1. Rate limited like `/auth/login` (per IP + email).
+
+- Body: `{ "email": string, "lang"?: "it" | "en" }` (`lang` picks the language of the email, default `"it"`).
+- `200`: `{ "sent": true }` **always**, whether or not the account exists (no enumeration; the answer is timed like the unknown-account path).
+- For an active account: any previous unused token is invalidated, a random 32-byte token is created (only its sha256 is stored in
+  `password_resets`), valid 60 minutes, and an email with the link `${PUBLIC_APP_URL}/reset-password?token=<token>` is sent.
+  Without `RESEND_API_KEY` the link is not sent, a warning is logged and the answer is still `200`.
+
+### `POST /auth/reset-password`
+Step 2: sets the new password with the token from the email. Rate limited.
+
+- Body: `{ "token": string, "password": string }` (`password` min length 8).
+- `200`: `{ "reset": true }`. The token is marked used (single use); the other unused tokens of the account are invalidated.
+- `400`: `{ "error": "Invalid or expired token", "code": "INVALID_OR_EXPIRED_TOKEN" }` for an unknown, expired or already used token.
+- `400`: `{ "error": "Password must be at least 8 characters long" }`.
 
 > There is no `/auth/logout` endpoint. Logout is client-side: the SPA clears
 > stored tokens (`clearToken()` in `frontend/src/lib/auth.ts`).
@@ -104,8 +127,8 @@ Min role: `user`. Requires Bearer token. Source: `user.routes.ts`.
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | `/users/profile` | — | profile object (id, email, role, firstName, lastName, phone, city, address, emergencyContact, emergencyContactName, avatarUrl) or `null` |
-| PUT | `/users/profile` | `{ firstName?, lastName?, phone?, city?, address?, emergencyContact?, emergencyContactName? }` | `{ "updated": true }` |
+| GET | `/users/profile` | — | profile object (id, email, username, role, firstName, lastName, phone, city, address, emergencyContact, emergencyContactName, avatarUrl) or `null` |
+| PUT | `/users/profile` | `{ username?: string \| null, firstName?, lastName?, phone?, city?, address?, emergencyContact?, emergencyContactName? }` | `{ "updated": true }`. `username` follows the registration rule (`""`/`null` clears it); `409 { code: "USERNAME_TAKEN" }` on a duplicate, `422` on an invalid value |
 | GET | `/users/me/level-up?eventId=<id>` | `{ warn: boolean }` — `true` only when setting `levelUpWarning` is `"true"` and the caller matches a previous Standard Gold (see Level-up). `422` bad `eventId`, `404` unknown event |
 
 ```json
@@ -278,10 +301,20 @@ Source: `payment.routes.ts`.
 | Method | Path | Source |
 |--------|------|--------|
 | GET | `/public/events?status=<active\|all\|…>` | `public.routes.ts` (no auth) |
-| GET | `/public/registration` | `public.routes.ts` (no auth) → `{ status: "open" \| "openday" \| "closed", defaultPage: "login" \| "register" }`. `defaultPage` is `"register"` for `openday` or when `defaultPublicPage` = `"register"`, else `"login"` |
+| GET | `/public/registration` | `public.routes.ts` (no auth) → `{ status: "open" \| "openday" \| "closed", defaultPage: "login" \| "register", turnstileSiteKey: string \| null }`. `defaultPage` is `"register"` for `openday` or when `defaultPublicPage` = `"register"`, else `"login"`. `turnstileSiteKey` is `TURNSTILE_SITE_KEY` or `null` |
 | GET | `/public/categories?eventId=<id>` | `public-categories.routes.ts` |
 | GET | `/public/levels` | `levels.routes.ts` |
 | GET | `/public/member-roles` | `member-roles.routes.ts` |
+
+### Public socials (no auth) — `public-socials.routes.ts`
+Opt-in socials of the exhibitors, open only after judging. Rate limited per IP like the auth endpoints.
+
+| Method | Path | Response |
+|--------|------|----------|
+| GET | `/public/socials/:eventId` | `{ available: boolean }`: `true` only when the event has at least one class and **all** its classes are closed. `422` invalid uuid |
+| GET | `/public/socials/:eventId/displays/:displayNumber` | `404` no such display (non-missing models with that number in the event) · `403 { code: "NOT_AVAILABLE_YET" }` before all classes are closed · otherwise `{ displayNumber, categoryName, models: string[], optedIn: boolean, exhibitor?: { name, country, socials: { instagram, facebook, website, patreon, pinterest, tiktok } } }` |
+
+`exhibitor` is present **only** when the owner's `public_profile` is `true` (`optedIn: true`); otherwise `optedIn` is `false` and the key is absent. No email or other private data is exposed.
 
 ### Levels (`/admin/levels`) — min role `manager` — `levels.routes.ts`
 GET `/` → `[{ id, name, sortOrder, freeToEnter }]`,
@@ -429,8 +462,8 @@ Tables: `honors` (unique `(event_id, lower(code))`) and `honor_assignments` (uni
 |--------|------|------|----------|
 | POST | `/admin/users` | `{ email, password, role? }` (password min 8) | `{ id, email, role }` (`409` duplicate) |
 | GET | `/admin/users` | — | `[{ id, email, role, isActive }]` |
-| GET | `/admin/users/:userId/profile` | — | full profile or `404` |
-| PUT | `/admin/users/:userId/profile` | profile fields | `{ "updated": true }` |
+| GET | `/admin/users/:userId/profile` | — | full profile (includes `username`) or `404` |
+| PUT | `/admin/users/:userId/profile` | `username?` (same rule as `PUT /users/profile`) and profile fields | `{ "updated": true }`, `409 { code: "USERNAME_TAKEN" }` on a duplicate |
 | PATCH | `/admin/users/:userId` | `{ role?, isActive? }` | `{ "updated": true }` |
 | POST | `/admin/users/:userId/reset-password` | — | `{ emailSent: true }` (temporary password sent by email only; `503 { error, emailSent: false }` and no change if email is unavailable) |
 
@@ -582,7 +615,8 @@ Desk prints (`/desk/*`): `from` / `to` are participant numbers (`users.seq_id`),
 
 Photography list: a display whose models (at least two) all have the same medal is one "whole display" row; otherwise one row per model above the cut-off.
 
-`PUBLIC_APP_URL` (default `http://localhost:5173`, trailing slashes removed) is the base of the judge app URL printed and encoded in the QR codes.
+`PUBLIC_APP_URL` (default `http://localhost:5173`, trailing slashes removed) is the base of the judge app URL printed and encoded in the QR codes, and of the password reset link (`/reset-password?token=`).
+`TURNSTILE_SITE_KEY` (public widget key, returned by `GET /public/registration`) and `TURNSTILE_SECRET_KEY` (server-side verification) are optional; with the secret set, self registration requires a valid Turnstile token.
 The judge sheet tells the judge the session length from `JUDGE_SESSION_HOURS` (see `POST /auth/refresh`).
 
 XLSX content is shaped by tenant settings (`exportIncludeModelCode`,
@@ -613,3 +647,7 @@ XLSX content is shaped by tenant settings (`exportIncludeModelCode`,
 | `INVALID_MEDAL` | 422 | `PATCH /awards/:awardId` (medal is neither `None`/0 nor a bracket of the event) |
 | `INVALID_CATEGORY`, `CATEGORY_EVENT_MISMATCH`, `CATEGORY_MODEL_MISMATCH` | 422 | `POST /events/:eventId/enroll` |
 | `SECTION_HIDDEN` | 403 | `jury_president` on a hidden section |
+| `USERNAME_TAKEN` | 409 | `POST /auth/register`, `PUT /users/profile`, `PUT /admin/users/:userId/profile` (case-insensitive) |
+| `CAPTCHA_FAILED` | 400 | `POST /auth/register` when `TURNSTILE_SECRET_KEY` is set and the Turnstile token is missing or rejected |
+| `INVALID_OR_EXPIRED_TOKEN` | 400 | `POST /auth/reset-password` (unknown, expired or already used token) |
+| `NOT_AVAILABLE_YET` | 403 | `GET /public/socials/:eventId/displays/:displayNumber` before all classes of the event are closed |

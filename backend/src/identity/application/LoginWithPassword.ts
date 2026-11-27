@@ -1,9 +1,9 @@
-import { Email } from "../domain/Email";
 import { InvalidCredentialsError, describeHashFormat } from "../domain/InvalidCredentialsError";
 import type { UserRepository } from "./ports/UserRepository";
 import type { PasswordHasher } from "./ports/PasswordHasher";
 import type { TokenService } from "./ports/TokenService";
 import { judgeSessionHoursFromEnv, nowSeconds, refreshCapFor } from "../domain/judgeSession";
+import { findUserByIdentifier } from "./findUserByIdentifier";
 
 export class LoginWithPassword {
   constructor(
@@ -12,9 +12,9 @@ export class LoginWithPassword {
     private readonly tokens: TokenService,
     private readonly judgeSessionHours = judgeSessionHoursFromEnv()
   ) {}
+  /** `email` carries an email or a username (see findUserByIdentifier). */
   async execute(input: { email: string; password: string }) {
-    const email = Email.create(input.email);
-    const user = await this.users.findByEmail(email);
+    const user = await findUserByIdentifier(this.users, input.email);
     if (!user) {
       await this.hasher.hash(input.password); // equalize timing with the existing-user path
       throw new InvalidCredentialsError("user_not_found");
