@@ -13,6 +13,8 @@ import { EmailService } from "../../../shared/infra/email/emailService";
 import { ROLES, type Role } from "../../domain/Role";
 import { authorizeCreateUser, authorizeUpdateUser, authorizeResetPassword } from "../../domain/adminUserPolicy";
 import { generateTemporaryPassword } from "../../domain/temporaryPassword";
+import { normalizeUsername, UsernameTakenError } from "../../domain/username";
+import { setUsername } from "../persistence/userRepository.drizzle";
 
 const roleSchema = t.Union(ROLES.map((r) => t.Literal(r)) as any);
 
@@ -125,6 +127,7 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
         email: usersTable.email,
         role: usersTable.role,
         isActive: usersTable.isActive,
+        username: usersTable.username,
         firstName: userProfilesTable.firstName,
         lastName: userProfilesTable.lastName,
         phone: userProfilesTable.phone,
@@ -158,28 +161,48 @@ export const adminUserRoutes = new Elysia({ prefix: "/admin/users" })
     }
   })
   .put("/:userId/profile", async ({ tenantDb, params, body, set }) => {
-    const social = normalizeSocialPatch(body);
+    const { username, ...profileBody } = body;
+    const social = normalizeSocialPatch(profileBody);
     if (!social.ok) {
       set.status = 422;
       return { error: social.error };
     }
-    const profile = normalizeProfilePatch(body);
+    const profile = normalizeProfilePatch(profileBody);
     if (!profile.ok) {
       set.status = 422;
       return { error: profile.error };
     }
-    const values = { ...body, ...social.patch, ...profile.patch };
-    await tenantDb
-      .insert(userProfilesTable)
-      .values({ userId: params.userId as any, ...values })
-      .onConflictDoUpdate({
-        target: userProfilesTable.userId,
-        set: values
-      });
+    const values = { ...profileBody, ...social.patch, ...profile.patch };
+    if (username !== undefined) {
+      const name = normalizeUsername(username);
+      if (!name.ok) {
+        set.status = 422;
+        return { error: name.error };
+      }
+      try {
+        await setUsername(tenantDb, params.userId, name.value);
+      } catch (error) {
+        if (error instanceof UsernameTakenError) {
+          set.status = 409;
+          return { error: "Username already taken", code: "USERNAME_TAKEN" };
+        }
+        throw error;
+      }
+    }
+    if (Object.keys(values).length > 0) {
+      await tenantDb
+        .insert(userProfilesTable)
+        .values({ userId: params.userId as any, ...values })
+        .onConflictDoUpdate({
+          target: userProfilesTable.userId,
+          set: values
+        });
+    }
     return { updated: true };
   }, {
     params: t.Object({ userId: t.String() }),
     body: t.Object({
+      username: t.Optional(t.Union([t.String({ maxLength: 100 }), t.Null()])),
       firstName: t.Optional(t.String()),
       lastName: t.Optional(t.String()),
       phone: t.Optional(t.String()),

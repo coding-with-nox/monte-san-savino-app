@@ -46,6 +46,7 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import PrivacyTipIcon from "@mui/icons-material/PrivacyTip";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import ReplayIcon from "@mui/icons-material/Replay";
+import ShareIcon from "@mui/icons-material/Share";
 import Login from "./pages/Login";
 const Judge = lazy(() => import("./pages/Judge"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -63,6 +64,8 @@ const Stats = lazy(() => import("./pages/Stats"));
 const Podium = lazy(() => import("./pages/Podium"));
 const Help = lazy(() => import("./pages/Help"));
 const Privacy = lazy(() => import("./pages/Privacy"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Socials = lazy(() => import("./pages/Socials"));
 import PageSkeleton from "./components/PageSkeleton";
 import SideNav from "./components/SideNav";
 import { ActionButton, TipIconButton, TipMenuItem } from "./components/ActionButton";
@@ -232,6 +235,7 @@ export default function App() {
     { label: t(language, "navModels"), path: "/models", minRole: "user" as Role, section: "models", icon: <ViewInArIcon /> },
     { label: t(language, "navEnrollments"), path: "/enrollments", minRole: "user" as Role, section: "enrollments", icon: <AssignmentIcon /> },
     { label: t(language, "navPublicEvents"), path: "/public-events", minRole: null, section: null, icon: <EventIcon /> },
+    { label: t(language, "navSocials"), path: "/socials", minRole: null, section: null, icon: <ShareIcon /> },
     { label: t(language, "navCheckin"), path: "/staff-checkin", minRole: "staff" as Role, section: "checkin", icon: <HowToRegIcon /> },
     { label: t(language, "navJudge"), path: "/judge", minRole: "judge" as Role, section: "judge", icon: <GavelIcon /> },
     { label: t(language, "navUsers"), path: "/users", minRole: "manager" as Role, section: "users", icon: <PeopleIcon /> },
@@ -416,6 +420,8 @@ export default function App() {
             <Route path="/staff-checkin" element={<Protected><RequireRole min="staff">{guard("checkin", <StaffCheckin language={language} />)}</RequireRole></Protected>} />
             <Route path="/teams" element={<Protected><Teams language={language} /></Protected>} />
             <Route path="/public-events" element={<PublicEvents language={language} />} />
+            <Route path="/socials" element={<Socials language={language} />} />
+            <Route path="/reset-password" element={<ResetPassword language={language} />} />
             <Route path="/judge" element={<Protected><RequireRole min="judge">{guard("judge", <Judge language={language} />)}</RequireRole></Protected>} />
             <Route path="/users" element={<Protected><RequireRole min="manager">{guard("users", <Users language={language} />)}</RequireRole></Protected>} />
             <Route path="/admin" element={<Protected><RequireRole min="manager">{guard("admin", <Admin language={language} />)}</RequireRole></Protected>} />

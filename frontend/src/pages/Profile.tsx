@@ -6,7 +6,7 @@ import PhoneIcon from "@mui/icons-material/Phone";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import ShareIcon from "@mui/icons-material/Share";
 import { matchIsValidTel } from "mui-tel-input";
-import { api } from "../lib/api";
+import { api, errorCode } from "../lib/api";
 import { Language, t } from "../lib/i18n";
 import ProfileEditSections from "../components/ProfileEditSections";
 import PageContainer from "../components/PageContainer";
@@ -16,10 +16,12 @@ import SocialLinks from "../components/SocialLinks";
 import useToast from "../components/useToast";
 import { hasInvalidSocial, socialPayload } from "../lib/social";
 import { countryName } from "../lib/countries";
+import { isValidUsername } from "../lib/username";
 import { ActionButton } from "../components/ActionButton";
 
 type Profile = {
   email?: string;
+  username?: string | null;
   role?: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -63,6 +65,11 @@ export default function Profile({ language }: ProfileProps) {
       toast.error(t(language, "profileSocialInvalid"));
       return;
     }
+    const username = (editProfile.username ?? "").trim();
+    if (username && !isValidUsername(username)) {
+      toast.error(t(language, "usernameInvalid"));
+      return;
+    }
     if (editProfile.phone && !matchIsValidTel(editProfile.phone)) {
       setPhoneError(true);
       return;
@@ -73,13 +80,13 @@ export default function Profile({ language }: ProfileProps) {
     }
     try {
       const { email, role, ...body } = editProfile;
-      const payload = { ...body, ...socialPayload(editProfile), country: editProfile.country || null, publicProfile: editProfile.publicProfile ?? false };
+      const payload = { ...body, username: username || null, ...socialPayload(editProfile), country: editProfile.country || null, publicProfile: editProfile.publicProfile ?? false };
       await api("/users/profile", { method: "PUT", body: JSON.stringify(payload) });
       toast.success(t(language, "profileSaved"));
-      setProfile({ ...editProfile, ...socialPayload(editProfile) });
+      setProfile({ ...editProfile, username: username || null, ...socialPayload(editProfile) });
       setEditing(false);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(errorCode(err) === "USERNAME_TAKEN" ? t(language, "usernameTaken") : err.message);
     }
   }
 
@@ -126,6 +133,9 @@ export default function Profile({ language }: ProfileProps) {
               </Grid>
               <Grid item xs={12} sm={6}>
                 <Field label={t(language, "profileLastName")} value={profile.lastName} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Field label={t(language, "profileUsername")} value={profile.username} />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <Field label="Email" value={profile.email} />

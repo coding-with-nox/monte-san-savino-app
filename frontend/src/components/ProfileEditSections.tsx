@@ -15,9 +15,11 @@ import { Language, t } from "../lib/i18n";
 import SectionCard from "./SectionCard";
 import { safeHttpUrl } from "../lib/social";
 import { countryOptions } from "../lib/countries";
+import { isValidUsername } from "../lib/username";
 
 export type EditableProfile = {
   email?: string;
+  username?: string | null;
   role?: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -65,6 +67,8 @@ export default function ProfileEditSections({
     { key: "tiktok" as const, label: t(language, "profileTiktok"), icon: <MusicNoteIcon /> }
   ];
   const countries = React.useMemo(() => countryOptions(language), [language]);
+  const username = (value.username ?? "").trim();
+  const invalidUsername = username !== "" && !isValidUsername(username);
   return (
     <Stack spacing={3}>
       <SectionCard icon={<PersonIcon />} title={t(language, "profilePersonalSection")}>
@@ -82,6 +86,17 @@ export default function ProfileEditSections({
               label={t(language, "profileLastName")}
               value={value.lastName ?? ""}
               onChange={(e) => onChange({ ...value, lastName: e.target.value })}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label={t(language, "profileUsername")}
+              value={value.username ?? ""}
+              onChange={(e) => onChange({ ...value, username: e.target.value })}
+              error={invalidUsername}
+              helperText={invalidUsername ? t(language, "usernameInvalid") : ""}
+              inputProps={{ maxLength: 30 }}
               fullWidth
             />
           </Grid>

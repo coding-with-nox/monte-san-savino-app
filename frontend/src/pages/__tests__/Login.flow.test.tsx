@@ -99,8 +99,8 @@ describe("Login flow", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it("validates the email format before calling the API", async () => {
-    const user = await fillAndSubmit("not-an-email");
+  it("validates the email format when the identifier contains @", async () => {
+    const user = await fillAndSubmit("not-an@email");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByText("Invalid email format")).toBeInTheDocument();
     expect(apiMock).not.toHaveBeenCalled();

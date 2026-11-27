@@ -5,7 +5,7 @@ import { User } from "../../domain/User";
 import type { UserRepository } from "../ports/UserRepository";
 import type { TokenService } from "../ports/TokenService";
 
-const repo = (u: User | null): UserRepository => ({ findByEmail: async () => null, findById: async () => u, save: async () => {} });
+const repo = (u: User | null): UserRepository => ({ findByEmail: async () => null, findByUsername: async () => null, findById: async () => u, save: async () => {} });
 const tokens = (payload: any, signed: any[] = []): TokenService => ({
   signAccess: async (p) => { signed.push(p); return { token: "a", expiresIn: 900 }; },
   signRefresh: async (p) => { signed.push(p); return { token: "r", expiresIn: 1 }; },
