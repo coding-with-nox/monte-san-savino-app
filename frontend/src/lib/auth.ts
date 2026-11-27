@@ -46,6 +46,12 @@ export function getUserId(): string | null {
 }
 const order: Role[] = ["user","staff","judge","jury_president","manager","admin"];
 export function roleAtLeast(actual: Role, minimum: Role) { return order.indexOf(actual) >= order.indexOf(minimum); }
+/** Front desk roles (same list as the backend): judges rank above staff but must not see the desk. */
+export const DESK_ROLES: readonly Role[] = ["staff", "manager", "admin"];
+/** Access check for a page or guide: "staff" means the desk roles, any other role is a minimum rank. */
+export function roleReaches(actual: Role, required: Role) {
+  return required === "staff" ? DESK_ROLES.includes(actual) : roleAtLeast(actual, required);
+}
 
 function base64UrlEncode(bytes: Uint8Array) {
   let binary = "";

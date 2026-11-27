@@ -1,7 +1,8 @@
 import { Elysia, t } from "elysia";
 import { and, eq, sql } from "drizzle-orm";
 import { applyPage, withPagination } from "../../../shared/infra/http/pagination";
-import { requireRole } from "../../../identity/infra/http/role.middleware";
+import { requireAnyRole, requireRole } from "../../../identity/infra/http/role.middleware";
+import { DESK_ROLES } from "../../../identity/domain/Role";
 import { tenantMiddleware } from "../../../tenancy/infra/http/tenant.middleware";
 import { requireVisibleSection } from "../../../identity/infra/http/section.middleware";
 import { registrationsTable } from "../persistence/schema";
@@ -123,7 +124,7 @@ export const adminEnrollmentRoutes = new Elysia()
 
 export const staffCheckinRoutes = new Elysia({ prefix: "/staff" })
   .use(tenantMiddleware)
-  .use(requireRole("staff"))
+  .use(requireAnyRole(DESK_ROLES))
   .post("/checkin/:enrollmentId", async ({ tenantDb, params, set }) => {
     if (!isUuid(params.enrollmentId)) {
       set.status = 422;

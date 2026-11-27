@@ -1,4 +1,4 @@
-import { Role, roleAtLeast } from "./auth";
+import { Role, roleAtLeast, roleReaches } from "./auth";
 import { Permission, hasPermission } from "./access";
 
 /**
@@ -251,7 +251,7 @@ export const TOURS: TourDef[] = [
 
 export function canSeeTour(tour: TourDef, { role, sections }: TourContext) {
   if (!tour.audience) return true;
-  if (!role || !roleAtLeast(role, tour.audience)) return false;
+  if (!role || !roleReaches(role, tour.audience)) return false;
   return !tour.section || sections === null || role === "admin" || sections.includes(tour.section);
 }
 
