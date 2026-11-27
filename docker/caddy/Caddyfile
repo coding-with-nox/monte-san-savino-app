@@ -1,0 +1,26 @@
+# HTTPS in front of the app (SEC-01). Used by docker-compose.tls.yml.
+# Caddy gets and renews the Let's Encrypt certificates for both names and redirects http -> https.
+# DNS of APP_DOMAIN and FILES_DOMAIN must point to this server, ports 80 and 443 open.
+{
+	email {$ACME_EMAIL}
+}
+
+# The app: SPA + API, through the frontend nginx (rate limits, security headers).
+{$APP_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy frontend:8080
+	# HSTS only here, on https. No includeSubDomains: other hosts of the domain may still be http.
+	header Strict-Transport-Security "max-age=31536000"
+	# The nginx CSP names the local MinIO (http://localhost:9000): point it to the files host and
+	# upgrade any http request of the page to https.
+	header >Content-Security-Policy "http://localhost:9000" "https://{$FILES_DOMAIN}"
+	header >Content-Security-Policy "default-src 'self';" "upgrade-insecure-requests; default-src 'self';"
+}
+
+# Model images (MinIO S3 API) on their own origin: uploaded files never run in the app origin.
+{$FILES_DOMAIN} {
+	reverse_proxy minio:9000
+	header Strict-Transport-Security "max-age=31536000"
+	header >X-Content-Type-Options "nosniff"
+	header >Content-Security-Policy "default-src 'none'; img-src 'self'; sandbox"
+}
